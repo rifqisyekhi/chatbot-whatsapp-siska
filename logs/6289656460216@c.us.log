@@ -1,0 +1,992 @@
+[2025-11-25T01:37:42.493Z] [MASUK] selamat pagi
+[2025-11-25T01:37:44.484Z] [KELUAR] Halo, terima kasih sudah menghubungi Helpdesk Biro Keuangan dan BMN. 🙏
+
+Mohon sebutkan identitas Anda:
+1. Nama Lengkap
+2. Jabatan
+3. Unit Kerja
+[2025-11-25T01:37:59.872Z] [MASUK] 1. rifqi
+2. intern
+3. tata usaha
+[2025-11-25T01:38:02.073Z] [KELUAR] Terima kasih. Silakan tuliskan pertanyaan Anda.
+[2025-11-25T01:38:13.821Z] [MASUK] bagaimana cara membuat bot
+[2025-11-25T01:38:22.065Z] [KELUAR] Pertanyaan Anda sudah diteruskan ke tim Helpdesk. Mohon tunggu jawaban dari kami.
+[2025-11-25T01:43:56.979Z] [MASUK] menu
+[2025-11-25T02:02:18.352Z] [MASUK] menu
+[2025-11-25T02:02:19.973Z] [KELUAR] Halo, terima kasih sudah menghubungi Helpdesk Biro Keuangan dan BMN. 🙏
+
+Mohon sebutkan identitas Anda:
+1. Nama Lengkap
+2. Jabatan
+3. Unit Kerja
+[2025-11-25T02:11:35.634Z] [MASUK] menu
+[2025-11-25T02:11:37.494Z] [KELUAR] Halo, terima kasih sudah menghubungi Helpdesk Biro Keuangan dan BMN. 🙏
+
+Mohon sebutkan identitas Anda:
+1. Nama Lengkap
+2. Jabatan
+3. Unit Kerja
+[2025-11-25T02:11:46.341Z] [MASUK] selamat pagi
+[2025-11-25T02:11:49.531Z] [KELUAR] Terima kasih. Silakan tuliskan pertanyaan Anda.
+[2025-11-25T02:16:00.134Z] [MASUK] Selamat pagi
+[2025-11-25T02:16:02.296Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T02:16:31.084Z] [MASUK] 1
+[2025-11-25T02:16:32.752Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T02:16:44.489Z] [MASUK] Menguji coba aplikasi chatbot lembur
+[2025-11-25T02:16:46.281Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T02:16:55.572Z] [MASUK] 16.00
+[2025-11-25T02:16:57.323Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T02:17:09.573Z] [MASUK] 22:00
+[2025-11-25T02:17:12.820Z] [KELUAR] Maaf, data atasan Anda tidak ditemukan. Hubungi admin.
+[2025-11-25T02:51:53.687Z] [MASUK] halo
+[2025-11-25T02:51:56.386Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T02:52:01.721Z] [MASUK] 1
+[2025-11-25T02:52:04.018Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T02:52:11.965Z] [MASUK] membuat chatbot
+[2025-11-25T02:52:15.103Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T02:52:21.334Z] [MASUK] 17:00
+[2025-11-25T02:52:24.734Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T02:52:33.904Z] [MASUK] 22:00
+[2025-11-25T02:52:38.393Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T03:01:38.022Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T03:06:39.928Z] [MASUK] 
+[2025-11-25T03:06:44.490Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T03:06:49.052Z] [MASUK] 
+[2025-11-25T03:06:51.593Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T03:07:05.610Z] [MASUK] 
+[2025-11-25T03:07:07.936Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T03:22:37.533Z] [MASUK] menu
+[2025-11-25T03:22:41.449Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T03:22:44.389Z] [MASUK] 1
+[2025-11-25T03:22:46.181Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T03:22:59.691Z] [MASUK] chabot loh ya
+[2025-11-25T03:23:02.222Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T03:23:07.168Z] [MASUK] 17:00
+[2025-11-25T03:23:10.144Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T03:23:14.242Z] [MASUK] 22:00
+[2025-11-25T03:23:15.783Z] [KELUAR] Maaf, data atasan Anda tidak ditemukan. Hubungi admin.
+[2025-11-25T03:29:22.975Z] [MASUK] halo
+[2025-11-25T03:29:26.370Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T03:29:41.644Z] [MASUK] 1
+[2025-11-25T03:29:45.188Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T03:29:50.888Z] [MASUK] membuat chatbot
+[2025-11-25T03:29:54.869Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T03:29:59.778Z] [MASUK] 17:00
+[2025-11-25T03:30:02.393Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T03:30:06.349Z] [MASUK] 20:00
+[2025-11-25T03:30:08.133Z] [KELUAR] Maaf, data atasan Anda tidak ditemukan. Hubungi admin.
+[2025-11-25T03:32:52.719Z] [MASUK] halo
+[2025-11-25T03:32:54.454Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T03:32:59.175Z] [MASUK] 1
+[2025-11-25T03:33:02.295Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T03:33:11.701Z] [MASUK] membuat chatbot whatsapp
+[2025-11-25T03:33:13.547Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T03:33:19.623Z] [MASUK] 17:00
+[2025-11-25T03:33:22.178Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T03:33:27.667Z] [MASUK] 20:00
+[2025-11-25T03:33:32.746Z] [KELUAR] Maaf, data atasan Anda tidak ditemukan. Hubungi admin.
+[2025-11-25T03:38:53.984Z] [MASUK] halo
+[2025-11-25T03:38:56.935Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T03:39:00.839Z] [MASUK] 1
+[2025-11-25T03:39:02.459Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T03:39:07.340Z] [MASUK] membuat chatbot
+[2025-11-25T03:39:09.482Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T03:39:14.914Z] [MASUK] 17:00
+[2025-11-25T03:39:16.447Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T03:39:19.266Z] [MASUK] 20:00
+[2025-11-25T03:39:22.406Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T03:40:13.184Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T03:40:28.284Z] [MASUK] 
+[2025-11-25T03:40:31.722Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T03:40:37.569Z] [MASUK] 
+[2025-11-25T03:40:41.286Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T03:40:44.733Z] [MASUK] 
+[2025-11-25T03:40:47.945Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T05:56:54.433Z] [MASUK] halo
+[2025-11-25T05:56:56.688Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T05:57:00.343Z] [MASUK] 1
+[2025-11-25T05:57:03.676Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T05:57:11.828Z] [MASUK] pembuatan chatbot
+[2025-11-25T05:57:13.933Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T05:57:18.674Z] [MASUK] 17:00
+[2025-11-25T05:57:20.899Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T05:57:25.362Z] [MASUK] 20:00
+[2025-11-25T05:57:27.331Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T05:57:39.983Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T05:58:05.207Z] [MASUK] 
+[2025-11-25T05:58:08.847Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T05:58:12.329Z] [MASUK] 
+[2025-11-25T05:58:15.799Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T05:58:20.470Z] [MASUK] 
+[2025-11-25T05:58:23.607Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:10:19.376Z] [MASUK] halo
+[2025-11-25T06:10:21.485Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:10:24.402Z] [MASUK] 1
+[2025-11-25T06:10:27.721Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:10:33.284Z] [MASUK] membuat chatbot
+[2025-11-25T06:10:35.920Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:10:40.885Z] [MASUK] 17:00
+[2025-11-25T06:10:43.834Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:10:46.297Z] [MASUK] 22:00
+[2025-11-25T06:10:48.131Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:11:11.331Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:11:21.260Z] [MASUK] 
+[2025-11-25T06:11:26.370Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:11:30.438Z] [MASUK] 
+[2025-11-25T06:11:33.797Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:11:39.916Z] [MASUK] 
+[2025-11-25T06:11:42.652Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:13:28.646Z] [MASUK] halo
+[2025-11-25T06:13:31.627Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:13:34.573Z] [MASUK] 1
+[2025-11-25T06:13:37.862Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:13:44.015Z] [MASUK] buat chatbot
+[2025-11-25T06:13:46.319Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:13:48.919Z] [MASUK] 17:00
+[2025-11-25T06:13:50.631Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:13:52.439Z] [MASUK] 22:00
+[2025-11-25T06:13:54.571Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:14:03.885Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:14:13.216Z] [MASUK] 
+[2025-11-25T06:14:16.461Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:14:21.743Z] [MASUK] 
+[2025-11-25T06:14:24.206Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:14:27.824Z] [MASUK] 
+[2025-11-25T06:14:31.092Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:25:07.455Z] [MASUK] halo
+[2025-11-25T06:25:10.890Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:25:16.522Z] [MASUK] 1
+[2025-11-25T06:25:19.135Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:25:24.560Z] [MASUK] buat chatbot
+[2025-11-25T06:25:26.457Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:25:33.062Z] [MASUK] 17:00
+[2025-11-25T06:25:34.704Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:25:39.456Z] [MASUK] 20:00
+[2025-11-25T06:25:42.016Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:25:53.661Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:26:03.017Z] [MASUK] 
+[2025-11-25T06:26:06.537Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:26:11.267Z] [MASUK] 
+[2025-11-25T06:26:15.167Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:26:19.811Z] [MASUK] 
+[2025-11-25T06:26:21.629Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:26:23.817Z] [KELUAR] Maaf, terjadi kesalahan pada sistem. Silakan coba lagi nanti.
+[2025-11-25T06:28:38.948Z] [MASUK] halo
+[2025-11-25T06:28:40.682Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:28:43.743Z] [MASUK] 1
+[2025-11-25T06:28:46.588Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:28:52.233Z] [MASUK] membuat chatbot
+[2025-11-25T06:28:55.387Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:29:01.815Z] [MASUK] 17:00
+[2025-11-25T06:29:03.694Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:29:06.326Z] [MASUK] 22:00
+[2025-11-25T06:29:08.759Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:29:17.696Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:29:34.309Z] [MASUK] 
+[2025-11-25T06:29:36.880Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:29:41.575Z] [MASUK] 
+[2025-11-25T06:29:43.765Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:29:48.010Z] [MASUK] 
+[2025-11-25T06:29:49.928Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:35:33.733Z] [MASUK] hi
+[2025-11-25T06:35:35.551Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:35:39.563Z] [MASUK] 1
+[2025-11-25T06:35:42.093Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:35:48.177Z] [MASUK] membuat chatbot
+[2025-11-25T06:35:51.534Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:35:59.273Z] [MASUK] 17:00
+[2025-11-25T06:36:01.816Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:36:06.659Z] [MASUK] 22:00
+[2025-11-25T06:36:09.385Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:36:17.238Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:36:31.427Z] [MASUK] 
+[2025-11-25T06:36:33.895Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:36:39.790Z] [MASUK] 
+[2025-11-25T06:36:43.568Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:36:48.001Z] [MASUK] 
+[2025-11-25T06:36:49.617Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:40:53.075Z] [MASUK] halo
+[2025-11-25T06:40:55.670Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:41:01.470Z] [MASUK] 1
+[2025-11-25T06:41:03.913Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:41:08.833Z] [MASUK] 1
+[2025-11-25T06:41:10.692Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:41:14.920Z] [MASUK] 1
+[2025-11-25T06:41:18.000Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:41:22.079Z] [MASUK] 1
+[2025-11-25T06:41:25.364Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:41:37.640Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:41:54.922Z] [MASUK] 
+[2025-11-25T06:41:57.127Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:42:19.481Z] [MASUK] 
+[2025-11-25T06:42:23.220Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:42:29.738Z] [MASUK] 
+[2025-11-25T06:42:32.049Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:42:34.838Z] [KELUAR] Maaf, terjadi kesalahan pada sistem. Silakan coba lagi nanti.
+[2025-11-25T06:46:29.310Z] [MASUK] haii
+[2025-11-25T06:46:32.747Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:46:36.128Z] [MASUK] 1
+[2025-11-25T06:46:39.250Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:46:49.441Z] [MASUK] membuat chatbot
+[2025-11-25T06:46:52.286Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:46:59.224Z] [MASUK] 16:00
+[2025-11-25T06:47:00.767Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:47:04.354Z] [MASUK] 22:00
+[2025-11-25T06:47:06.554Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:47:17.195Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:49:32.224Z] [MASUK] 
+[2025-11-25T06:49:36.443Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:49:43.101Z] [MASUK] 
+[2025-11-25T06:49:46.528Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:49:57.112Z] [MASUK] 
+[2025-11-25T06:49:58.969Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T06:50:01.656Z] [KELUAR] Maaf, terjadi kesalahan pada sistem. Silakan coba lagi nanti.
+[2025-11-25T06:52:06.744Z] [MASUK] halo
+[2025-11-25T06:52:09.230Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T06:52:13.070Z] [MASUK] 1
+[2025-11-25T06:52:14.629Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T06:52:19.132Z] [MASUK] 1
+[2025-11-25T06:52:21.662Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T06:52:39.902Z] [MASUK] 17:00
+[2025-11-25T06:52:42.066Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T06:52:47.981Z] [MASUK] 20:00
+[2025-11-25T06:52:51.983Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T06:53:45.339Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T06:54:27.376Z] [MASUK] 
+[2025-11-25T06:54:31.165Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T06:54:40.763Z] [MASUK] 
+[2025-11-25T06:54:43.292Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T06:54:53.852Z] [MASUK] 
+[2025-11-25T06:54:56.208Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:02:26.317Z] [MASUK] halo
+[2025-11-25T07:02:29.059Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:02:35.706Z] [MASUK] 1
+[2025-11-25T07:02:37.346Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:02:44.989Z] [MASUK] membuat chatbot
+[2025-11-25T07:02:46.939Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:02:54.518Z] [MASUK] 17:00
+[2025-11-25T07:02:57.175Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:03:00.755Z] [MASUK] 22:00
+[2025-11-25T07:03:02.835Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:03:17.305Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:05:01.414Z] [MASUK] 
+[2025-11-25T07:05:04.034Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:05:10.377Z] [MASUK] 
+[2025-11-25T07:05:12.602Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:05:18.799Z] [MASUK] 
+[2025-11-25T07:05:22.170Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:12:45.859Z] [MASUK] halo
+[2025-11-25T07:12:48.036Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:12:51.937Z] [MASUK] 1
+[2025-11-25T07:12:53.647Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:13:38.900Z] [MASUK] membuat chatbot
+[2025-11-25T07:13:40.829Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:13:47.382Z] [MASUK] 17:00
+[2025-11-25T07:13:49.748Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:14:04.934Z] [MASUK] 20:00
+[2025-11-25T07:14:08.601Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:14:29.251Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:14:38.496Z] [MASUK] 
+[2025-11-25T07:14:41.783Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:14:47.577Z] [MASUK] 
+[2025-11-25T07:14:50.732Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:14:57.037Z] [MASUK] 
+[2025-11-25T07:14:59.542Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:23:17.096Z] [MASUK] haloooooooooooooooooooo
+[2025-11-25T07:23:18.732Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:23:23.520Z] [MASUK] 1
+[2025-11-25T07:23:25.498Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:24:44.317Z] [MASUK] membuat  chatbot
+[2025-11-25T07:24:47.134Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:24:57.824Z] [MASUK] 17:00
+[2025-11-25T07:24:59.794Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:25:04.255Z] [MASUK] 22:00
+[2025-11-25T07:25:07.872Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:25:22.074Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:25:35.775Z] [MASUK] 
+[2025-11-25T07:25:38.442Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:25:47.791Z] [MASUK] 
+[2025-11-25T07:25:50.976Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:26:00.414Z] [MASUK] 
+[2025-11-25T07:26:02.341Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:32:20.919Z] [MASUK] halo
+[2025-11-25T07:32:22.955Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:32:28.449Z] [MASUK] 1
+[2025-11-25T07:32:31.439Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:32:53.490Z] [MASUK] membuat chatbot
+[2025-11-25T07:32:55.309Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:33:02.079Z] [MASUK] 17:00
+[2025-11-25T07:33:05.179Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:33:09.433Z] [MASUK] 20:00
+[2025-11-25T07:33:11.944Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:33:55.313Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:34:11.413Z] [MASUK] 
+[2025-11-25T07:34:15.092Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:34:22.491Z] [MASUK] 
+[2025-11-25T07:34:25.162Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:34:31.773Z] [MASUK] 
+[2025-11-25T07:34:34.995Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:43:08.111Z] [MASUK] halo
+[2025-11-25T07:43:10.709Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:43:16.830Z] [MASUK] 1
+[2025-11-25T07:43:19.676Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:43:24.452Z] [MASUK] pembuatan chatbot
+[2025-11-25T07:43:25.939Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:43:40.357Z] [MASUK] 16:00
+[2025-11-25T07:43:43.454Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:43:47.874Z] [MASUK] 22:00
+[2025-11-25T07:43:51.290Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:43:57.777Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:44:37.733Z] [MASUK] 
+[2025-11-25T07:44:40.648Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:44:59.872Z] [MASUK] 
+[2025-11-25T07:45:02.319Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:45:12.740Z] [MASUK] 
+[2025-11-25T07:45:15.182Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T07:45:16.690Z] [KELUAR] Maaf, terjadi kesalahan pada sistem. Silakan coba lagi nanti.
+[2025-11-25T07:57:44.370Z] [MASUK] halo
+[2025-11-25T07:57:46.111Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T07:57:52.703Z] [MASUK] 1
+[2025-11-25T07:57:55.611Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T07:58:03.521Z] [MASUK] membuat chatbot
+[2025-11-25T07:58:06.797Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T07:58:16.582Z] [MASUK] 17:00
+[2025-11-25T07:58:19.326Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T07:58:23.616Z] [MASUK] 22:00
+[2025-11-25T07:58:25.597Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T07:58:37.804Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T07:58:51.622Z] [MASUK] 
+[2025-11-25T07:58:55.482Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T07:59:04.447Z] [MASUK] 
+[2025-11-25T07:59:07.854Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T07:59:15.053Z] [MASUK] 
+[2025-11-25T07:59:17.707Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:05:10.632Z] [MASUK] halo
+[2025-11-25T08:05:12.505Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:05:39.748Z] [MASUK] 1
+[2025-11-25T08:05:42.241Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:05:48.871Z] [MASUK] 1
+[2025-11-25T08:05:51.098Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:05:59.150Z] [MASUK] 16:00
+[2025-11-25T08:06:02.009Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:06:07.202Z] [MASUK] 22:00
+[2025-11-25T08:06:09.122Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:06:13.627Z] [MASUK] membuat chatbot
+[2025-11-25T08:06:15.714Z] [KELUAR] Perintah tidak dikenali. Ketik *menu* untuk kembali ke menu utama.
+[2025-11-25T08:06:33.675Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:06:47.497Z] [MASUK] 
+[2025-11-25T08:06:51.011Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:06:59.187Z] [MASUK] 
+[2025-11-25T08:07:01.072Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:07:11.057Z] [MASUK] 
+[2025-11-25T08:07:13.148Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:18:47.419Z] [MASUK] halo
+[2025-11-25T08:18:50.499Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:19:03.115Z] [MASUK] 1
+[2025-11-25T08:19:05.845Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:19:15.598Z] [MASUK] membuat chatbot
+[2025-11-25T08:19:19.364Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:19:37.982Z] [MASUK] 17:00
+[2025-11-25T08:19:40.175Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:20:22.218Z] [MASUK] 22:00
+[2025-11-25T08:20:25.471Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:20:52.030Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:21:16.043Z] [MASUK] 
+[2025-11-25T08:21:18.487Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:21:31.204Z] [MASUK] 
+[2025-11-25T08:21:33.004Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:21:44.930Z] [MASUK] 
+[2025-11-25T08:21:47.157Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:24:41.183Z] [MASUK] HALOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+[2025-11-25T08:24:43.281Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:24:51.517Z] [MASUK] 1
+[2025-11-25T08:24:54.001Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:25:45.859Z] [MASUK] MEMBUAT CHATTIME
+[2025-11-25T08:25:49.665Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:26:44.070Z] [MASUK] 17:00
+[2025-11-25T08:26:46.334Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:26:53.476Z] [MASUK] 22:00
+[2025-11-25T08:26:56.776Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:27:08.820Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:27:23.004Z] [MASUK] 
+[2025-11-25T08:27:25.368Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:27:35.601Z] [MASUK] 
+[2025-11-25T08:27:37.348Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:27:49.062Z] [MASUK] 
+[2025-11-25T08:27:51.048Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:33:24.857Z] [MASUK] halo
+[2025-11-25T08:33:27.971Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:33:35.712Z] [MASUK] 1
+[2025-11-25T08:33:38.236Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:33:56.496Z] [MASUK] membuat chatbot
+[2025-11-25T08:33:59.369Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:34:08.643Z] [MASUK] 16:00
+[2025-11-25T08:34:10.435Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:34:18.206Z] [MASUK] 17:00
+[2025-11-25T08:34:21.633Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:34:47.941Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:35:12.061Z] [MASUK] 
+[2025-11-25T08:35:14.644Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:35:25.133Z] [MASUK] 
+[2025-11-25T08:35:27.641Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:35:36.763Z] [MASUK] 
+[2025-11-25T08:35:39.312Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:41:16.893Z] [MASUK] halo
+[2025-11-25T08:41:20.052Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:41:26.883Z] [MASUK] 1
+[2025-11-25T08:41:30.246Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:41:46.896Z] [MASUK] membuat chatbottt
+[2025-11-25T08:41:48.791Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:41:58.496Z] [MASUK] 16:00
+[2025-11-25T08:42:01.050Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:42:06.944Z] [MASUK] 22:00
+[2025-11-25T08:42:08.985Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:42:25.250Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:42:45.190Z] [MASUK] 
+[2025-11-25T08:42:48.882Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:43:00.419Z] [MASUK] 
+[2025-11-25T08:43:04.013Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:43:15.408Z] [MASUK] 
+[2025-11-25T08:43:18.859Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T08:45:48.614Z] [MASUK] hi
+[2025-11-25T08:45:50.600Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-25T08:46:00.062Z] [MASUK] 1
+[2025-11-25T08:46:03.198Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-25T08:46:14.043Z] [MASUK] membuat chatbot loh ya
+[2025-11-25T08:46:17.248Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-25T08:46:27.456Z] [MASUK] 16:00
+[2025-11-25T08:46:29.780Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-25T08:46:37.026Z] [MASUK] 22:00
+[2025-11-25T08:46:39.458Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-25T08:46:58.438Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-25T08:47:13.732Z] [MASUK] 
+[2025-11-25T08:47:16.990Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-25T08:47:29.663Z] [MASUK] 
+[2025-11-25T08:47:32.039Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-25T08:47:45.342Z] [MASUK] 
+[2025-11-25T08:47:47.333Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-25T09:13:05.046Z] [MASUK] halo
+[2025-11-25T09:13:06.895Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T07:14:40.046Z] [MASUK] halo
+[2025-11-26T07:14:43.576Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T07:14:49.894Z] [MASUK] 2
+[2025-11-26T07:14:53.251Z] [KELUAR] Silakan tuliskan *alasan pengajuan cuti* Anda.
+[2025-11-26T07:15:04.454Z] [MASUK] lahiran anak
+[2025-11-26T07:15:07.245Z] [KELUAR] Pengajuan Cuti Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-26T07:15:31.898Z] [KELUAR] ✅ Pengajuan Cuti Anda telah *DISETUJUI* oleh atasan.
+
+Silakan lanjutkan mengisi form pengajuan cuti di link berikut:
+https://forms.gle/1JJLAFTGCN1McEUJ7
+[2025-11-26T07:15:59.893Z] [MASUK] halo
+[2025-11-26T07:16:03.044Z] [KELUAR] Perintah tidak dikenali. Ketik *menu* untuk kembali ke menu utama.
+[2025-11-26T07:16:07.180Z] [MASUK] menu
+[2025-11-26T07:16:10.128Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T07:16:12.748Z] [MASUK] 3
+[2025-11-26T07:16:14.907Z] [KELUAR] Silakan tuliskan pertanyaan Anda untuk Helpdesk.
+[2025-11-26T07:16:23.559Z] [MASUK] siapa yang suka makan
+[2025-11-26T07:16:42.992Z] [KELUAR] Pertanyaan Anda sudah diteruskan ke tim Helpdesk. Mohon tunggu jawaban dari kami.
+[2025-11-26T07:19:12.890Z] [MASUK] menu
+[2025-11-26T07:20:42.486Z] [MASUK] 1
+[2025-11-26T07:24:16.550Z] [MASUK] halo
+[2025-11-26T07:24:18.712Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T07:24:21.201Z] [MASUK] 1
+[2025-11-26T07:24:23.829Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-26T07:24:28.445Z] [MASUK] membuat chatbot
+[2025-11-26T07:24:31.601Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-26T07:24:35.671Z] [MASUK] 16:00
+[2025-11-26T07:24:38.480Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-26T07:24:40.447Z] [MASUK] 22:00
+[2025-11-26T07:24:43.512Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-26T07:25:06.033Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-26T07:25:20.331Z] [MASUK] 
+[2025-11-26T07:25:23.546Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-26T07:25:31.789Z] [MASUK] 
+[2025-11-26T07:25:34.588Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-26T07:25:41.476Z] [MASUK] 
+[2025-11-26T07:25:45.003Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-26T08:33:17.624Z] [MASUK] halo
+[2025-11-26T08:33:20.594Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T08:33:25.647Z] [MASUK] 1
+[2025-11-26T08:33:28.684Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-26T08:33:33.994Z] [MASUK] membuat chatbot
+[2025-11-26T08:33:37.321Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-26T08:33:41.356Z] [MASUK] 16:00
+[2025-11-26T08:33:44.543Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-26T08:33:45.873Z] [MASUK] 22:00
+[2025-11-26T08:33:49.007Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-26T08:33:57.775Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-26T08:34:11.001Z] [MASUK] 
+[2025-11-26T08:34:13.855Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-26T08:34:18.097Z] [MASUK] 
+[2025-11-26T08:34:20.061Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-26T08:34:25.824Z] [MASUK] 
+[2025-11-26T08:34:28.692Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-26T08:45:43.884Z] [MASUK] halo
+[2025-11-26T08:45:46.858Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T08:45:49.472Z] [MASUK] 1
+[2025-11-26T08:45:51.811Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-26T08:45:56.800Z] [MASUK] membuat chatbot
+[2025-11-26T08:45:59.400Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-26T08:46:03.680Z] [MASUK] 16:00
+[2025-11-26T08:46:06.045Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-26T08:46:11.281Z] [MASUK] 18:00
+[2025-11-26T08:46:14.760Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-26T08:46:25.865Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-26T08:46:39.765Z] [MASUK] 
+[2025-11-26T08:46:43.815Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-26T08:46:47.757Z] [MASUK] 
+[2025-11-26T08:46:50.250Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-26T08:46:55.386Z] [MASUK] 
+[2025-11-26T08:46:58.338Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-26T08:49:51.894Z] [MASUK] assalmualaikum
+[2025-11-26T08:49:53.730Z] [KELUAR] Halo Rifqi Syekhi Marsaputra! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu:
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+
+Ketik *angka* pilihan.
+[2025-11-26T08:49:56.246Z] [MASUK] 1
+[2025-11-26T08:49:58.685Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-26T08:50:04.005Z] [MASUK] Membuat chatbot
+[2025-11-26T08:50:06.227Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-26T08:50:07.442Z] [MASUK] 16:00
+[2025-11-26T08:50:10.013Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-26T08:50:11.355Z] [MASUK] 22:00
+[2025-11-26T08:50:13.234Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan untuk persetujuan.
+[2025-11-26T08:50:22.784Z] [KELUAR] ✅ Pengajuan Lembur Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan.
+[2025-11-26T08:50:32.413Z] [MASUK] 
+[2025-11-26T08:50:35.914Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2.
+[2025-11-26T08:50:41.835Z] [MASUK] 
+[2025-11-26T08:50:44.939Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3.
+[2025-11-26T08:50:51.205Z] [MASUK] 
+[2025-11-26T08:50:52.996Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...
+[2025-11-26T09:03:11.321Z] [MASUK] HALO
+[2025-11-26T09:03:13.861Z] [KELUAR] Halo *Rifqi Syekhi Marsaputra*! 👋
+Ada yang bisa kami bantu hari ini?
+
+Silakan pilih menu (ketik *angka* pilihan):
+1. Pengajuan Lembur
+2. Pengajuan Cuti
+3. Chat Helpdesk
+[2025-11-26T09:03:15.700Z] [MASUK] 1
+[2025-11-26T09:03:18.488Z] [KELUAR] Silakan tuliskan *alasan/tujuan lembur* Anda.
+[2025-11-26T09:03:31.800Z] [MASUK] Membuat chatbot loh ya
+[2025-11-26T09:03:34.843Z] [KELUAR] Baik, sekarang masukkan *jam mulai lembur* Anda (format 24 jam, contoh: 17:00).
+[2025-11-26T09:03:39.627Z] [MASUK] 16:00
+[2025-11-26T09:03:41.879Z] [KELUAR] Oke, terakhir masukkan *jam selesai lembur* Anda (format 24 jam, contoh: 20:00).
+[2025-11-26T09:03:46.461Z] [MASUK] 18:00
+[2025-11-26T09:03:48.214Z] [KELUAR] Pengajuan Lembur Anda sudah diteruskan ke atasan (sakehservice) untuk persetujuan.
+[2025-11-26T09:03:57.971Z] [KELUAR] ✅ Pengajuan *Lembur* Anda telah *DISETUJUI* oleh atasan.
+
+Mohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:
+1. Foto hasil lembur
+2. Foto Anda di tempat lembur
+3. Screenshot approval dari atasan (pesan ini).
+[2025-11-26T09:04:07.473Z] [MASUK] 
+[2025-11-26T09:04:11.169Z] [KELUAR] Foto 1 sudah diterima ✅. Silakan upload foto ke-2 (total 3 foto).
+[2025-11-26T09:04:16.055Z] [MASUK] 
+[2025-11-26T09:04:18.677Z] [KELUAR] Foto 2 sudah diterima ✅. Silakan upload foto ke-3 (total 3 foto).
+[2025-11-26T09:04:24.452Z] [MASUK] 
+[2025-11-26T09:04:26.393Z] [KELUAR] Semua foto sudah diterima, sedang membuat laporan PDF...

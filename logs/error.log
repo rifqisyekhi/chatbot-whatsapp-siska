@@ -1,0 +1,4 @@
+[2025-11-25T00:58:10.202Z] [UNHANDLED] Error: Error: EBUSY: resource busy or locked, unlink 'C:\Users\Lenovo\Documents\Sakeh - Magang\SisKA\.wwebjs_auth\session\Default\Cookies'
+[2025-11-25T00:58:13.552Z] [UNHANDLED] Error: Error: EBUSY: resource busy or locked, unlink 'C:\Users\Lenovo\Documents\Sakeh - Magang\SisKA\.wwebjs_auth\session\Default\Cookies'
+[2025-11-25T00:58:13.577Z] [UNHANDLED] Error: Error: EBUSY: resource busy or locked, unlink 'C:\Users\Lenovo\Documents\Sakeh - Magang\SisKA\.wwebjs_auth\session\Default\chrome_debug.log'
+[2025-11-26T08:20:58.619Z] [UNHANDLED] ProtocolError: Protocol error (Runtime.callFunctionOn): Execution context was destroyed.
