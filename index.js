@@ -1,5 +1,3 @@
-// index.js (Main Bot File)
-
 console.log("[INIT] Memulai bot SisKA...");
 
 // =========================================================================
@@ -52,10 +50,22 @@ function ensureDir(p) {
 }
 
 function logToFile(numberOrName, type, text) {
-  ensureDir(LOGS_DIR);
-  const logFile = path.join(LOGS_DIR, `${numberOrName}.log`);
-  const line = `[${ts()}] [${type}] ${text}\n`;
-  fs.appendFileSync(logFile, line);
+  try {
+    ensureDir(LOGS_DIR);
+    // Bersihkan nama file dari karakter aneh (jaga-jaga)
+    const cleanName = String(numberOrName).replace(/[^a-zA-Z0-9@._-]/g, "_");
+    const logFile = path.join(LOGS_DIR, `${cleanName}.log`);
+    const line = `[${ts()}] [${type}] ${text}\n`;
+
+    fs.appendFileSync(logFile, line);
+  } catch (err) {
+    // Jika gagal catat log, CUKUP PRINT DI CONSOLE SAJA.
+    // Jangan biarkan bot crash hanya karena gagal nulis log.
+    console.error(
+      `[LOG ERROR] Gagal menulis log untuk ${numberOrName}:`,
+      err.message
+    );
+  }
 }
 
 function logIn(chatId, body) {
@@ -152,18 +162,34 @@ console.log(`[INIT] Berhasil memuat ${dbPegawai.length} data pegawai.`);
 
 function cariPegawaiByWa(waNumberDigits) {
   if (!Array.isArray(dbPegawai)) return null;
-  // DB menyimpan nomor seperti 6285xxxx tanpa @c.us
+
   return (
-    dbPegawai.find((p) => (p["No. HP (WA) aktif"] || "") === waNumberDigits) ||
-    null
+    dbPegawai.find((p) => {
+      // 1. Cek apakah baris data ini valid (tidak null/undefined)
+      if (!p) return false;
+
+      // 2. Pastikan data HP dibaca sebagai String agar aman
+      const nomorDiDb = String(p["No. HP (WA) aktif"] || "").trim();
+
+      return nomorDiDb === waNumberDigits;
+    }) || null
   );
 }
 
 function cariAtasanPegawai(pegawai) {
   if (!pegawai) return null;
+
   return (
-    dbPegawai.find((p) => p["No. HP (WA) aktif"] === pegawai["NO HP ATASAN"]) ||
-    null
+    dbPegawai.find((p) => {
+      // 1. Cek validitas data
+      if (!p) return false;
+
+      // 2. Bandingkan nomor HP atasan
+      const nomorDiDb = String(p["No. HP (WA) aktif"] || "").trim();
+      const targetAtasan = String(pegawai["NO HP ATASAN"] || "").trim();
+
+      return nomorDiDb === targetAtasan;
+    }) || null
   );
 }
 
@@ -206,7 +232,13 @@ async function kirimDenganTyping(client, chatId, text) {
 // VI. PDF GENERATOR (Dianggap sebagai 'pdfGenerator.js')
 // =========================================================================
 
-async function buatLaporanLemburDenganFoto(data, fotoPaths, chatId, client) {
+async function buatLaporanLemburDenganFoto(
+  data,
+  fotoPaths,
+  chatId,
+  targetAtasan,
+  client
+) {
   ensureDir(REPORTS_DIR);
   ensureDir(UPLOADS_DIR); // Pastikan dir uploads sudah ada sebelum cleanup
 
@@ -355,23 +387,17 @@ async function buatLaporanLemburDenganFoto(data, fotoPaths, chatId, client) {
     }
 
     // ========== TANDA TANGAN ==========
-    doc.moveDown(5);
+    doc.moveDown(8);
 
     const startY = doc.y;
 
-    doc
-      .fontSize(11)
-      .text(
-        "Mengetahui,\nKepala Sub Bagian TU Biro Keuangan dan BMN",
-        50,
-        startY
-      );
+    doc.fontSize(11).text(`Mengetahui,\n${data.atasan_jabatan}`, 50, startY);
 
-    doc.text(`Dilaksanakan Oleh,\n${data.jabatan || ""}`, 330, startY);
+    doc.text(`Dilaksanakan Oleh,\n${data.jabatan}`, 330, startY);
 
     // Ambil tanda tangan secara paralel
     const [ttdKepalaBuffer, ttdPegawaiBuffer] = await Promise.all([
-      getDummySignature("198703232015031002"), // NIP kepala statis
+      getDummySignature(data.atasan_nip), // NIP Atasan
       getDummySignature(data.nip), // NIP pegawai
     ]);
 
@@ -380,34 +406,68 @@ async function buatLaporanLemburDenganFoto(data, fotoPaths, chatId, client) {
     const ttdPegX = 330;
     const ttdKepX = 50;
 
-    // Render TTD Kepala
+    // [BARU] Tentukan lokasi file gambar fallback lokal
+    // Pastikan folder 'assets' dan file 'ttd_fallback.png' sudah ada
+    const fallbackImgPath = path.join(__dirname, "assets", "contoh-ttd.png");
+
+    // 1. RENDER TTD ATASAN (Kiri)
     if (ttdKepalaBuffer) {
+      // Opsi A: Pakai TTD dari API (Prioritas Utama)
       try {
         doc.image(ttdKepalaBuffer, ttdKepX, ttdY, { width: ttdWidth });
       } catch (e) {
-        doc.fontSize(10).text("(TTD Kepala tidak tersedia)", ttdKepX, ttdY);
+        // Jika buffer rusak, fallback ke lokal
+        if (fs.existsSync(fallbackImgPath)) {
+          doc.image(fallbackImgPath, ttdKepX, ttdY, { width: ttdWidth });
+        } else {
+          doc.fontSize(10).text("(TTD Error)", ttdKepX, ttdY);
+        }
+      }
+    } else if (fs.existsSync(fallbackImgPath)) {
+      // Opsi B: API Gagal/Null, Pakai File Lokal
+      try {
+        doc.image(fallbackImgPath, ttdKepX, ttdY, { width: ttdWidth });
+      } catch (e) {
+        console.error("[PDF] Gagal load fallback img atasan:", e.message);
+        doc.fontSize(10).text("(TTD Error)", ttdKepX, ttdY);
       }
     } else {
-      doc.fontSize(10).text("(TTD Kepala tidak tersedia)", ttdKepX, ttdY);
+      // Opsi C: Semua Gagal (Tampilkan Teks)
+      doc.fontSize(10).text("(TTD Tidak Tersedia)", ttdKepX, ttdY);
     }
 
-    // Render TTD Pegawai
+    // 2. RENDER TTD PEGAWAI (Kanan)
     if (ttdPegawaiBuffer) {
+      // Opsi A: Pakai TTD dari API (Prioritas Utama)
       try {
         doc.image(ttdPegawaiBuffer, ttdPegX, ttdY, { width: ttdWidth });
       } catch (e) {
-        doc.fontSize(10).text("(TTD Pegawai tidak tersedia)", ttdPegX, ttdY);
+        // Jika buffer rusak, fallback ke lokal
+        if (fs.existsSync(fallbackImgPath)) {
+          doc.image(fallbackImgPath, ttdPegX, ttdY, { width: ttdWidth });
+        } else {
+          doc.fontSize(10).text("(TTD Error)", ttdPegX, ttdY);
+        }
+      }
+    } else if (fs.existsSync(fallbackImgPath)) {
+      // Opsi B: API Gagal/Null, Pakai File Lokal
+      try {
+        doc.image(fallbackImgPath, ttdPegX, ttdY, { width: ttdWidth });
+      } catch (e) {
+        console.error("[PDF] Gagal load fallback img pegawai:", e.message);
+        doc.fontSize(10).text("(TTD Error)", ttdPegX, ttdY);
       }
     } else {
-      doc.fontSize(10).text("(TTD Pegawai tidak tersedia)", ttdPegX, ttdY);
+      // Opsi C: Semua Gagal (Tampilkan Teks)
+      doc.fontSize(10).text("(TTD Tidak Tersedia)", ttdPegX, ttdY);
     }
 
     const yNama = ttdY + 70;
     const yNIP = yNama + 14;
 
     // Nama dan NIP Kepala
-    doc.fontSize(11).text("ALPHA SANDRO ADITTHYASWARA, S.Sos", ttdKepX, yNama);
-    doc.text("NIP. 198703232015031002", ttdKepX, yNIP);
+    doc.fontSize(11).text(`${data.atasan_nama}`, ttdKepX, yNama);
+    doc.text(`NIP. ${data.atasan_nip}`, ttdKepX, yNIP);
 
     // Nama dan NIP Pegawai
     doc.text(`${data.nama}`, ttdPegX, yNama);
@@ -419,15 +479,25 @@ async function buatLaporanLemburDenganFoto(data, fotoPaths, chatId, client) {
       stream.on("finish", async () => {
         try {
           const media = MessageMedia.fromFilePath(filePath);
+
+          // 1. Kirim ke pegawai (user)
           await client.sendMessage(chatId, media, {
             caption: "Berikut laporan lembur final Anda 📑✅",
           });
+          console.log(`[PDF] Laporan lembur terkirim ke pegawai: ${chatId}`);
+
+          // 2. Kirim ke atasan (jika tersedia)
+          if (targetAtasan) {
+            await client.sendMessage(targetAtasan, media, {
+              caption: `📑 Laporan Lembur dari:\n*${data.nama}*\nTanggal: ${data.tanggal}`,
+            });
+            console.log(`[PDF] terkirim ke atasan: ${targetAtasan}`);
+          }
 
           // Hapus semua file foto setelah berhasil dikirim
           for (const fotoPath of fotoPaths) {
             try {
               fs.unlinkSync(fotoPath);
-              // console.log(`[CLEANUP] Berhasil hapus file: ${fotoPath}`);
             } catch (e) {
               console.error(
                 `[CLEANUP ERROR] Gagal hapus file ${fotoPath}:`,
@@ -536,25 +606,38 @@ client.on("message", async (message) => {
             "Semua foto sudah diterima, sedang membuat laporan PDF..."
           );
 
+          const atasanObj = flow.atasan || {};
+
+          // [BARU] Siapkan Nomor Atasan
+          let targetAtasan = null;
+          if (atasanObj["No. HP (WA) aktif"]) {
+            targetAtasan = hanyaAngka(atasanObj["No. HP (WA) aktif"]) + "@c.us";
+          }
+
           const dataLembur = {
             nama: flow.pegawai["Nama Pegawai"],
-            nip: flow.pegawai["nip"] || flow.pegawai["NIP"] || "-",
+            nip: flow.pegawai["nip"],
+            jabatan: flow.pegawai["Jabatan"],
             tanggal: new Date().toISOString().split("T")[0],
             kegiatan: flow.alasan || "",
             jamMasuk: flow.jamMasuk,
             jamKeluar: flow.jamKeluar,
-            jabatan: flow.pegawai["Jabatan"] || "",
+            atasan_nama: atasanObj["Nama Pegawai"] || "Nama Atasan",
+            atasan_nip: atasanObj["nip"] || "-",
+            atasan_jabatan: atasanObj["Jabatan"] || "Jabatan Atasan",
           };
 
+          // [UBAH PEMANGGILAN FUNGSI] Masukkan targetAtasan
           await buatLaporanLemburDenganFoto(
             dataLembur,
             flow.fotoList,
             chatId,
+            targetAtasan, // <--- Parameter baru disisipkan di sini
             client
           );
 
           delete pengajuanBySender[chatId];
-          console.log("[DEBUG] State upload-foto selesai dan dihapus:", chatId);
+          console.log("[DEBUG] Laporan selesai, dikirim ke User & Atasan.");
         }
       } else if (bodyLower !== "") {
         await kirimDenganTyping(
@@ -629,6 +712,7 @@ client.on("message", async (message) => {
             pengajuanBySender[pemohonId] = {
               step: "upload-foto",
               pegawai: p,
+              atasan: pengajuan.atasan,
               alasan,
               jamMasuk,
               jamKeluar,
