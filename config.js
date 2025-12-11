@@ -2,7 +2,7 @@
 
 module.exports = {
   // ID grup WhatsApp Helpdesk
-  HELPDESK_GROUP_ID: '120363419971805888@g.us',
+  HELPDESK_GROUP_ID: '120363402724430173@g.us',
 // test group: 120363419971805888@g.us
 // production group:120363402724430173@g.us
   // Link formulir pengajuan lembur
