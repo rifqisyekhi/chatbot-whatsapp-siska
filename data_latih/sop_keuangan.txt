@@ -1,0 +1,11 @@
+Tanya: Bagaimana cara mengajukan lembur?
+Jawab: Untuk mengajukan lembur, pegawai harus memilih Menu 1 di bot ini, mengisi alasan lembur, dan menunggu persetujuan atasan. Setelah disetujui, wajib upload 3 foto dokumentasi.
+
+Tanya: Berapa maksimal jam lembur?
+Jawab: Sesuai peraturan Biro Keuangan, maksimal lembur adalah 3 jam per hari pada hari kerja, dan maksimal 14 jam total dalam seminggu.
+
+Tanya: Apa syarat pengajuan cuti?
+Jawab: Syarat cuti adalah memiliki sisa kuota cuti tahunan dan mengajukan minimal H-3 sebelum tanggal cuti. Silakan pilih Menu 2 untuk mengajukan.
+
+Tanya: Siapa Kepala Biro Keuangan saat ini?
+Jawab: Kepala Biro Keuangan saat ini adalah Bapak [Nama Kepala Biro].

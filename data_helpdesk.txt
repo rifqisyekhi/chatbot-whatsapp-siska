@@ -1,0 +1,81 @@
+=== DATA HELPDESK BIRO KEUANGAN & BMN ===
+
+=== PROFIL SEKRETARIAT JENDERAL (SETJEN KEMNAKER) ===
+
+DEFINISI:
+Sekretariat Jenderal Kementerian Ketenagakerjaan (Setjen Kemnaker) adalah unsur pelaksana yang dipimpin oleh Sekretaris Jenderal. Setjen berada di bawah dan bertanggung jawab langsung kepada Menteri Ketenagakerjaan.
+
+TUGAS:
+Menyelenggarakan koordinasi pelaksanaan tugas, pembinaan, dan pemberian dukungan administrasi kepada seluruh unit organisasi di lingkungan Kementerian.
+
+FUNGSI:
+1. Mengoordinasikan seluruh kegiatan Kementerian Ketenagakerjaan.
+2. Mengoordinasikan penyusunan rencana, program, dan anggaran.
+3. Memberikan pembinaan dan dukungan administrasi (Tata usaha, kepegawaian, keuangan, kerumahtanggaan, kerja sama, humas, arsip, dan dokumentasi).
+4. Membina dan menata organisasi serta tata laksana.
+5. Mengoordinasikan penyusunan peraturan perundang-undangan dan advokasi hukum.
+6. Mengelola Barang Milik Negara (BMN) dan layanan pengadaan barang/jasa.
+7. Melaksanakan fungsi lain yang diberikan oleh Menteri.
+
+=== STRUKTUR ORGANISASI ===
+Sekretariat Jenderal Kementerian Ketenagakerjaan terdiri atas unit-unit kerja berikut:
+1. Biro Perencanaan dan Manajemen Kinerja
+2. Biro Keuangan dan Barang Milik Negara
+3. Biro Organisasi dan Sumber Daya Manusia Aparatur
+4. Biro Hukum
+5. Biro Umum
+6. Biro Kerja Sama
+7. Biro Hubungan Masyarakat
+8. Pusat Pengembangan Sumber Daya Manusia Ketenagakerjaan
+9. Pusat Pasar Kerja
+10. Politeknik Ketenagakerjaan.
+
+=== INFORMASI OPERASIONAL & SOP ===
+
+1. JAM OPERASIONAL
+- Senin s.d. Kamis: 08.00 - 16.00 WIB
+- Jumat: 08.00 - 16.30 WIB
+- Sabtu & Minggu: Libur
+
+2. PROSEDUR PENGAJUAN LEMBUR
+- Pegawai harus mengisi Form L-01.
+- Form harus ditandatangani atasan langsung (Eselon III/IV).
+- Form diserahkan ke admin Tata Usaha paling lambat H-1.
+
+3. KETERLAMBATAN GAJI
+- Jika gaji belum masuk pada tanggal 1, harap cek status di aplikasi SAKTI.
+- Jika status "SP2D Terbit", tunggu proses kliring bank (maksimal 1x24 jam).
+
+=== FAQ & PENGETAHUAN UMUM (DARI RIWAYAT CHAT) ===
+
+TANYA: Apa itu BMN?
+JAWAB: BMN adalah Barang Milik Negara. Definisi resminya adalah semua barang yang dibeli atau diperoleh atas beban APBN, atau berasal dari perolehan lainnya yang sah, dan tercatat sebagai kekayaan negara. Contohnya: gedung kantor, kendaraan dinas, laptop inventaris, hingga alat tulis kantor.
+
+TANYA: Apa fungsi BMN?
+JAWAB: BMN berfungsi sebagai aset negara yang harus dikelola, dijaga, dan dipertanggungjawabkan. Terdapat aturan ketat mengenai pencatatan, penggunaan, pemeliharaan, hingga penghapusannya.
+
+TANYA: Apa maksud dari KIB pada BMN?
+JAWAB: KIB singkatan dari Kartu Inventaris Barang.
+
+TANYA: Apa itu PIPK?
+JAWAB: PIPK adalah singkatan dari Pengendalian Intern atas Pelaporan Keuangan.
+
+TANYA: Akun apa yang digunakan untuk Tunkin (Tunjangan Kinerja)?
+JAWAB: Untuk Tunkin, akun yang tepat digunakan adalah akun 51 (Belanja Pegawai).
+
+TANYA: Bagaimana cara mengajukan cuti?
+JAWAB: Untuk pengajuan cuti, silakan gunakan alur internal pada sistem kepegawaian dan pilih "Menu 2".
+
+TANYA: Unit Barenbang (Badan Perencanaan dan Pengembangan) ada di lantai berapa?
+JAWAB: Unit Barenbang terletak di Lantai 3 dan Lantai 6.
+
+TANYA: Unit Barenbang berada di gedung mana?
+JAWAB: Unit Barenbang berada di Gedung Parkir.
+
+TANYA: Bagaimana pengelolaan aset di Kemnaker?
+JAWAB: Pengelolaan aset dilaksanakan berdasarkan regulasi perundang-undangan yang berlaku terkait Barang Milik Negara.
+
+=== PELAJARAN BARU (22/12/2025, 10.35.01) ===
+TANYA: siapa goat esport?
+JAWAB: faker
+================================

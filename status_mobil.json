@@ -1,0 +1,162 @@
+[
+  {
+    "id": 1,
+    "plat": "B 1059 SQP",
+    "nama": "Toyota Kijang Innova G",
+    "km_terakhir": 170,
+    "bbm_bar": 2,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null,
+    "tujuan_aktif": "dinas ke blok m",
+    "waktu_pinjam": null
+  },
+  {
+    "id": 2,
+    "plat": "B 1083 SQP",
+    "nama": "Toyota Kijang Innova G",
+    "km_terakhir": 20,
+    "bbm_bar": 2,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null,
+    "tujuan_aktif": "dinas ke blok m",
+    "waktu_pinjam": null
+  },
+  {
+    "id": 3,
+    "plat": "B 1084 SQP",
+    "nama": "Toyota Kijang Innova G",
+    "km_terakhir": 1567,
+    "bbm_bar": 6,
+    "status": "DIPAKAI",
+    "peminjam_saat_ini": "199504152025051001",
+    "tujuan_aktif": "Ke polteknaker"
+  },
+  {
+    "id": 4,
+    "plat": "B 1642 POH",
+    "nama": "Toyota Kijang Innova G",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 5,
+    "plat": "B 1643 POH",
+    "nama": "Toyota Kijang Innova G",
+    "km_terakhir": 10,
+    "bbm_bar": 2,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null,
+    "tujuan_aktif": "dinas ke kemenkeu",
+    "waktu_pinjam": null
+  },
+  {
+    "id": 6,
+    "plat": "B 2039 POK",
+    "nama": "Toyota Hi Ace",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 7,
+    "plat": "B 2809 POK",
+    "nama": "Toyota Hi Ace",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 8,
+    "plat": "B 1603 POH",
+    "nama": "Toyota Avanza E",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 9,
+    "plat": "B 1604 POH",
+    "nama": "Toyota Avanza E",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 10,
+    "plat": "B 1606 POH",
+    "nama": "Toyota Avanza E",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 11,
+    "plat": "B 1608 POH",
+    "nama": "Toyota Avanza E",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 12,
+    "plat": "B 2933 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 13,
+    "plat": "B 2934 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 14,
+    "plat": "B 2935 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 15,
+    "plat": "B 2936 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 16,
+    "plat": "B 2937 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  },
+  {
+    "id": 17,
+    "plat": "B 2938 POK",
+    "nama": "Toyota Avanza Veloz",
+    "km_terakhir": 0,
+    "bbm_bar": 8,
+    "status": "TERSEDIA",
+    "peminjam_saat_ini": null
+  }
+]

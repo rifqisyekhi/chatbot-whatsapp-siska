@@ -1,9 +1,16 @@
 {
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "axios": "^1.13.2",
+    "cheerio": "^1.1.2",
+    "express": "^5.1.0",
     "google-auth-library": "^10.3.0",
+    "googleapis": "^166.0.0",
+    "groq-sdk": "^0.37.0",
+    "image-size": "^2.0.2",
     "pdfkit": "^0.17.2",
-    "puppeteer": "^24.18.0",
+    "puppeteer": "^24.31.0",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.33.2"
+    "whatsapp-web.js": "github:pedroslopez/whatsapp-web.js#main"
   }
 }
