@@ -1,0 +1,82 @@
+[
+  {
+    "tanggal": "12/3/2026, 10.27.08",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "dinas ke ancol",
+    "jam_pinjam": "12/3/2026, 10.26.29",
+    "jam_akhir": "12/3/2026, 10.27.08"
+  },
+  {
+    "tanggal": "12/3/2026, 11.03.26",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "-",
+    "jam_pinjam": "12/3/2026, 11.03.13",
+    "jam_akhir": "12/3/2026, 11.03.26"
+  },
+  {
+    "tanggal": "12/3/2026, 11.36.37",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "gatau",
+    "jam_pinjam": "12/3/2026, 11.36.08",
+    "jam_akhir": "12/3/2026, 11.36.37"
+  },
+  {
+    "tanggal": "12/3/2026, 12.08.29",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "-",
+    "jam_pinjam": "12/3/2026, 12.08.15",
+    "jam_akhir": "12/3/2026, 12.08.29"
+  },
+  {
+    "tanggal": "13/3/2026, 09.57.53",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "dinas ke polteknaker",
+    "kondisi": "aman",
+    "lama_pakai": "2 jam",
+    "jam_pinjam": "13/3/2026, 09.57.27",
+    "jam_akhir": "13/3/2026, 09.57.53"
+  },
+  {
+    "tanggal": "13/3/2026, 15.42.05",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "dinas ke blok m",
+    "kondisi": "aman",
+    "lama_pakai": "2 jam",
+    "jam_pinjam": "13/3/2026, 15.41.40",
+    "jam_akhir": "13/3/2026, 15.42.05"
+  },
+  {
+    "tanggal": "31/3/2026, 13.45.03",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "dinas ke polteknaker",
+    "kondisi": "aman",
+    "lama_pakai": "2 jam",
+    "jam_pinjam": "31/3/2026, 13.44.32",
+    "jam_akhir": "31/3/2026, 13.45.03"
+  },
+  {
+    "tanggal": "31/3/2026, 14.07.16",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "mobil": "Toyota Kijang Innova G",
+    "tujuan": "dinas ke ancol",
+    "kondisi": "aman",
+    "lama_pakai": "2 jam",
+    "jam_pinjam": "31/3/2026, 14.06.53",
+    "jam_akhir": "31/3/2026, 14.07.16"
+  }
+]

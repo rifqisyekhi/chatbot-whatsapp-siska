@@ -1,17 +1,24 @@
-# Node modules
-node_modules/
-
-# WhatsApp Web session
+# Folder Cache & Sesi WhatsApp
 .wwebjs_auth/
 .wwebjs_cache/
 
-# Logs
-logs/
-*.log
-messages.log
+# Folder Dependencies Node.js
+node_modules/
 
+# File Sistem Operasi macOS
+.DS_Store
+
+# Folder Hasil Generate & Upload User
+uploads/
 reports/
 
-uploads/
+# Folder sementara
+temp/
+logs/
 
+# Kredensial Pribadi
+credentials.json
+.env
 
+# Cache NPM lokal
+npm/
