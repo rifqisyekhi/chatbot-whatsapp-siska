@@ -11,7 +11,6 @@ const groq = new Groq({ apiKey: GROQ_API_KEY });
 // --- FUNGSI 1: Membaca Database Pengetahuan (TXT) ---
 function bacaDataHelpdesk() {
   try {
-    // PERBAIKAN: Arahkan path mundur satu folder (..), lalu masuk ke folder "data"
     const filePath = path.join(__dirname, "..", "data", DATA_FILE);
     
     // Jika file belum ada, buat file kosong

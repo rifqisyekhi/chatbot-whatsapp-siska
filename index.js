@@ -8,7 +8,13 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
-const { buatLaporanLemburDenganFotoAsync, buatLaporanWFAAsync, buatPDFRekapBulanan, calculateDuration } = require("./features/pdf_generator");
+const { 
+  buatLaporanLemburDenganFotoAsync, 
+  buatLaporanWFAAsync, 
+  buatPDFRekapBulanan, 
+  buatSuratIzinMobilAsync,
+  calculateDuration 
+} = require("./features/pdf_generator");
 const { HELPDESK_GROUP_ID, FORM_CUTI_URL } = require("./config/config");
 
 // --- DATABASE MOBIL ---
@@ -1089,27 +1095,30 @@ client.on("message", async (message) => {
       return;
     }
 
+    // --- ALUR PELAPORAN KONDISI & WAKTU (BARU) ---
     if (flow.step === "lapor-kondisi") {
       pengajuanBySender[chatId].kondisi = message.body.trim();
-      pengajuanBySender[chatId].step = "lapor-lama";
-      await kirimDenganTyping(client, chatId, "Terakhir, berapa *Lama Pemakaian*? (misal: 2 jam, 1 hari)");
+      pengajuanBySender[chatId].step = "lapor-waktu-awal";
+      await kirimDenganTyping(client, chatId, "Silakan tuliskan *Tanggal dan Jam Awal* pemakaian. (misal: 2 April 2026 pukul 08.00)");
       return;
     }
 
-    if (flow.step === "lapor-lama") {
-      const lamaPakai = message.body.trim();
-      const { mobilId, kondisi } = pengajuanBySender[chatId];
+    if (flow.step === "lapor-waktu-awal") {
+      pengajuanBySender[chatId].waktuAwal = message.body.trim();
+      pengajuanBySender[chatId].step = "lapor-waktu-akhir";
+      await kirimDenganTyping(client, chatId, "Silakan tuliskan *Tanggal dan Jam Selesai* pemakaian. (misal: 2 April 2026 pukul 16.00)");
+      return;
+    }
+
+    if (flow.step === "lapor-waktu-akhir") {
+      const waktuAkhir = message.body.trim();
+      const { mobilId, kondisi, waktuAwal } = pengajuanBySender[chatId];
 
       const allMobil = await getStatusMobil();
       const index = allMobil.findIndex((m) => m.id === mobilId);
 
       if (index !== -1) {
         const mobil = allMobil[index];
-        const waktuPinjamRaw = mobil.waktu_pinjam ? new Date(mobil.waktu_pinjam) : new Date();
-        const waktuAkhirRaw = new Date();
-
-        const strJamPinjam = waktuPinjamRaw.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
-        const strJamAkhir = waktuAkhirRaw.toLocaleString("id-ID", { timeZone: "Asia/Jakarta" });
         const tujuanAwal = mobil.tujuan_aktif;
 
         mobil.status = "TERSEDIA";
@@ -1120,15 +1129,15 @@ client.on("message", async (message) => {
         await updateStatusMobilAsync(allMobil);
 
         const logData = {
-          tanggal: strJamAkhir,
+          tanggal: new Date().toISOString(),
           nama_pegawai: pegawai["Nama Pegawai"],
           nip: pegawai["nip"],
           mobil: mobil.nama,
           tujuan: tujuanAwal || "-",
           kondisi: kondisi,
-          lama_pakai: lamaPakai,
-          jam_pinjam: strJamPinjam,
-          jam_akhir: strJamAkhir,
+          lama_pakai: `${waktuAwal} s.d. ${waktuAkhir}`,
+          jam_pinjam: waktuAwal,
+          jam_akhir: waktuAkhir,
         };
 
         await simpanRiwayatMobilAsync(logData);
@@ -1136,8 +1145,41 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `*Pengembalian Selesai!*\n\nUnit *${mobil.nama}* telah dikembalikan ke sistem.\nKondisi: ${kondisi}\nTerima kasih.`,
+          `*Pengembalian Selesai!*\n\nUnit *${mobil.nama}* telah dikembalikan ke sistem.\nKondisi: ${kondisi}\nTerima kasih. Sedang memproses PDF Surat Izin Pemakaian...`,
         );
+
+        // ==========================================
+        // EKSEKUSI PEMBUATAN PDF MOBIL
+        // ==========================================
+        try {
+          const dataPDFMobil = {
+            penanggungJawab: {
+              nama: "ALPHA SANDRO ADITHYASWARA, s.Sos.",
+              nip: "198703232015031002",
+              jabatan: "Kepala Sub Bagian Tata Usaha" 
+            },
+            pemakai: {
+              nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
+              nip: pegawai["nip"] || pegawai["NIP"] || "-",
+              jabatan: pegawai["Jabatan"] || "-"
+            },
+            kendaraan: {
+              merek: mobil.nama || "-",
+              tnkb: mobil.plat || "-",
+              keperluan: tujuanAwal || "-",
+              tanggalMulai: waktuAwal,
+              tanggalSelesai: waktuAkhir
+            },
+            pengembalian: {
+              kondisi: kondisi
+            }
+          };
+
+          await buatSuratIzinMobilAsync(dataPDFMobil, chatId, client);
+        } catch (pdfErr) {
+          console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
+          await kirimDenganTyping(client, chatId, "Terjadi kesalahan saat mencetak PDF Surat Izin Mobil, namun data pengembalian tetap berhasil disimpan.");
+        }
       }
 
       delete pengajuanBySender[chatId];

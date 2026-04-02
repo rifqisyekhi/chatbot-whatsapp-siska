@@ -67,7 +67,6 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
   const tanggalLaporan = new Date().toISOString().split("T")[0];
   const safeSubstansi = (data.substansi || "TU").replace(/[\/\\]/g, "_");
   
-  // Format Nama File: Laporan Lembur_Nama_NIP_Subtansi_Tanggal.pdf
   const namaFile = `Laporan Lembur_${data.nama}_${data.nip}_${safeSubstansi}_${tanggalLaporan}.pdf`;
   const filePath = path.join(REPORTS_DIR, namaFile);
 
@@ -390,9 +389,8 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         let img1Width = 0, img1Height = 0;
         let img2Width = 0, img2Height = 0;
         
-        // Lebar maksimal gambar diset hampir selebar kolom 5 (dikurangi padding 20)
         const maxImgW = colWidths[5] - 20; 
-        const maxImgH = 130; // Batas tinggi agar tidak terlalu makan tempat ke bawah
+        const maxImgH = 130; 
 
         if (validImg1) {
           img1Width = maxImgW;
@@ -412,9 +410,8 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           }
         }
 
-        // Hitung total ruang vertikal yang dibutuhkan untuk semua gambar
         let col5ImagesHeight = 0;
-        if (validImg1) col5ImagesHeight += img1Height + 10; // +10 untuk gap bawah gambar
+        if (validImg1) col5ImagesHeight += img1Height + 10;
         if (validImg2) col5ImagesHeight += img2Height + 10;
 
         let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8 });
@@ -432,7 +429,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         let maxTextHeight = Math.max(...textHeights);
         let rowHeight = Math.max(maxTextHeight + 15, 30);
 
-        // Cek halaman baru jika baris kepanjangan
         if (currentY + rowHeight > doc.page.height - 50) {
           doc.addPage();
           currentY = 50;
@@ -442,7 +438,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         let x = startX;
 
-        // Gambar kotak dan isi teks tiap kolom
         doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
         doc.text(`${i + 1}.`, x + 2, currentY + 5, { width: colWidths[0] - 4, align: "center" });
         x += colWidths[0];
@@ -466,13 +461,12 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
         doc.text(item.keterangan || "-", x + 4, currentY + 5, { width: colWidths[5] - 8, align: "left" });
 
-        // Tumpuk gambar ke bawah (Stacked)
         let currentImgY = currentY + 5 + textHeight5 + 10;
 
         if (validImg1) {
           let startXCenter = x + (colWidths[5] - img1Width) / 2;
           doc.image(buf1, startXCenter, currentImgY, { width: img1Width, height: img1Height });
-          currentImgY += img1Height + 10; // Tambah koordinat Y untuk foto kedua
+          currentImgY += img1Height + 10; 
         } else if (item.fotoPath1) {
           doc.text("(Gambar 1 rusak)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
           currentImgY += 20;
@@ -619,8 +613,10 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
     const hKegiatan = doc.heightOfString(strKegiatan, { width: colWidths[5] - 6 });
     const hTanggal = doc.heightOfString(strTanggal, { width: colWidths[4] - 6 });
 
-    const hColNama = hNama + hNip + 15;
-    let rowHeight = Math.max(hColNama, hJabatan, hKegiatan, hTanggal) + 10;
+    // Hitung tinggi konten Kolom 2 yang sebenarnya untuk spacing tengah
+    const hColNamaReal = hNama + hNip + 11;
+
+    let rowHeight = Math.max(hColNamaReal, hJabatan, hKegiatan, hTanggal) + 10;
     if (rowHeight < 40) rowHeight = 40;
 
     if (currentY + rowHeight > doc.page.height - 50) {
@@ -630,32 +626,41 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
     }
 
     let currentX = startX;
+    
+    // Kolom 1 (NO) 
     doc.rect(currentX, currentY, colWidths[0], rowHeight).stroke();
-    doc.text((i + 1).toString(), currentX, currentY + 5, { width: colWidths[0], align: "center" });
+    const hNo = doc.heightOfString((i + 1).toString(), { width: colWidths[0] });
+    doc.text((i + 1).toString(), currentX, currentY + (rowHeight - hNo) / 2, { width: colWidths[0], align: "center" });
     currentX += colWidths[0];
 
+    // Kolom 2 (NAMA / NIP) 
     doc.rect(currentX, currentY, colWidths[1], rowHeight).stroke();
-    doc.font("TMR-Bold").text(p.nama.toUpperCase(), currentX + 3, currentY + 5, { width: colWidths[1] - 6, align: "left" });
-    const lineY = currentY + hNama + 8;
+    const startY_Col2 = currentY + (rowHeight - hColNamaReal) / 2;
+    doc.font("TMR-Bold").text(p.nama.toUpperCase(), currentX + 3, startY_Col2, { width: colWidths[1] - 6, align: "left" });
+    const lineY = startY_Col2 + hNama + 8;
     doc.moveTo(currentX, lineY).lineTo(currentX + colWidths[1], lineY).stroke();
     doc.font("TMR").text(p.nip, currentX + 3, lineY + 3, { width: colWidths[1] - 6, align: "left" });
     currentX += colWidths[1];
 
+    // Kolom 3 (GOL) 
     doc.rect(currentX, currentY, colWidths[2], rowHeight).stroke();
-    doc.text(p.gol, currentX, currentY + 5, { width: colWidths[2], align: "center" });
+    const hGol = doc.heightOfString(p.gol, { width: colWidths[2] });
+    doc.text(p.gol, currentX, currentY + (rowHeight - hGol) / 2, { width: colWidths[2], align: "center" });
     currentX += colWidths[2];
 
+    // Kolom 4 (JABATAN) 
     doc.rect(currentX, currentY, colWidths[3], rowHeight).stroke();
-    const yJab = currentY + (rowHeight - hJabatan) / 2;
-    doc.text(p.jabatan, currentX + 3, yJab > currentY ? yJab : currentY + 5, { width: colWidths[3] - 6, align: "center" });
+    doc.text(p.jabatan, currentX + 3, currentY + (rowHeight - hJabatan) / 2, { width: colWidths[3] - 6, align: "center" });
     currentX += colWidths[3];
 
+    // Kolom 5 (TANGGAL) 
     doc.rect(currentX, currentY, colWidths[4], rowHeight).stroke();
-    doc.text(strTanggal, currentX + 3, currentY + 5, { width: colWidths[4] - 6, align: "center" });
+    doc.text(strTanggal, currentX + 3, currentY + (rowHeight - hTanggal) / 2, { width: colWidths[4] - 6, align: "center" });
     currentX += colWidths[4];
 
+    // Kolom 6 (KETERANGAN)
     doc.rect(currentX, currentY, colWidths[5], rowHeight).stroke();
-    doc.text(strKegiatan, currentX + 3, currentY + 5, { width: colWidths[5] - 6, align: "left" });
+    doc.text(strKegiatan, currentX + 3, currentY + (rowHeight - hKegiatan) / 2, { width: colWidths[5] - 6, align: "left" });
     currentX += colWidths[5];
 
     currentY += rowHeight;
@@ -681,9 +686,292 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
   });
 }
 
+// ==========================================
+// FUNGSI BARU: BUAT PDF PEMINJAMAN MOBIL
+// ==========================================
+
+function extractDateTime(dateStr) {
+  if (!dateStr) return { tgl: "-", jam: "-" };
+  
+  const lowerStr = dateStr.toLowerCase();
+  if (lowerStr.includes(" pukul ")) {
+    const idx = lowerStr.indexOf(" pukul ");
+    const tgl = dateStr.substring(0, idx).trim();
+    const jam = dateStr.substring(idx + 7).trim();
+    return { tgl, jam };
+  }
+  
+  const parts = dateStr.split(/, | /);
+  if (parts.length >= 4) {
+    return { tgl: parts.slice(0, 3).join(" "), jam: parts.slice(3).join(" ") };
+  }
+  
+  return { tgl: dateStr, jam: "-" };
+}
+
+async function buatSuratIzinMobilAsync(data, chatId, client) {
+  await ensureDirAsync(REPORTS_DIR);
+
+  // FORMAT FILE NAME BARU: nama_nip_Surat Izin Pemakaian Kendaraan_tanggal.pdf
+  const tanggalPembuatan = new Date().toISOString().split("T")[0];
+  const namaFile = `${data.pemakai.nama}_${data.pemakai.nip}_Surat Izin Pemakaian Kendaraan_${tanggalPembuatan}.pdf`;
+  const filePath = path.join(REPORTS_DIR, namaFile);
+
+  const cm = 28.3465;
+
+  const doc = new PDFDocument({ 
+    size: [21 * cm, 33 * cm], 
+    margins: { 
+      top: 3 * cm, 
+      bottom: 2.5 * cm, 
+      left: 2.5 * cm, 
+      right: 2.5 * cm 
+    } 
+  });
+
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  try {
+    const fontDir = path.join(__dirname, "..", "assets", "fonts");
+    try {
+      doc.registerFont("Bookman", path.join(fontDir, "BOOKOS.ttf"));
+      doc.registerFont("Bookman-Bold", path.join(fontDir, "BOOKOSB.ttf"));
+      doc.registerFont("Bookman-Italic", path.join(fontDir, "BOOKOSI.ttf"));
+      doc.font("Bookman");
+    } catch (e) {
+      doc.font("Times-Roman"); 
+    }
+
+    const marginLeft = doc.page.margins.left;
+    const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    // 1. KOP SURAT
+    // Atur Kop Surat mepet ke ujung atas (margin Y 0.5 cm)
+    const headerX = 1 * cm; 
+    const headerWidth = doc.page.width - (2 * cm); 
+    const headerY = 0.2 * cm; 
+
+    const kopSuratPath = path.join(__dirname, "..", "assets", "images", "kop-kemnaker.png");
+    let yAfterCop = headerY;
+    
+    if (fs.existsSync(kopSuratPath)) {
+      try {
+        const bufKop = await fsPromises.readFile(kopSuratPath);
+        const dimKop = imageSize(bufKop);
+        const aspectRatio = dimKop.width / dimKop.height;
+        const imgHeight = headerWidth / aspectRatio;
+        
+        doc.image(bufKop, headerX, headerY, { width: headerWidth, height: imgHeight });
+        yAfterCop = headerY + imgHeight + 5; 
+      } catch (err) {
+        doc.font("Bookman-Bold").fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+        yAfterCop = headerY + 20;
+      }
+    } else {
+      doc.font("Bookman-Bold").fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+      yAfterCop = headerY + 20;
+    }
+
+    doc.lineWidth(1);
+    doc.moveTo(headerX, yAfterCop).lineTo(headerX + headerWidth, yAfterCop).stroke(); 
+    doc.moveTo(headerX, yAfterCop + 2).lineTo(headerX + headerWidth, yAfterCop + 2).stroke(); 
+
+    doc.y = yAfterCop + 20;
+
+    // 2. JUDUL
+    doc.font("Bookman").fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
+    doc.font("Bookman").fontSize(11).text("Nomor: .....................................................", { align: "center" });
+    doc.moveDown(0.8);
+
+    const labelX = marginLeft; 
+    const valueX = marginLeft + 140; 
+    const valWidth = availableWidth - 140;
+
+    const printRow = (label, value) => {
+      const startY = doc.y;
+      doc.text(label, labelX, startY, { width: valueX - labelX - 10, align: "left" });
+      doc.text(`: ${value}`, valueX, startY, { width: valWidth, align: "left" });
+      
+      const hLabel = doc.heightOfString(label, { width: valueX - labelX - 10 });
+      const hValue = doc.heightOfString(`: ${value}`, { width: valWidth });
+      doc.y = Math.max(startY + hLabel, startY + hValue) + 2; 
+    };
+
+    // 3. PENANGGUNG JAWAB
+    doc.font("Bookman").fontSize(11);
+    doc.text("Yang bertanda tangan di bawah ini:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Nama", data.penanggungJawab.nama);
+    printRow("NIP", data.penanggungJawab.nip);
+    printRow("Jabatan", data.penanggungJawab.jabatan);
+    
+    doc.text("Selaku penanggung jawab kendaraan dinas.", marginLeft, doc.y);
+    doc.moveDown(0.5);
+
+    // 4. PEMAKAI
+    doc.text("Memberikan izin kepada:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Nama", data.pemakai.nama);
+    printRow("NIP/NIK", data.pemakai.nip);
+    printRow("Jabatan", data.pemakai.jabatan);
+    doc.moveDown(0.5);
+
+    // 5. DETAIL KENDARAAN
+    doc.text("Untuk memakai kendaraan operasional:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Merek/Type Mobil", data.kendaraan.merek);
+    printRow("Nomor TNKB", data.kendaraan.tnkb);
+    printRow("Keperluan", data.kendaraan.keperluan);
+
+    const pinjamObj = extractDateTime(data.kendaraan.tanggalMulai);
+    const kembaliObj = extractDateTime(data.kendaraan.tanggalSelesai);
+    const textTanggalPemakaian = `${pinjamObj.tgl} pukul ${pinjamObj.jam} s.d. ${kembaliObj.tgl} pukul ${kembaliObj.jam}`;
+    
+    printRow("Tanggal pemakaian", textTanggalPemakaian);
+    doc.moveDown(0.8);
+
+    // 6. KETENTUAN
+    doc.text("Dengan ketentuan pemakai bertanggung jawab terhadap resiko kehilangan, serta kerusakan yang terjadi selama dalam pemakaian dan wajib mengembalikan setelah pemakaian.", marginLeft, doc.y, { align: "justify", width: availableWidth });
+    doc.moveDown(1);
+
+    // 7. TANDA TANGAN ATAS
+    const tglTtd = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    const yTtdAtas = doc.y;
+    
+    const ttdWidth = 200;
+    const rightTtdX = marginLeft + availableWidth - ttdWidth;
+    
+    doc.text(`Jakarta, ${tglTtd}`, rightTtdX, yTtdAtas, { align: "center", width: ttdWidth });
+    
+    doc.moveDown(1);
+    const yTtdJabatan = doc.y;
+    
+    doc.text("Penanggung Jawab\nKendaraan Dinas,", marginLeft, yTtdJabatan, { align: "center", width: ttdWidth });
+    const yAfterJabatanKiri = doc.y;
+    
+    doc.text("Pemakai,", rightTtdX, yTtdJabatan, { align: "center", width: ttdWidth });
+    const yAfterJabatanKanan = doc.y;
+
+    doc.y = Math.max(yAfterJabatanKiri, yAfterJabatanKanan) + 40;
+    const yNamaTtd = doc.y;
+
+    doc.text(`(${data.penanggungJawab.nama})`, marginLeft, yNamaTtd, { align: "center", width: ttdWidth });
+    const yNipKiri = doc.y;
+    doc.text(`NIP. ${data.penanggungJawab.nip}`, marginLeft, yNipKiri, { align: "center", width: ttdWidth });
+    const yAkhirKiri = doc.y;
+
+    doc.text(`(${data.pemakai.nama})`, rightTtdX, yNamaTtd, { align: "center", width: ttdWidth });
+    const yNipKanan = doc.y;
+    doc.text(`NIP/NIK. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
+    const yAkhirKanan = doc.y;
+
+    doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
+
+    // --- BATAS GARIS GANDA & SPACING TABEL ---
+    const doubleLineY = doc.y;
+    doc.moveTo(marginLeft, doubleLineY).lineTo(marginLeft + availableWidth, doubleLineY).stroke();
+    doc.moveTo(marginLeft, doubleLineY + 2).lineTo(marginLeft + availableWidth, doubleLineY + 2).stroke();
+    
+    doc.y = doubleLineY + 10;
+
+    // 8. TABEL PENGEMBALIAN
+    doc.page.margins.bottom = 0; 
+    
+    doc.font("Bookman").text("PENGEMBALIAN KENDARAAN OPERASIONAL", marginLeft, doc.y, { align: "center", width: availableWidth });
+    doc.moveDown(0.5);
+
+    const tableY = doc.y;
+    
+    const col1Width = availableWidth * 0.40; 
+    const col2Width = availableWidth * 0.30;
+    const col3Width = availableWidth * 0.30;
+    
+    const rowHeight = 170; 
+    const headerHeight = 35; 
+
+    // Kotak Utama Tabel
+    doc.rect(marginLeft, tableY, col1Width, rowHeight).stroke();
+    doc.rect(marginLeft + col1Width, tableY, col2Width, rowHeight).stroke();
+    doc.rect(marginLeft + col1Width + col2Width, tableY, col3Width, rowHeight).stroke();
+
+    // Garis Potong Horizontal didalam kolom 2 & 3
+    doc.moveTo(marginLeft + col1Width, tableY + headerHeight)
+       .lineTo(marginLeft + availableWidth, tableY + headerHeight)
+       .stroke();
+
+    // --- Isi Kolom 1 (Kiri) ---
+    doc.text("Kendaraan operasional tersebut diatas telah selesai digunakan dan dikembalikan kepada penanggung jawab kendaraan dinas dalam", marginLeft + 5, tableY + 10, { width: col1Width - 10, align: "left" });
+    doc.text(`kondisi: ${data.pengembalian.kondisi}`, marginLeft + 5, tableY + rowHeight - 20, { width: col1Width - 10, align: "left" });
+
+    // --- Isi Kolom 2 (Tengah) ---
+    const col2X = marginLeft + col1Width;
+    doc.font("Bookman").text("Pemakai", col2X + 5, tableY + 10, { width: col2Width - 10, align: "center" });
+    
+    doc.text("Dikembalikan", col2X + 5, tableY + headerHeight + 10, { width: col2Width - 10, align: "left" });
+    doc.text(`tanggal: ${kembaliObj.tgl}`, col2X + 5, tableY + headerHeight + 25, { width: col2Width - 10, align: "left" });
+    doc.text(`pukul: ${kembaliObj.jam}`, col2X + 5, tableY + headerHeight + 40, { width: col2Width - 10, align: "left" });
+    
+    const namePemakai = `(${data.pemakai.nama})`;
+    const hPemakai = doc.heightOfString(namePemakai, { width: col2Width - 10 });
+    doc.text(namePemakai, col2X + 5, tableY + rowHeight - hPemakai - 15, { width: col2Width - 10, align: "center" });
+
+    // --- Isi Kolom 3 (Kanan) ---
+    const col3X = marginLeft + col1Width + col2Width;
+    doc.font("Bookman").text("Penanggung Jawab\nKendaraan Dinas", col3X + 5, tableY + 5, { width: col3Width - 10, align: "center" });
+    
+    doc.text("Diterima", col3X + 5, tableY + headerHeight + 10, { width: col3Width - 10, align: "left" });
+    doc.text(`tanggal: ${kembaliObj.tgl}`, col3X + 5, tableY + headerHeight + 25, { width: col3Width - 10, align: "left" });
+    doc.text(`pukul: ${kembaliObj.jam}`, col3X + 5, tableY + headerHeight + 40, { width: col3Width - 10, align: "left" });
+
+    const namePJ = `(${data.penanggungJawab.nama})`;
+    const hPJ = doc.heightOfString(namePJ, { width: col3Width - 10 });
+    doc.text(namePJ, col3X + 5, tableY + rowHeight - hPJ - 15, { width: col3Width - 10, align: "center" });
+
+    // 9. FOOTER BSrE
+    try {
+      doc.font("Bookman-Italic").fontSize(9);
+    } catch(e) {
+      doc.font("Bookman").fontSize(9);
+    }
+    
+    const footerY = (33 * cm) - (1.5 * cm);
+    doc.text("Dokumen ini telah ditandatangani secara elektronik yang diterbitkan oleh Balai Sertifikasi Elektronik (BSrE), BSSN", marginLeft, footerY, { align: "center", width: availableWidth, lineBreak: false });
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      stream.on("finish", async () => {
+        try {
+          const media = MessageMedia.fromFilePath(filePath);
+          try {
+            await client.sendMessage(chatId, media, {
+              caption: "Berikut adalah *Surat Izin Pemakaian Kendaraan Operasional* Anda yang telah otomatis dibuat oleh sistem beserta log pengembaliannya.",
+            });
+          } catch(e) {
+             console.error("❌ Gagal kirim PDF Mobil ke user:", e);
+          }
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+      stream.on("error", (err) => reject(err));
+    });
+  } catch (err) {
+    doc.end();
+    console.error("❌ Error fatal saat pembuatan PDF Mobil:", err);
+    throw err;
+  }
+}
+
 module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
   buatPDFRekapBulanan,
+  buatSuratIzinMobilAsync,
   calculateDuration
 };
