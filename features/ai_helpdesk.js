@@ -1,9 +1,9 @@
+require("dotenv").config();
 const Groq = require("groq-sdk");
 const fs = require("fs");
 const path = require("path");
 
-// Konfigurasi API Key Groq
-const GROQ_API_KEY = "";
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const DATA_FILE = "data_helpdesk.txt";
 
 const groq = new Groq({ apiKey: GROQ_API_KEY });
