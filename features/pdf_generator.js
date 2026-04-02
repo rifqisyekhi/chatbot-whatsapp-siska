@@ -613,7 +613,6 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
     const hKegiatan = doc.heightOfString(strKegiatan, { width: colWidths[5] - 6 });
     const hTanggal = doc.heightOfString(strTanggal, { width: colWidths[4] - 6 });
 
-    // Hitung tinggi konten Kolom 2 yang sebenarnya untuk spacing tengah
     const hColNamaReal = hNama + hNip + 11;
 
     let rowHeight = Math.max(hColNamaReal, hJabatan, hKegiatan, hTanggal) + 10;
@@ -733,24 +732,45 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
   doc.pipe(stream);
 
   try {
+    let fontNormal = "Times-Roman";
+    let fontBold = "Times-Bold";
+    let fontItalic = "Times-Italic";
+
     const fontDir = path.join(__dirname, "..", "assets", "fonts");
-    try {
-      doc.registerFont("Bookman", path.join(fontDir, "BOOKOS.ttf"));
-      doc.registerFont("Bookman-Bold", path.join(fontDir, "BOOKOSB.ttf"));
-      doc.registerFont("Bookman-Italic", path.join(fontDir, "BOOKOSI.ttf"));
-      doc.font("Bookman");
-    } catch (e) {
-      doc.font("Times-Roman"); 
+
+    // Logika anti-crash mendeteksi huruf besar/kecil ekstensi file
+    const getFontPath = (baseName) => {
+      const lower = path.join(fontDir, `${baseName}.ttf`);
+      const upper = path.join(fontDir, `${baseName}.TTF`);
+      if (fs.existsSync(lower)) return lower;
+      if (fs.existsSync(upper)) return upper;
+      return null;
+    };
+
+    const bookmanPath = getFontPath("BOOKOS");
+    const bookmanBoldPath = getFontPath("BOOKOSB");
+    const bookmanItalicPath = getFontPath("BOOKOSI");
+
+    if (bookmanPath && bookmanBoldPath && bookmanItalicPath) {
+      try {
+        doc.registerFont("BookmanCustom", bookmanPath);
+        doc.registerFont("BookmanCustom-Bold", bookmanBoldPath);
+        doc.registerFont("BookmanCustom-Italic", bookmanItalicPath);
+        fontNormal = "BookmanCustom";
+        fontBold = "BookmanCustom-Bold";
+        fontItalic = "BookmanCustom-Italic";
+      } catch (e) {
+        console.error("Gagal register font custom, menggunakan fallback bawaan.");
+      }
     }
 
     const marginLeft = doc.page.margins.left;
     const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
     // 1. KOP SURAT
-    // Atur Kop Surat mepet ke ujung atas (margin Y 0.5 cm)
     const headerX = 1 * cm; 
     const headerWidth = doc.page.width - (2 * cm); 
-    const headerY = 0.2 * cm; 
+    const headerY = 0.2 * cm;
 
     const kopSuratPath = path.join(__dirname, "..", "assets", "images", "kop-kemnaker.png");
     let yAfterCop = headerY;
@@ -765,11 +785,11 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
         doc.image(bufKop, headerX, headerY, { width: headerWidth, height: imgHeight });
         yAfterCop = headerY + imgHeight + 5; 
       } catch (err) {
-        doc.font("Bookman-Bold").fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+        doc.font(fontBold).fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
         yAfterCop = headerY + 20;
       }
     } else {
-      doc.font("Bookman-Bold").fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+      doc.font(fontBold).fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
       yAfterCop = headerY + 20;
     }
 
@@ -780,8 +800,8 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
     doc.y = yAfterCop + 20;
 
     // 2. JUDUL
-    doc.font("Bookman").fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
-    doc.font("Bookman").fontSize(11).text("Nomor: .....................................................", { align: "center" });
+    doc.font(fontNormal).fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
+    doc.font(fontNormal).fontSize(11).text("Nomor: .....................................................", { align: "center" });
     doc.moveDown(0.8);
 
     const labelX = marginLeft; 
@@ -799,7 +819,7 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
     };
 
     // 3. PENANGGUNG JAWAB
-    doc.font("Bookman").fontSize(11);
+    doc.font(fontNormal).fontSize(11);
     doc.text("Yang bertanda tangan di bawah ini:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
@@ -881,7 +901,7 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
     // 8. TABEL PENGEMBALIAN
     doc.page.margins.bottom = 0; 
     
-    doc.font("Bookman").text("PENGEMBALIAN KENDARAAN OPERASIONAL", marginLeft, doc.y, { align: "center", width: availableWidth });
+    doc.font(fontNormal).text("PENGEMBALIAN KENDARAAN OPERASIONAL", marginLeft, doc.y, { align: "center", width: availableWidth });
     doc.moveDown(0.5);
 
     const tableY = doc.y;
@@ -909,7 +929,7 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
 
     // --- Isi Kolom 2 (Tengah) ---
     const col2X = marginLeft + col1Width;
-    doc.font("Bookman").text("Pemakai", col2X + 5, tableY + 10, { width: col2Width - 10, align: "center" });
+    doc.font(fontNormal).text("Pemakai", col2X + 5, tableY + 10, { width: col2Width - 10, align: "center" });
     
     doc.text("Dikembalikan", col2X + 5, tableY + headerHeight + 10, { width: col2Width - 10, align: "left" });
     doc.text(`tanggal: ${kembaliObj.tgl}`, col2X + 5, tableY + headerHeight + 25, { width: col2Width - 10, align: "left" });
@@ -921,7 +941,7 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
 
     // --- Isi Kolom 3 (Kanan) ---
     const col3X = marginLeft + col1Width + col2Width;
-    doc.font("Bookman").text("Penanggung Jawab\nKendaraan Dinas", col3X + 5, tableY + 5, { width: col3Width - 10, align: "center" });
+    doc.font(fontNormal).text("Penanggung Jawab\nKendaraan Dinas", col3X + 5, tableY + 5, { width: col3Width - 10, align: "center" });
     
     doc.text("Diterima", col3X + 5, tableY + headerHeight + 10, { width: col3Width - 10, align: "left" });
     doc.text(`tanggal: ${kembaliObj.tgl}`, col3X + 5, tableY + headerHeight + 25, { width: col3Width - 10, align: "left" });
@@ -933,9 +953,9 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
 
     // 9. FOOTER BSrE
     try {
-      doc.font("Bookman-Italic").fontSize(9);
+      doc.font(fontItalic).fontSize(9);
     } catch(e) {
-      doc.font("Bookman").fontSize(9);
+      doc.font(fontNormal).fontSize(9);
     }
     
     const footerY = (33 * cm) - (1.5 * cm);
