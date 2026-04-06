@@ -686,7 +686,7 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
 }
 
 // ==========================================
-// FUNGSI BARU: BUAT PDF PEMINJAMAN MOBIL
+// FUNGSI PDF KENDARAAN (VERSI AWAL: TANPA TABEL, HANYA TTD)
 // ==========================================
 
 function extractDateTime(dateStr) {
@@ -708,10 +708,9 @@ function extractDateTime(dateStr) {
   return { tgl: dateStr, jam: "-" };
 }
 
-async function buatSuratIzinMobilAsync(data, chatId, client) {
+async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
   await ensureDirAsync(REPORTS_DIR);
 
-  // FORMAT FILE NAME BARU: nama_nip_Surat Izin Pemakaian Kendaraan_tanggal.pdf
   const tanggalPembuatan = new Date().toISOString().split("T")[0];
   const namaFile = `${data.pemakai.nama}_${data.pemakai.nip}_Surat Izin Pemakaian Kendaraan_${tanggalPembuatan}.pdf`;
   const filePath = path.join(REPORTS_DIR, namaFile);
@@ -738,7 +737,225 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
 
     const fontDir = path.join(__dirname, "..", "assets", "fonts");
 
-    // Logika anti-crash mendeteksi huruf besar/kecil ekstensi file
+    const getFontPath = (baseName) => {
+      const lower = path.join(fontDir, `${baseName}.ttf`);
+      const upper = path.join(fontDir, `${baseName}.TTF`);
+      if (fs.existsSync(lower)) return lower;
+      if (fs.existsSync(upper)) return upper;
+      return null;
+    };
+
+    const bookmanPath = getFontPath("BOOKOS");
+    const bookmanBoldPath = getFontPath("BOOKOSB");
+    const bookmanItalicPath = getFontPath("BOOKOSI");
+
+    if (bookmanPath && bookmanBoldPath && bookmanItalicPath) {
+      try {
+        doc.registerFont("BookmanCustom", bookmanPath);
+        doc.registerFont("BookmanCustom-Bold", bookmanBoldPath);
+        doc.registerFont("BookmanCustom-Italic", bookmanItalicPath);
+        fontNormal = "BookmanCustom";
+        fontBold = "BookmanCustom-Bold";
+        fontItalic = "BookmanCustom-Italic";
+      } catch (e) {
+        console.error("Gagal register font custom, menggunakan fallback bawaan.");
+      }
+    }
+
+    const marginLeft = doc.page.margins.left;
+    const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+
+    // 1. KOP SURAT
+    const headerX = 1 * cm; 
+    const headerWidth = doc.page.width - (2 * cm); 
+    const headerY = 0.2 * cm;
+
+    const kopSuratPath = path.join(__dirname, "..", "assets", "images", "kop-kemnaker.png");
+    let yAfterCop = headerY;
+    
+    if (fs.existsSync(kopSuratPath)) {
+      try {
+        const bufKop = await fsPromises.readFile(kopSuratPath);
+        const dimKop = imageSize(bufKop);
+        const aspectRatio = dimKop.width / dimKop.height;
+        const imgHeight = headerWidth / aspectRatio;
+        
+        doc.image(bufKop, headerX, headerY, { width: headerWidth, height: imgHeight });
+        yAfterCop = headerY + imgHeight + 5; 
+      } catch (err) {
+        doc.font(fontBold).fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+        yAfterCop = headerY + 20;
+      }
+    } else {
+      doc.font(fontBold).fontSize(14).text("KOP SURAT", headerX, headerY, { align: "center", width: headerWidth });
+      yAfterCop = headerY + 20;
+    }
+
+    doc.lineWidth(1);
+    doc.moveTo(headerX, yAfterCop).lineTo(headerX + headerWidth, yAfterCop).stroke(); 
+    doc.moveTo(headerX, yAfterCop + 2).lineTo(headerX + headerWidth, yAfterCop + 2).stroke(); 
+
+    doc.y = yAfterCop + 20;
+
+    // 2. JUDUL
+    doc.font(fontNormal).fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
+    doc.font(fontNormal).fontSize(11).text("Nomor: .....................................................", { align: "center" });
+    doc.moveDown(0.8);
+
+    const labelX = marginLeft; 
+    const valueX = marginLeft + 140; 
+    const valWidth = availableWidth - 140;
+
+    const printRow = (label, value) => {
+      const startY = doc.y;
+      doc.text(label, labelX, startY, { width: valueX - labelX - 10, align: "left" });
+      doc.text(`: ${value}`, valueX, startY, { width: valWidth, align: "left" });
+      
+      const hLabel = doc.heightOfString(label, { width: valueX - labelX - 10 });
+      const hValue = doc.heightOfString(`: ${value}`, { width: valWidth });
+      doc.y = Math.max(startY + hLabel, startY + hValue) + 2; 
+    };
+
+    // 3. PENANGGUNG JAWAB
+    doc.font(fontNormal).fontSize(11);
+    doc.text("Yang bertanda tangan di bawah ini:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Nama", data.penanggungJawab.nama);
+    printRow("NIP", data.penanggungJawab.nip);
+    printRow("Jabatan", data.penanggungJawab.jabatan);
+    
+    doc.text("Selaku penanggung jawab kendaraan dinas.", marginLeft, doc.y);
+    doc.moveDown(0.5);
+
+    // 4. PEMAKAI
+    doc.text("Memberikan izin kepada:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Nama", data.pemakai.nama);
+    printRow("NIP/NIK", data.pemakai.nip);
+    printRow("Jabatan", data.pemakai.jabatan);
+    doc.moveDown(0.5);
+
+    // 5. DETAIL KENDARAAN
+    doc.text("Untuk memakai kendaraan operasional:", marginLeft, doc.y);
+    doc.moveDown(0.2);
+
+    printRow("Merek/Type Mobil", data.kendaraan.merek);
+    printRow("Nomor TNKB", data.kendaraan.tnkb);
+    printRow("Keperluan", data.kendaraan.keperluan);
+    
+    printRow("Tanggal peminjaman", data.kendaraan.tanggalMulai); // Versi awal tidak perlu jam kembali, cukup tgl dia pinjam
+    doc.moveDown(0.8);
+
+    // 6. KETENTUAN
+    doc.text("Dengan ketentuan pemakai bertanggung jawab terhadap resiko kehilangan, serta kerusakan yang terjadi selama dalam pemakaian dan wajib mengembalikan setelah pemakaian.", marginLeft, doc.y, { align: "justify", width: availableWidth });
+    doc.moveDown(1);
+
+    // 7. TANDA TANGAN ATAS
+    const tglTtd = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+    const yTtdAtas = doc.y;
+    
+    const ttdWidth = 200;
+    const rightTtdX = marginLeft + availableWidth - ttdWidth;
+    
+    doc.text(`Jakarta, ${tglTtd}`, rightTtdX, yTtdAtas, { align: "center", width: ttdWidth });
+    
+    doc.moveDown(1);
+    const yTtdJabatan = doc.y;
+    
+    doc.text("Penanggung Jawab\nKendaraan Dinas,", marginLeft, yTtdJabatan, { align: "center", width: ttdWidth });
+    const yAfterJabatanKiri = doc.y;
+    
+    doc.text("Pemakai,", rightTtdX, yTtdJabatan, { align: "center", width: ttdWidth });
+    const yAfterJabatanKanan = doc.y;
+
+    doc.y = Math.max(yAfterJabatanKiri, yAfterJabatanKanan) + 40;
+    const yNamaTtd = doc.y;
+
+    doc.text(`(${data.penanggungJawab.nama})`, marginLeft, yNamaTtd, { align: "center", width: ttdWidth });
+    const yNipKiri = doc.y;
+    doc.text(`NIP. ${data.penanggungJawab.nip}`, marginLeft, yNipKiri, { align: "center", width: ttdWidth });
+    const yAkhirKiri = doc.y;
+
+    doc.text(`(${data.pemakai.nama})`, rightTtdX, yNamaTtd, { align: "center", width: ttdWidth });
+    const yNipKanan = doc.y;
+    doc.text(`NIP/NIK. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
+    const yAkhirKanan = doc.y;
+
+    doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
+
+    // 8. FOOTER BSrE
+    doc.page.margins.bottom = 0; // Mencegah pembuatan halaman baru secara otomatis
+    try {
+      doc.font(fontItalic).fontSize(9);
+    } catch(e) {
+      doc.font(fontNormal).fontSize(9);
+    }
+    
+    const footerY = (33 * cm) - (1.5 * cm);
+    doc.text("Dokumen ini telah ditandatangani secara elektronik yang diterbitkan oleh Balai Sertifikasi Elektronik (BSrE), BSSN", marginLeft, footerY, { align: "center", width: availableWidth, lineBreak: false });
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      stream.on("finish", async () => {
+        try {
+          const media = MessageMedia.fromFilePath(filePath);
+          try {
+            await client.sendMessage(chatId, media, {
+              caption: "Berikut adalah *Surat Izin Pemakaian Kendaraan Operasional* (Bukti Pinjam). Gunakan surat ini untuk verifikasi pengambilan kunci.",
+            });
+          } catch(e) {
+             console.error("❌ Gagal kirim PDF Mobil ke user:", e);
+          }
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+      stream.on("error", (err) => reject(err));
+    });
+  } catch (err) {
+    doc.end();
+    console.error("❌ Error fatal saat pembuatan PDF Mobil Awal:", err);
+    throw err;
+  }
+}
+
+// ==========================================
+// FUNGSI PDF KENDARAAN (VERSI AKHIR: FULL DENGAN TABEL PENGEMBALIAN)
+// ==========================================
+
+async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
+  await ensureDirAsync(REPORTS_DIR);
+
+  const tanggalPembuatan = new Date().toISOString().split("T")[0];
+  const namaFile = `${data.pemakai.nama}_${data.pemakai.nip}_Log Pengembalian Kendaraan_${tanggalPembuatan}.pdf`;
+  const filePath = path.join(REPORTS_DIR, namaFile);
+
+  const cm = 28.3465;
+
+  const doc = new PDFDocument({ 
+    size: [21 * cm, 33 * cm], 
+    margins: { 
+      top: 3 * cm, 
+      bottom: 2.5 * cm, 
+      left: 2.5 * cm, 
+      right: 2.5 * cm 
+    } 
+  });
+
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  try {
+    let fontNormal = "Times-Roman";
+    let fontBold = "Times-Bold";
+    let fontItalic = "Times-Italic";
+
+    const fontDir = path.join(__dirname, "..", "assets", "fonts");
+
     const getFontPath = (baseName) => {
       const lower = path.join(fontDir, `${baseName}.ttf`);
       const upper = path.join(fontDir, `${baseName}.TTF`);
@@ -969,10 +1186,10 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
           const media = MessageMedia.fromFilePath(filePath);
           try {
             await client.sendMessage(chatId, media, {
-              caption: "Berikut adalah *Surat Izin Pemakaian Kendaraan Operasional* Anda yang telah otomatis dibuat oleh sistem beserta log pengembaliannya.",
+              caption: "Berikut adalah *Log Pengembalian Kendaraan Operasional* Anda yang telah otomatis dibuat oleh sistem beserta tabel laporan kondisinya di bawah.",
             });
           } catch(e) {
-             console.error("❌ Gagal kirim PDF Mobil ke user:", e);
+             console.error("❌ Gagal kirim PDF Mobil Akhir ke user:", e);
           }
           resolve();
         } catch (err) {
@@ -983,7 +1200,7 @@ async function buatSuratIzinMobilAsync(data, chatId, client) {
     });
   } catch (err) {
     doc.end();
-    console.error("❌ Error fatal saat pembuatan PDF Mobil:", err);
+    console.error("❌ Error fatal saat pembuatan PDF Mobil Akhir:", err);
     throw err;
   }
 }
@@ -992,6 +1209,7 @@ module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
   buatPDFRekapBulanan,
-  buatSuratIzinMobilAsync,
+  buatSuratIzinMobilAwalAsync, // Fungsi PDF Awal
+  buatSuratIzinMobilAkhirAsync, // Fungsi PDF Akhir (dengan tabel)
   calculateDuration
 };

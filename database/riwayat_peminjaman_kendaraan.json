@@ -287,5 +287,115 @@
     "lama_pakai": "2 April 2026 pukul 08:00 s.d. 2 April 2026 pukul 18:00",
     "jam_pinjam": "2 April 2026 pukul 08:00",
     "jam_akhir": "2 April 2026 pukul 18:00"
+  },
+  {
+    "tanggal": "2026-04-06T03:57:28.913Z",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "kendaraan": "Isuzu Panther LM25",
+    "tujuan": "Dinas ke polteknaker",
+    "kondisi": "Aman",
+    "lama_pakai": "2 April 2026 pukul 08:00 s.d. 2 April 2026 pukul 18:00",
+    "jam_pinjam": "2 April 2026 pukul 08:00",
+    "jam_akhir": "2 April 2026 pukul 18:00"
+  },
+  {
+    "tanggal": "2026-04-06T04:02:19.215Z",
+    "nama_pegawai": "Prasetyo Muhammad Sidqi, S.M.",
+    "nip": "199611272018121001",
+    "kendaraan": "Toyota Kijang Innova J TGN4OR",
+    "tujuan": "Dalam rangka penugasan Pembinaan Pengelolaan Keuangan dan Barang Milik Negara",
+    "kondisi": "aman",
+    "lama_pakai": "tanggal 6 April 2026 pukul 09.00 s.d. 8 April 2026 pukul 09.00",
+    "jam_pinjam": "tanggal 6 April 2026 pukul 09.00",
+    "jam_akhir": "8 April 2026 pukul 09.00"
+  },
+  {
+    "tanggal": "2026-04-06T05:03:04.729Z",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "kendaraan": "Honda Mobilio RS CVT",
+    "tujuan": "Dines ke Polteknaker",
+    "kondisi": "Aman",
+    "lama_pakai": "2 April 2026 pukul 08:00 s.d. 4 April 2026 pukul 08:00",
+    "jam_pinjam": "2 April 2026 pukul 08:00",
+    "jam_akhir": "4 April 2026 pukul 08:00"
+  },
+  {
+    "tanggal": "2026-04-06T07:32:27.700Z",
+    "nama_pegawai": "Haris Dwi Wibowo",
+    "nip": "3276022212960000",
+    "kendaraan": "Toyota Kijang Innova J TGN4OR",
+    "tujuan": "Bandung\nPerjalanan dinas dalam rangka peningkatan kualitas laporan keuangan kemnaker thn 2025 unaudited  dan monitoring usulan jurnal koreksi lk kemnaker thn 2025",
+    "kondisi": "Aman",
+    "lama_pakai": "8 April 2026 pukul 08.00 s.d. 10 April 2026 pukul 16.00",
+    "jam_pinjam": "8 April 2026 pukul 08.00",
+    "jam_akhir": "10 April 2026 pukul 16.00"
+  },
+  {
+    "tanggal": "2026-04-06T07:43:21.420Z",
+    "nama_pegawai": "YOGA DWIDINGGA",
+    "nip": "199005262025211011",
+    "kendaraan": "Toyota Kijang Innova J TGN4OR",
+    "tujuan": "7",
+    "kondisi": "Kembali",
+    "lama_pakai": "Kembali s.d. Kembali",
+    "jam_pinjam": "Kembali",
+    "jam_akhir": "Kembali"
+  },
+  {
+    "tanggal": "2026-04-06T07:45:40.969Z",
+    "nama_pegawai": "YOGA DWIDINGGA",
+    "nip": "199005262025211011",
+    "kendaraan": "Toyota Kijang Innova J TGN4OR",
+    "tujuan": "Pembinaan & pengelolaan keuangan BMN",
+    "kondisi": "Aman",
+    "lama_pakai": "8 April 2026 pukul 08.00 s.d. 10 April 2026 pukul 16.00",
+    "jam_pinjam": "8 April 2026 pukul 08.00",
+    "jam_akhir": "10 April 2026 pukul 16.00"
+  },
+  {
+    "tanggal": "2026-04-06T08:00:50.803Z",
+    "nama_pegawai": "YOGA DWIDINGGA",
+    "nip": "199005262025211011",
+    "kendaraan": "Honda NEW FREED  GB3 1.5E AT",
+    "tujuan": "Pembinaan & pengelolaan keuangan BMN",
+    "kondisi": "Aman",
+    "lama_pakai": "8 April 2026 pukul 08.00 s.d. 10 April 2026 pukul 16.00",
+    "jam_pinjam": "8 April 2026 pukul 08.00",
+    "jam_akhir": "10 April 2026 pukul 16.00"
+  },
+  {
+    "tanggal": "2026-04-06T08:32:30.008Z",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "kendaraan": "Honda Mobilio RS CVT",
+    "tujuan": "Dines ke Polteknaker",
+    "kondisi": "Aman",
+    "lama_pakai": "2 April 2026 pukul 08:00 s.d. 2 April 2026 pukul 22:00",
+    "jam_pinjam": "2 April 2026 pukul 08:00",
+    "jam_akhir": "2 April 2026 pukul 22:00"
+  },
+  {
+    "tanggal": "2026-04-06T08:37:50.741Z",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "kendaraan": "Honda Mobilio RS CVT",
+    "tujuan": "Dinas ke Polteknaker",
+    "kondisi": "Aman",
+    "lama_pakai": "2 April 2026 pukul 08.00 s.d. 2 April 2026 pukul 18.00",
+    "jam_pinjam": "2 April 2026 pukul 08.00",
+    "jam_akhir": "2 April 2026 pukul 18.00"
+  },
+  {
+    "tanggal": "2026-04-06T08:55:26.320Z",
+    "nama_pegawai": "Rifqi Syekhi Marsaputra",
+    "nip": "1217050123",
+    "kendaraan": "Yamaha Mio M3",
+    "tujuan": "Dinas ke Polteknaker",
+    "kondisi": "Aman",
+    "lama_pakai": "6 April 2026 pukul 08.00 s.d. 9 April 2026 pukul 08.00",
+    "jam_pinjam": "6 April 2026 pukul 08.00",
+    "jam_akhir": "9 April 2026 pukul 08.00"
   }
 ]
