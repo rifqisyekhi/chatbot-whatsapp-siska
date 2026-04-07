@@ -6,6 +6,7 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
+const express = require('express'); // <-- TAMBAHAN: WEB SERVER EXPRESS
 
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
@@ -17,6 +18,20 @@ const {
   calculateDuration,
 } = require("./features/pdf_generator");
 const { HELPDESK_GROUP_ID, FORM_CUTI_URL } = require("./config/config");
+
+// ==========================================
+// II. SERVER WEB UNTUK KATALOG BARANG (PORT 3000)
+// ==========================================
+const app = express();
+const port = 3000;
+
+// Izinkan akses ke folder public (untuk index.html) dan assets (untuk gambar)
+app.use(express.static(path.join(__dirname, 'public')));
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
+
+app.listen(port, () => {
+  console.log(`[WEB SERVER] Katalog Persediaan aktif di port ${port}`);
+});
 
 // --- DATABASE KENDARAAN ---
 const KENDARAAN_PATH = path.join(
@@ -110,14 +125,14 @@ function simpanRiwayatLemburAsync(data) {
 
 const ID_PAK_ALPHA = "6285156151128@c.us";
 
-// II. STATE MANAGEMENT
+// III. STATE MANAGEMENT
 let dbPegawai = [];
 const pengajuanBySender = {};
 const pengajuanByAtasanMsgId = {};
 const helpdeskQueue = {};
 const helpdeskInstruksiMap = {};
 
-// III. UTILITAS & LOGGING
+// IV. UTILITAS & LOGGING
 const LOGS_DIR = path.join(__dirname, "logs");
 const UPLOADS_DIR = path.join(__dirname, "uploads");
 
@@ -187,7 +202,7 @@ function isApprovalNo(text) {
   );
 }
 
-// IV. DATABASE & API HELPER
+// V. DATABASE & API HELPER
 function loadDatabase() {
   try {
     const dbPath = path.join(
@@ -255,7 +270,7 @@ function cariAtasanPegawai(pegawai) {
   );
 }
 
-// V. WHATSAPP CLIENT HELPER
+// VI. WHATSAPP CLIENT HELPER
 async function kirimDenganTyping(client, chatId, text) {
   try {
     try {
@@ -275,7 +290,7 @@ async function kirimDenganTyping(client, chatId, text) {
   }
 }
 
-// VI. WHATSAPP CLIENT INIT & EVENT HANDLERS
+// VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
 const client = new Client({
   authStrategy: new LocalAuth(),
   puppeteer: {
@@ -302,7 +317,7 @@ client.on("disconnected", (reason) =>
   console.log(`[WA] Bot disconnect: ${reason}`),
 );
 
-// VII. MESSAGE HANDLER
+// VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
   // --- FILTER PESAN (MENCEGAH DUPLIKAT) ---
   if (message.from === "status@broadcast") return;
@@ -348,7 +363,34 @@ client.on("message", async (message) => {
     const flow = pengajuanBySender[chatId];
 
     // ==========================================
-    // 1. HANDLER PERINTAH REKAP (KHUSUS TU)
+    // 1. PENANGKAP ORDER PERSEDIAAN DARI WEB (BARU)
+    // ==========================================
+    if (message.body.startsWith("!ORDER_BARANG")) {
+      const pesananClean = message.body.replace("!ORDER_BARANG", "").trim();
+      
+      // Beri tahu pemesan
+      await kirimDenganTyping(
+        client, 
+        chatId, 
+        "✅ *Pesanan Diterima!*\n\nPermintaan persediaan Anda telah kami catat dan sedang diteruskan ke Admin Gudang / Tata Usaha untuk diproses."
+      );
+
+      // Teruskan daftar pesanan ke Pak Alpha / Admin
+      const namaPemesan = pegawai ? pegawai["Nama Pegawai"] : "Pegawai (Tidak ada di DB)";
+      const nipPemesan = pegawai ? (pegawai["nip"] || pegawai["NIP"] || "-") : "-";
+      const unitKerja = pegawai ? (pegawai["Unit Kerja"] || pegawai["SUBUNIT"] || "-") : "-";
+
+      const forwardTeks = `📦 *ORDER PERSEDIAAN BARU* 📦\n\n*Pemohon:* ${namaPemesan}\n*NIP:* ${nipPemesan}\n*Unit:* ${unitKerja}\n\n*Detail Pesanan:*\n${pesananClean}\n\n_Mohon admin menyiapkan barang tersebut._`;
+      
+      // Kirim ke Pak Alpha
+      await client.sendMessage(ID_PAK_ALPHA, forwardTeks);
+      
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    // ==========================================
+    // 2. HANDLER PERINTAH REKAP (KHUSUS TU)
     // ==========================================
     if (bodyLower.startsWith("rekap")) {
       if (!pegawai) {
@@ -454,7 +496,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 2. HANDLER UPLOAD FOTO (LEMBUR)
+    // 3. HANDLER UPLOAD FOTO (LEMBUR)
     // ==========================================
     if (flow?.step === "upload-foto") {
       if (message.hasMedia) {
@@ -562,7 +604,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 3. HANDLER GRUP (HELPDESK ADMIN)
+    // 4. HANDLER GRUP (HELPDESK ADMIN)
     // ==========================================
     if (isGroup) {
       if (chatId === HELPDESK_GROUP_ID && message.hasQuotedMsg) {
@@ -618,7 +660,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 4. HANDLER APPROVAL ATASAN (DM)
+    // 5. HANDLER APPROVAL ATASAN (DM)
     // ==========================================
     if (message.hasQuotedMsg) {
       const quoted = await message.getQuotedMessage();
@@ -677,7 +719,6 @@ client.on("message", async (message) => {
                     kondisi: "-",
                   },
                 };
-
                 await buatSuratIzinMobilAwalAsync(dataPDFMobil, pemohonId, client);
               } catch (pdfErr) {
                 console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
@@ -686,7 +727,6 @@ client.on("message", async (message) => {
             } else {
               pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
             }
-            
             delete pengajuanBySender[pemohonId];
           }
 
@@ -707,7 +747,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 5. HANDLER EKSTERNAL & HELPDESK
+    // 6. HANDLER EKSTERNAL & HELPDESK
     // ==========================================
     if (!pegawai || helpdeskQueue[chatId]) {
       if (helpdeskQueue[chatId]) {
@@ -810,7 +850,7 @@ client.on("message", async (message) => {
             let nipDisplay = "-";
             if (pegawai) {
               namaDisplay = pegawai["Nama Pegawai"];
-              nipDisplay = pegawai["nip"] || pegawai["NIP"] || "-";
+              nipDisplay = pegawai["NIP"] || pegawai["NIP"] || "-";
             }
 
             const pesanEskalasi = `[HELPDESK - PERTANYAAN BELUM TERJAWAB]\n\nIdentitas : ${namaDisplay}\nNIP       : ${nipDisplay}\nPertanyaan: ${pertanyaanUser}\n\n_AI tidak dapat menjawab pertanyaan ini._\n\n*Balas Pesan ini (QUOTE REPLY) Untuk Menjawab*`;
@@ -844,7 +884,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 6. HANDLER MENU UTAMA & RESET
+    // 7. HANDLER MENU UTAMA & RESET
     // ==========================================
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
@@ -857,7 +897,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 7. ROUTING MENU UTAMA
+    // 8. ROUTING MENU UTAMA
     // ==========================================
     if (flow.step === "menu") {
       if (bodyLower === "1") {
@@ -909,12 +949,11 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "5") {
-        const linkGForm =
-          "https://docs.google.com/forms/d/e/1FAIpQLSfC8aa3eGzNCjB4B_okAFxmkmbttPTraqgNeKGR0wJ1bPc1HA/viewform";
+        const linkWebCart = `http://192.168.221.44:3000/`; 
         await kirimDenganTyping(
           client,
           chatId,
-          `*Formulir Pengambilan Persediaan*\n\nSilakan isi daftar permintaan barang melalui link berikut:\n${linkGForm}`,
+          `*Formulir Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${linkWebCart}`,
         );
         delete pengajuanBySender[chatId];
         return;
@@ -954,7 +993,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 8. STATE MACHINE (PROSES ALUR SEMUA MENU)
+    // 9. STATE MACHINE (PROSES ALUR SEMUA MENU)
     // ==========================================
 
     // --- ALUR WFA ---
@@ -1304,7 +1343,7 @@ client.on("message", async (message) => {
         flow.pegawai["NO HP ATASAN"].trim() === "";
 
       if (isPimpinan) {
-        let pesanPegawai = `*Pengajuan Cuti OTOMATIS DISETUJUI* karena Anda terdeteksi sebagai Pimpinan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
+        let pesanPegawai = `*Pengajuan Cuti OTOMATIS DISETUJU* karena Anda terdeteksi sebagai Pimpinan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
         await kirimDenganTyping(client, chatId, pesanPegawai);
         delete pengajuanBySender[chatId];
         return;
@@ -1392,7 +1431,7 @@ client.on("message", async (message) => {
             if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
 
             text += `\n~- ${m.nama} (${m.plat})~`;
-            text += `\n   └ Dipakai: ${namaPeminjam}`;
+            text += `\n   └ Dipakai: ${namaPeminjam}`;
           });
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;
@@ -1510,7 +1549,7 @@ client.on("message", async (message) => {
           await kirimDenganTyping(
             client,
             chatId,
-            `*Peminjaman OTOMATIS DISETUJUI* karena Anda terdeteksi sebagai Pimpinan/Penanggung Jawab.\n\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`,
+            `*Peminjaman OTOMATIS DISETUJU* karena Anda terdeteksi sebagai Pimpinan/Penanggung Jawab.\n\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`,
           );
 
           try {
@@ -1723,7 +1762,7 @@ client.on("message", async (message) => {
   }
 });
 
-// VIII. GLOBAL ERROR HANDLERS & START
+// IX. GLOBAL ERROR HANDLERS & START
 process.on("unhandledRejection", (reason, p) => {
   console.error("[UNHANDLED REJECTION]", reason);
   logToFile("error", "UNHANDLED", String(reason));
