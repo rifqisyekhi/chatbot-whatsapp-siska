@@ -6,7 +6,8 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const express = require('express'); // <-- TAMBAHAN: WEB SERVER EXPRESS
+const express = require('express');
+const cors = require('cors');
 
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
@@ -25,12 +26,24 @@ const { HELPDESK_GROUP_ID, FORM_CUTI_URL } = require("./config/config");
 const app = express();
 const port = 3000;
 
-// Izinkan akses ke folder public (untuk index.html) dan assets (untuk gambar)
+app.use(cors());
+app.use(express.json());
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-app.listen(port, () => {
-  console.log(`[WEB SERVER] Katalog Persediaan aktif di port ${port}`);
+app.get('/api/barang', (req, res) => {
+    try {
+        const data = fs.readFileSync(path.join(__dirname, 'stok_barang.json'), 'utf8');
+        res.json(JSON.parse(data));
+    } catch (err) {
+        console.error("Gagal membaca database barang:", err);
+        res.status(500).json({ error: "Gagal memuat data persediaan" });
+    }
+});
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(`[WEB SERVER] API & Katalog aktif di port ${port}`);
 });
 
 // --- DATABASE KENDARAAN ---
@@ -319,8 +332,18 @@ client.on("disconnected", (reason) =>
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
-  // --- FILTER PESAN (MENCEGAH DUPLIKAT) ---
+
+  // 1. Buang update status WA dulu biar enteng
   if (message.from === "status@broadcast") return;
+
+  // 2. FILTER ANTI-SPAM (Pesan basi saat bot mati)
+  const waktuSekarang = Math.floor(Date.now() / 1000);
+  if (waktuSekarang - message.timestamp > 60) {
+    console.log(`[ABAIKAN] Pesan lama tertahan dari ${message.from}`);
+    return;
+  }
+  
+  // 3. FILTER TIPE PESAN LAINNYA
   if (
     message.type === "e2e_notification" ||
     message.type === "protocol" ||
@@ -627,8 +650,13 @@ client.on("message", async (message) => {
             }
           } catch (errLearn) {}
 
-          const balasan = `Halo, berikut jawaban dari Helpdesk Biro Keuangan:\n\n*${message.body}*`;
-          await kirimDenganTyping(client, targetUser, balasan);
+          if (message.hasMedia) {
+            const media = await message.downloadMedia();
+            await client.sendMessage(targetUser, media, { caption: message.body || "" });
+          } else {
+            const balasan = `Halo, berikut jawaban dari Helpdesk Biro Keuangan:\n\n*${message.body}*`;
+            await kirimDenganTyping(client, targetUser, balasan);
+          }
 
           const followup = `Apakah jawaban dari Helpdesk sudah membantu?\n\nKetik *selesai* jika sudah.\nAtau pilih:\n1. Ajukan pertanyaan lanjutan\n2. Jadwalkan konsultasi`;
           await kirimDenganTyping(client, targetUser, followup);
