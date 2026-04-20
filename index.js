@@ -13,7 +13,6 @@ const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
-  buatPDFRekapBulanan,
   buatSuratIzinMobilAwalAsync,
   buatSuratIzinMobilAkhirAsync,
   calculateDuration,
@@ -409,112 +408,6 @@ client.on("message", async (message) => {
       await client.sendMessage(ID_PAK_ALPHA, forwardTeks);
       
       delete pengajuanBySender[chatId];
-      return;
-    }
-
-    // ==========================================
-    // 2. HANDLER PERINTAH REKAP (KHUSUS TU)
-    // ==========================================
-    if (bodyLower.startsWith("rekap")) {
-      if (!pegawai) {
-        await kirimDenganTyping(
-          client,
-          chatId,
-          "Anda tidak terdaftar dalam database pegawai.",
-        );
-        return;
-      }
-
-      const unit = (
-        pegawai["Unit"] ||
-        pegawai["Subbagian"] ||
-        pegawai["Unit Kerja"] ||
-        pegawai["SUBUNIT"] ||
-        ""
-      ).toUpperCase();
-      const jabatan = (pegawai["Jabatan"] || "").toUpperCase();
-      const isAnakTU =
-        unit.includes("TU") ||
-        unit.includes("TATA USAHA") ||
-        jabatan.includes("TATA USAHA");
-
-      if (!isAnakTU) {
-        await kirimDenganTyping(
-          client,
-          chatId,
-          "*AKSES DITOLAK*\nFitur !rekap hanya dapat diakses oleh Subunit Tata Usaha (TU).",
-        );
-        return;
-      }
-
-      const args = bodyLower.split(" ");
-      const now = new Date();
-      const bulanInput = args[1] ? parseInt(args[1]) : now.getMonth() + 1;
-      const tahunInput = args[2] ? parseInt(args[2]) : now.getFullYear();
-
-      await kirimDenganTyping(
-        client,
-        chatId,
-        `Memproses Rekap SPK Bulan ${bulanInput}-${tahunInput}...`,
-      );
-
-      let riwayat = [];
-      if (fs.existsSync(RIWAYAT_PATH)) {
-        riwayat = JSON.parse(fs.readFileSync(RIWAYAT_PATH, "utf8"));
-      }
-
-      const dataBulanIni = riwayat.filter((row) => {
-        const d = new Date(row.tanggal);
-        return (
-          d.getMonth() + 1 === bulanInput && d.getFullYear() === tahunInput
-        );
-      });
-
-      if (dataBulanIni.length === 0) {
-        await kirimDenganTyping(
-          client,
-          chatId,
-          "Belum ada data lembur di periode tersebut.",
-        );
-        return;
-      }
-
-      function groupDataByNIP(dataMentah) {
-        const rekap = {};
-        dataMentah.sort((a, b) => new Date(a.tanggal) - new Date(b.tanggal));
-        dataMentah.forEach((row) => {
-          if (!rekap[row.nip]) {
-            rekap[row.nip] = {
-              nama: row.nama,
-              nip: row.nip,
-              gol: row.gol || "-",
-              jabatan: row.jabatan,
-              tanggal: new Set(),
-              kegiatan: [],
-            };
-          }
-          const tgl = row.tanggal.split("-")[2].replace(/^0+/, "");
-          rekap[row.nip].tanggal.add(tgl);
-          rekap[row.nip].kegiatan.push(row.kegiatan);
-        });
-        return Object.values(rekap).map((item) => {
-          item.tanggal = Array.from(item.tanggal).sort((a, b) => a - b);
-          return item;
-        });
-      }
-
-      const dataGrouped = groupDataByNIP(dataBulanIni);
-      const namaBulan = new Date(tahunInput, bulanInput - 1).toLocaleString(
-        "id-ID",
-        { month: "long", year: "numeric" },
-      );
-
-      try {
-        await buatPDFRekapBulanan(dataGrouped, namaBulan, chatId, client);
-      } catch (e) {
-        console.error("Gagal membuat rekap PDF:", e);
-        await kirimDenganTyping(client, chatId, "Gagal membuat PDF. Cek log.");
-      }
       return;
     }
 
@@ -1194,6 +1087,32 @@ client.on("message", async (message) => {
           };
         }
 
+        // --- PENCEGAT KHUSUS KOOR (WFA) ---
+        // Bot ngecek kolom Jabatan atau Subunit
+        const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
+        
+        // Trigger jalan JIKA dia Koor, TAPI BUKAN Kepala Biro
+        if (jabatanUser.includes("KOOR") && !jabatanUser.includes("KEPALA BIRO")) {
+          const dataKepalaBiro = dbPegawai.find(p => {
+            const jab = (p["Jabatan"] || p["JABATAN"] || "").toUpperCase();
+            return jab.includes("KEPALA BIRO"); 
+          });
+
+          if (dataKepalaBiro) {
+            atasan = {
+              "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
+              nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
+              Jabatan: dataKepalaBiro["Jabatan"] || "Kepala Biro"
+            };
+          } else {
+            atasan = {
+              "Nama Pegawai": "KEPALA BIRO (Data belum ada di Database)", 
+              nip: "-",
+              Jabatan: "Kepala Biro"
+            };
+          }
+        }
+
         const unitKerjaAtauSubstansi =
           flow.pegawai["Unit Kerja"] ||
           flow.pegawai["SUBUNIT"] ||
@@ -1459,7 +1378,7 @@ client.on("message", async (message) => {
             if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
 
             text += `\n~- ${m.nama} (${m.plat})~`;
-            text += `\n   └ Dipakai: ${namaPeminjam}`;
+            text += `\n   └ Dipakai: ${namaPeminjam}`;
           });
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;
