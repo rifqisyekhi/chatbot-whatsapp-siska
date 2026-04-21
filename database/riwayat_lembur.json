@@ -196,5 +196,14 @@
     "tanggal": "2026-04-02",
     "kegiatan": "membuat chatbot",
     "atasan": "Prasetyo Muhammad Sidqi, S.M."
+  },
+  {
+    "nip": "1217050123",
+    "nama": "Rifqi Syekhi Marsaputra",
+    "gol": "-",
+    "jabatan": "Intern",
+    "tanggal": "2026-04-21",
+    "kegiatan": "membuat sistem chatbot whatsapp bernama siska",
+    "atasan": "Testing"
   }
 ]

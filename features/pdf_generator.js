@@ -181,8 +181,10 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     addImageBlockMemory("2. Foto Pegawai di Tempat Lembur", loadedImages[1]);
     addImageBlockMemory("3. Screenshot Approval", loadedImages[2]);
 
+    // --- BLOK TANDA TANGAN MANUAL (KOSONG) ---
     const signatureHeight = 120;
     const remainingSpaceForSignature = doc.page.height - doc.y - doc.page.margins.bottom;
+    
     if (signatureHeight > remainingSpaceForSignature) {
       doc.addPage();
     }
@@ -190,49 +192,20 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     doc.moveDown(4);
     const startY = doc.y;
 
+    // Label Jabatan
     doc.fontSize(11).text(`Mengetahui,\n${data.atasan_jabatan}`, 50, startY);
     doc.text(`Dilaksanakan Oleh,\n${data.jabatan}`, 330, startY);
 
-    const [ttdKepalaBuffer, ttdPegawaiBuffer] = await Promise.all([
-      getDummySignature(data.atasan_nip),
-      getDummySignature(data.nip),
-    ]);
-
-    const ttdY = startY + 40;
-    const ttdWidth = 120;
-    const ttdPegX = 330;
-    const ttdKepX = 50;
-    const fallbackImgPath = path.join(__dirname, "..", "assets", "images", "contoh-ttd.png");
-
-    const renderTTD = (buffer, x, y) => {
-      if (buffer) {
-        try {
-          doc.image(buffer, x, y, { width: ttdWidth });
-        } catch (e) {
-          doc.fontSize(10).text("(TTD Error)", x, y);
-        }
-      } else {
-        if (fs.existsSync(fallbackImgPath)) {
-          try {
-            doc.image(fallbackImgPath, x, y, { width: ttdWidth });
-          } catch (e) {}
-        } else {
-          doc.fontSize(10).text("(TTD Tidak Tersedia)", x, y);
-        }
-      }
-    };
-
-    renderTTD(ttdKepalaBuffer, ttdKepX, ttdY);
-    renderTTD(ttdPegawaiBuffer, ttdPegX, ttdY);
-
-    const yNama = ttdY + 70;
+    // Kita kasih jarak kosong sekitar 80 unit untuk tempat ttd manual
+    const yNama = startY + 80; 
     const yNIP = yNama + 14;
 
-    doc.fontSize(11).text(`${data.atasan_nama}`, ttdKepX, yNama);
-    doc.text(`NIP. ${data.atasan_nip}`, ttdKepX, yNIP);
+    // Nama dan NIP
+    doc.font("TMR-Bold").fontSize(11).text(`${data.atasan_nama}`, 50, yNama);
+    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, 50, yNIP);
 
-    doc.text(`${data.nama}`, ttdPegX, yNama);
-    doc.text(`NIP. ${data.nip}`, ttdPegX, yNIP);
+    doc.font("TMR-Bold").text(`${data.nama}`, 330, yNama);
+    doc.font("TMR").text(`NIP. ${data.nip}`, 330, yNIP);
 
     doc.end();
 
@@ -458,8 +431,25 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         doc.text(item.satuan || "-", x + 2, currentY + 5, { width: colWidths[4] - 4, align: "center" });
         x += colWidths[4];
 
+        // doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
+        // doc.text(item.keterangan || "-", x + 4, currentY + 5, { width: colWidths[5] - 8, align: "left" });
+
         doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
-        doc.text(item.keterangan || "-", x + 4, currentY + 5, { width: colWidths[5] - 8, align: "left" });
+        
+        let ketText = item.keterangan || "-";
+        let textOptions = { width: colWidths[5] - 8, align: "left" };
+        
+        let urlDitemukan = ketText.match(/(https?:\/\/[^\s]+)/);
+        
+        if (urlDitemukan) {
+          textOptions.link = urlDitemukan[0]; 
+          doc.fillColor("blue");
+          textOptions.underline = true;
+        }
+        
+        doc.text(ketText, x + 4, currentY + 5, textOptions);
+        
+        doc.fillColor("black");
 
         let currentImgY = currentY + 5 + textHeight5 + 10;
 
@@ -485,27 +475,47 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
     doc.y = currentY + 20;
 
+    const requiredSignatureHeight = 150;
     const remainingSpaceForSignature = doc.page.height - doc.y - doc.page.margins.bottom;
-    if (120 > remainingSpaceForSignature) {
+
+    if (requiredSignatureHeight > remainingSpaceForSignature) {
       doc.addPage();
+      doc.y = 50;
     }
 
     doc.moveDown(2);
-    
-    doc.fontSize(12).text(tanggalTtd, 50, doc.y); 
+
+    doc.fontSize(12).text(tanggalTtd, 50, doc.y);
     doc.moveDown(1);
     const startY = doc.y;
 
     doc.fontSize(12).text("Pejabat Penilai/Atasan Langsung", 50, startY);
     doc.text("Pejabat yang dinilai,", 350, startY);
 
-    const yNama = startY + 75; 
-    const yNIP = yNama + 14;
+    // const yNama = startY + 75;
+    // const yNIP = yNama + 14;
 
-    doc.font("TMR-Bold").fontSize(12).text(`${data.atasan_nama}`, 50, yNama);
+    // doc.font("TMR-Bold").fontSize(12).text(`${data.atasan_nama}`, 50, yNama);
+    // doc.font("TMR").fontSize(12).text(`NIP. ${data.atasan_nip}`, 50, yNIP);
+
+    // doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama);
+    // doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNIP);
+
+    const yNama = startY + 75; 
+    
+    const maxLebarKolom = 200;
+
+    const tinggiNamaAtasan = doc.font("TMR-Bold").fontSize(12).heightOfString(`${data.atasan_nama}`, { width: maxLebarKolom });
+    const tinggiNamaPegawai = doc.font("TMR-Bold").fontSize(12).heightOfString(`${data.nama}`, { width: maxLebarKolom });
+
+    const maxTinggiNama = Math.max(tinggiNamaAtasan, tinggiNamaPegawai);
+
+    const yNIP = yNama + maxTinggiNama + 2;
+
+    doc.font("TMR-Bold").fontSize(12).text(`${data.atasan_nama}`, 50, yNama, { width: maxLebarKolom });
     doc.font("TMR").fontSize(12).text(`NIP. ${data.atasan_nip}`, 50, yNIP);
 
-    doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama);
+    doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama, { width: maxLebarKolom });
     doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNIP);
 
     doc.end();
@@ -845,7 +855,7 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     printRow("Nomor TNKB", data.kendaraan.tnkb);
     printRow("Keperluan", data.kendaraan.keperluan);
     
-    printRow("Tanggal peminjaman", data.kendaraan.tanggalMulai); // Versi awal tidak perlu jam kembali, cukup tgl dia pinjam
+    printRow("Tanggal peminjaman", data.kendaraan.tanggalMulai);
     doc.moveDown(0.8);
 
     // 6. KETENTUAN
@@ -886,7 +896,7 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
 
     // 8. FOOTER BSrE
-    doc.page.margins.bottom = 0; // Mencegah pembuatan halaman baru secara otomatis
+    doc.page.margins.bottom = 0;
     try {
       doc.font(fontItalic).fontSize(9);
     } catch(e) {
@@ -1209,7 +1219,7 @@ module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
   buatPDFRekapBulanan,
-  buatSuratIzinMobilAwalAsync, // Fungsi PDF Awal
-  buatSuratIzinMobilAkhirAsync, // Fungsi PDF Akhir (dengan tabel)
+  buatSuratIzinMobilAwalAsync,
+  buatSuratIzinMobilAkhirAsync,
   calculateDuration
 };

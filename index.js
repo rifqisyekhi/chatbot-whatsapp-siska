@@ -17,13 +17,22 @@ const {
   buatSuratIzinMobilAkhirAsync,
   calculateDuration,
 } = require("./features/pdf_generator");
-const { HELPDESK_GROUP_ID, FORM_CUTI_URL } = require("./config/config");
+
+const { 
+  HELPDESK_GROUP_ID, 
+  FORM_CUTI_URL, 
+  NO_PAK_ALPHA, 
+  NO_ADMIN_SAKEH,
+  NIP_PAK_ALPHA,
+  NAMA_PAK_ALPHA,
+  JABATAN_PAK_ALPHA,
+  PORT_WEB
+} = require("./config/config");
 
 // ==========================================
-// II. SERVER WEB UNTUK KATALOG BARANG (PORT 3000)
+// II. SERVER WEB UNTUK KATALOG BARANG 
 // ==========================================
 const app = express();
-const port = 3000;
 
 app.use(cors());
 app.use(express.json());
@@ -41,8 +50,8 @@ app.get('/api/barang', (req, res) => {
     }
 });
 
-app.listen(port, '0.0.0.0', () => {
-  console.log(`[WEB SERVER] API & Katalog aktif di port ${port}`);
+app.listen(PORT_WEB, '0.0.0.0', () => {
+  console.log(`[WEB SERVER] API & Katalog aktif di port ${PORT_WEB}`);
 });
 
 // --- DATABASE KENDARAAN ---
@@ -135,7 +144,15 @@ function simpanRiwayatLemburAsync(data) {
   });
 }
 
-const ID_PAK_ALPHA = "6285156151128@c.us";
+// ==================================
+// FORMAT DATA PENANGGUNG JAWAB (DARI CONFIG)
+// ==================================
+const DATA_PAK_ALPHA = {
+  "Nama Pegawai": NAMA_PAK_ALPHA,
+  "No. HP (WA) aktif": NO_PAK_ALPHA ? NO_PAK_ALPHA.split('@')[0] : "",
+  nip: NIP_PAK_ALPHA,
+  Jabatan: JABATAN_PAK_ALPHA
+};
 
 // III. STATE MANAGEMENT
 let dbPegawai = [];
@@ -384,29 +401,70 @@ client.on("message", async (message) => {
 
     const flow = pengajuanBySender[chatId];
 
+    // ===========
+    // FITUR ADMIN
+    // ===========
+    const daftarAdmin = NO_ADMIN_SAKEH ? [NO_ADMIN_SAKEH] : [];
+
+    if (daftarAdmin.includes(chatId) && message.body.startsWith("!JAPRI")) {
+      const teksTengah = message.body.replace("!JAPRI", "").trim();
+
+      const spasiPertama = teksTengah.indexOf(" ");
+      
+      if (spasiPertama === -1) {
+        await kirimDenganTyping(client, chatId, "❌ Format salah bos!\nContoh ketik: *!JAPRI 08123456789 Isi pesannya disini*");
+        return;
+      }
+
+      const nomorMentah = teksTengah.substring(0, spasiPertama).trim();
+      const isiPesan = teksTengah.substring(spasiPertama + 1).trim();
+
+      let nomorTujuan = hanyaAngka(nomorMentah);
+      if (nomorTujuan.startsWith("08")) {
+        nomorTujuan = "62" + nomorTujuan.slice(1);
+      }
+      const targetId = nomorTujuan + "@c.us";
+
+      try {
+        await client.sendMessage(targetId, isiPesan);
+        await kirimDenganTyping(client, chatId, `✅ *JAPRI SUKSES*\n\nPesan rahasia berhasil dikirim ke: ${nomorMentah}\n*Isi:* ${isiPesan}`);
+      } catch (err) {
+        await kirimDenganTyping(client, chatId, `❌ *GAGAL*\nNomor ${nomorMentah} tidak terdaftar di WhatsApp atau bot sedang error.`);
+      }
+      
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
     // ==========================================
     // 1. PENANGKAP ORDER PERSEDIAAN DARI WEB (BARU)
     // ==========================================
     if (message.body.startsWith("!ORDER_BARANG")) {
       const pesananClean = message.body.replace("!ORDER_BARANG", "").trim();
+      const namaPemesan = pegawai ? pegawai["Nama Pegawai"] : "Pegawai (Tidak ada di DB)";
       
       // Beri tahu pemesan
       await kirimDenganTyping(
         client, 
         chatId, 
-        "✅ *Pesanan Diterima!*\n\nPermintaan persediaan Anda telah kami catat dan sedang diteruskan ke Admin Gudang / Tata Usaha untuk diproses."
+        "✅ *Pesanan Diterima!*\n\nPermintaan persediaan Anda telah kami catat dan sedang dikirim ke Penanggung Jawab untuk proses persetujuan."
       );
 
-      // Teruskan daftar pesanan ke Pak Alpha / Admin
-      const namaPemesan = pegawai ? pegawai["Nama Pegawai"] : "Pegawai (Tidak ada di DB)";
-      const nipPemesan = pegawai ? (pegawai["nip"] || pegawai["NIP"] || "-") : "-";
-      const unitKerja = pegawai ? (pegawai["Unit Kerja"] || pegawai["SUBUNIT"] || "-") : "-";
+      const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      const forwardTeks = `📦 *ORDER PERSEDIAAN BARU* 📦\n\n*Pemohon:* ${namaPemesan}\n*NIP:* ${nipPemesan}\n*Unit:* ${unitKerja}\n\n*Detail Pesanan:*\n${pesananClean}\n\n_Mohon admin menyiapkan barang tersebut._`;
-      
-      // Kirim ke Pak Alpha
-      await client.sendMessage(ID_PAK_ALPHA, forwardTeks);
-      
+      if(NO_PAK_ALPHA) {
+        const sentToPJ = await client.sendMessage(NO_PAK_ALPHA, teksPengajuan);
+
+        // Masukkan ke memori antrean Approval
+        pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+          sender: chatId,
+          jenis: "Persediaan",
+          pegawai: pegawai,
+          atasan: DATA_PAK_ALPHA,
+          pesanan: pesananClean,
+        };
+      }
+
       delete pengajuanBySender[chatId];
       return;
     }
@@ -620,9 +678,9 @@ client.on("message", async (message) => {
               try {
                 const dataPDFMobil = {
                   penanggungJawab: {
-                    nama: "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-                    nip: "198703232015031002",
-                    jabatan: "Kepala Sub Bagian Tata Usaha",
+                    nama: DATA_PAK_ALPHA["Nama Pegawai"],
+                    nip: DATA_PAK_ALPHA.nip,
+                    jabatan: DATA_PAK_ALPHA.Jabatan,
                   },
                   pemakai: {
                     nama: p["Nama Pegawai"] || "Nama Pemakai",
@@ -649,16 +707,27 @@ client.on("message", async (message) => {
               pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
             }
             delete pengajuanBySender[pemohonId];
+          } else if (jenis === "Persediaan") {
+            // 1. Pesan Notif ke Pegawai (Suruh Ambil)
+            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Tenaga Ahli sedang menyiapkan pesanan Anda. *Silakan lakukan pengambilan barang di ruang Tata Usaha (TU).*`;
+            
+            // 2. Pesan Notif ke Tim Tenaga Ahli (Di Grup Helpdesk)
+            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Tenaga Ahli segera mengambil dan menyiapkan barang tersebut karena pemohon akan datang mengambilnya._`;
+            
+            if(HELPDESK_GROUP_ID) {
+              await kirimDenganTyping(client, HELPDESK_GROUP_ID, notifTim);
+            }
+            delete pengajuanBySender[pemohonId];
           }
 
           if (pesanPegawai) {
             await kirimDenganTyping(client, pemohonId, pesanPegawai);
-            await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p["Nama Pegawai"]}`);
+            await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p ? p["Nama Pegawai"] : "User"}`);
           }
           
         } else if (isApprovalNo(message.body)) {
           await kirimDenganTyping(client, pemohonId, `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`);
-          await kirimDenganTyping(client, chatId, `[APPROVAL] Ditolak untuk ${p["Nama Pegawai"]}`);
+          await kirimDenganTyping(client, chatId, `[APPROVAL] Ditolak untuk ${p ? p["Nama Pegawai"] : "User"}`);
           delete pengajuanBySender[pemohonId];
         }
 
@@ -738,8 +807,10 @@ client.on("message", async (message) => {
             nipDisplay = pegawai["nip"] || pegawai["NIP"] || "-";
           }
 
-          const notif = `[PERMINTAAN KONSULTASI HELPDESK]\n\nNama   : ${namaDisplay}\nNIP    : ${nipDisplay}\nNo WA  : ${noWaDisplay}\nJadwal : *${message.body.trim()}*\n\nMohon tim Helpdesk bersiap menindaklanjuti.`;
-          await kirimDenganTyping(client, HELPDESK_GROUP_ID, notif);
+          const notif = `[PERMINTAAN KONSULTASI HELPDESK]\n\nNama  : ${namaDisplay}\nNIP   : ${nipDisplay}\nNo WA : ${noWaDisplay}\nJadwal : *${message.body.trim()}*\n\nMohon tim Helpdesk bersiap menindaklanjuti.`;
+          if(HELPDESK_GROUP_ID) {
+            await kirimDenganTyping(client, HELPDESK_GROUP_ID, notif);
+          }
           delete helpdeskQueue[chatId];
           return;
         }
@@ -775,13 +846,16 @@ client.on("message", async (message) => {
             }
 
             const pesanEskalasi = `[HELPDESK - PERTANYAAN BELUM TERJAWAB]\n\nIdentitas : ${namaDisplay}\nNIP       : ${nipDisplay}\nPertanyaan: ${pertanyaanUser}\n\n_AI tidak dapat menjawab pertanyaan ini._\n\n*Balas Pesan ini (QUOTE REPLY) Untuk Menjawab*`;
-            const sentMsg = await client.sendMessage(
-              HELPDESK_GROUP_ID,
-              pesanEskalasi,
-            );
-            logOut(HELPDESK_GROUP_ID, pesanEskalasi);
+            
+            if(HELPDESK_GROUP_ID) {
+              const sentMsg = await client.sendMessage(
+                HELPDESK_GROUP_ID,
+                pesanEskalasi,
+              );
+              logOut(HELPDESK_GROUP_ID, pesanEskalasi);
+              helpdeskInstruksiMap[sentMsg.id._serialized] = chatId;
+            }
 
-            helpdeskInstruksiMap[sentMsg.id._serialized] = chatId;
             await kirimDenganTyping(
               client,
               chatId,
@@ -870,11 +944,10 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "5") {
-        const linkWebCart = `http://192.168.221.44:3000/`; 
         await kirimDenganTyping(
           client,
           chatId,
-          `*Formulir Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${linkWebCart}`,
+          `*Formulir Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${LINK_WEB_KATALOG}`,
         );
         delete pengajuanBySender[chatId];
         return;
@@ -1079,12 +1152,7 @@ client.on("message", async (message) => {
         
         // JIKA ATASAN TIDAK DITEMUKAN, JADIKAN PAK ALPHA SEBAGAI DEFAULT DI PDF
         if (!atasan || !atasan["No. HP (WA) aktif"]) {
-          atasan = {
-            "Nama Pegawai": "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-            "No. HP (WA) aktif": "6285156151128",
-            nip: "198703232015031002",
-            Jabatan: "Kepala Sub Bagian Tata Usaha"
-          };
+          atasan = DATA_PAK_ALPHA;
         }
 
         // --- PENCEGAT KHUSUS KOOR (WFA) ---
@@ -1378,7 +1446,7 @@ client.on("message", async (message) => {
             if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
 
             text += `\n~- ${m.nama} (${m.plat})~`;
-            text += `\n   └ Dipakai: ${namaPeminjam}`;
+            text += `\n   └ Dipakai: ${namaPeminjam}`;
           });
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;
@@ -1479,7 +1547,7 @@ client.on("message", async (message) => {
       const isPimpinan =
         !flow.pegawai["NO HP ATASAN"] ||
         flow.pegawai["NO HP ATASAN"].trim() === "" ||
-        chatId === ID_PAK_ALPHA; 
+        chatId === (NO_PAK_ALPHA ? `${NO_PAK_ALPHA}@c.us` : null); 
 
       if (isPimpinan) {
         const allKendaraan = await getStatusKendaraan();
@@ -1502,9 +1570,9 @@ client.on("message", async (message) => {
           try {
             const dataPDFMobil = {
               penanggungJawab: {
-                nama: "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-                nip: "198703232015031002",
-                jabatan: "Kepala Sub Bagian Tata Usaha",
+                nama: DATA_PAK_ALPHA["Nama Pegawai"],
+                nip: DATA_PAK_ALPHA.nip,
+                jabatan: DATA_PAK_ALPHA.Jabatan,
               },
               pemakai: {
                 nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
@@ -1538,38 +1606,33 @@ client.on("message", async (message) => {
         return;
       }
 
-      const penanggungJawab = {
-        "Nama Pegawai": "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-        "No. HP (WA) aktif": "6285156151128",
-        nip: "198703232015031002",
-      };
-
-      const nomorPJ = penanggungJawab["No. HP (WA) aktif"] + "@c.us";
       const teksPengajuan = `*Pengajuan Peminjaman Kendaraan* dari ${flow.pegawai["Nama Pegawai"]}\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      const sentToPJ = await client.sendMessage(nomorPJ, teksPengajuan);
+      if(NO_PAK_ALPHA) {
+        const sentToPJ = await client.sendMessage(`${NO_PAK_ALPHA}@c.us`, teksPengajuan);
 
-      pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
-        sender: chatId,
-        jenis: "Kendaraan",
-        pegawai: flow.pegawai,
-        atasan: penanggungJawab,
-        alasan: tujuan,
-        kendaraanId: flow.kendaraanId,
-        namaKendaraan: flow.namaKendaraan,
-      };
+        pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+          sender: chatId,
+          jenis: "Kendaraan",
+          pegawai: flow.pegawai,
+          atasan: DATA_PAK_ALPHA,
+          alasan: tujuan,
+          kendaraanId: flow.kendaraanId,
+          namaKendaraan: flow.namaKendaraan,
+        };
+      }
 
       pengajuanBySender[chatId] = {
         ...flow,
         step: "menunggu-persetujuan",
         jenis: "Kendaraan",
         alasan: tujuan,
-        atasan: penanggungJawab,
+        atasan: DATA_PAK_ALPHA,
       };
       await kirimDenganTyping(
         client,
         chatId,
-        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${penanggungJawab["Nama Pegawai"]}) untuk persetujuan.`,
+        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${DATA_PAK_ALPHA["Nama Pegawai"]}) untuk persetujuan.`,
       );
       return;
     }
@@ -1638,9 +1701,9 @@ client.on("message", async (message) => {
         try {
           const dataPDFMobil = {
             penanggungJawab: {
-              nama: "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-              nip: "198703232015031002",
-              jabatan: "Kepala Sub Bagian Tata Usaha",
+              nama: DATA_PAK_ALPHA["Nama Pegawai"],
+              nip: DATA_PAK_ALPHA.nip,
+              jabatan: DATA_PAK_ALPHA.Jabatan,
             },
             pemakai: {
               nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
