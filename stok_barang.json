@@ -4,49 +4,49 @@
     "nama": "Map Plastik",
     "stok": 21,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/MapPlastik.png"
+    "img": "http://192.168.221.44:3000/assets/MapPlastik.png"
   },
   {
     "id": "ATK-002",
     "nama": "Amplop",
     "stok": 22,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/Amplop.png"
+    "img": "http://192.168.221.44:3000/assets/Amplop.png"
   },
   {
     "id": "ATK-003",
     "nama": "Kertas A4",
     "stok": 2,
     "satuan": "Dus",
-    "img": "http://192.168.221.44:3000/public/assets/KertasA4.png"
+    "img": "http://192.168.221.44:3000/assets/KertasA4.png"
   },
   {
     "id": "ATK-004",
     "nama": "Kertas F4",
     "stok": 2,
     "satuan": "Rim",
-    "img": "http://192.168.221.44:3000/public/assets/KertasF4.png"
+    "img": "http://192.168.221.44:3000/assets/KertasF4.png"
   },
   {
     "id": "ATK-005",
     "nama": "Bantex Hitam",
     "stok": 2,
     "satuan": "Dus",
-    "img": "http://192.168.221.44:3000/public/assets/BantexHitam.png"
+    "img": "http://192.168.221.44:3000/assets/BantexHitam.png"
   },
   {
     "id": "ATK-006",
     "nama": "Lakban Hitam",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/LakbanHitam.png"
+    "img": "http://192.168.221.44:3000/assets/LakbanHitam.png"
   },
   {
     "id": "ATK-007",
     "nama": "Lakban Bening",
     "stok": 2,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/LakbanBening.png"
+    "img": "http://192.168.221.44:3000/assets/LakbanBening.png"
   },
   {
     "id": "ATK-008",
@@ -60,391 +60,391 @@
     "nama": "Pulpen Kenko Hitam",
     "stok": 6,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/PulpenKenkoHitam.png"
+    "img": "http://192.168.221.44:3000/assets/PulpenKenkoHitam.png"
   },
   {
     "id": "ATK-010",
     "nama": "Pulpen Kenko Biru",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/PulpenKenkoBiru.png"
+    "img": "http://192.168.221.44:3000/assets/PulpenKenkoBiru.png"
   },
   {
     "id": "ATK-011",
     "nama": "Pulpen Joyko Hitam",
     "stok": 4,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/PulpenJoykoHitam.png"
+    "img": "http://192.168.221.44:3000/assets/PulpenJoykoHitam.png"
   },
   {
     "id": "ATK-012",
     "nama": "Boldliner Biru",
     "stok": 2,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BoldlinerBiru.png"
+    "img": "http://192.168.221.44:3000/assets/BoldlinerBiru.png"
   },
   {
     "id": "ATK-013",
     "nama": "Boldliner Hitam",
     "stok": 4,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BoldlinerHitam.png"
+    "img": "http://192.168.221.44:3000/assets/BoldlinerHitam.png"
   },
   {
     "id": "ATK-014",
     "nama": "Toner Canon 054 Magenta",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/TonerCanon054Magenta.png"
+    "img": "http://192.168.221.44:3000/assets/TonerCanon054Magenta.png"
   },
   {
     "id": "ATK-015",
     "nama": "Pos-it TT",
     "stok": 7,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/Pos-itTT.png"
+    "img": "http://192.168.221.44:3000/assets/Pos-itTT.png"
   },
   {
     "id": "ATK-016",
     "nama": "Pos-it Note",
     "stok": 18,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Post-itNote.png"
+    "img": "http://192.168.221.44:3000/assets/Post-itNote.png"
   },
   {
     "id": "ATK-017",
     "nama": "Signhere Warna Warni",
     "stok": 13,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/SIgnhereWarnaWarni.png"
+    "img": "http://192.168.221.44:3000/assets/SIgnhereWarnaWarni.png"
   },
   {
     "id": "ATK-018",
     "nama": "Cutter",
     "stok": 3,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Cutter.png"
+    "img": "http://192.168.221.44:3000/assets/Cutter.png"
   },
   {
     "id": "ATK-019",
     "nama": "Staples Kecil",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/StaplesKecil.png"
+    "img": "http://192.168.221.44:3000/assets/StaplesKecil.png"
   },
   {
     "id": "ATK-020",
     "nama": "Binder Clip 105",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClip105.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClip105.png"
   },
   {
     "id": "ATK-021",
     "nama": "Lem",
     "stok": 2,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/Lem.png"
+    "img": "http://192.168.221.44:3000/assets/Lem.png"
   },
   {
     "id": "ATK-022",
     "nama": "Baterai AAA",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BateraiAAA.png"
+    "img": "http://192.168.221.44:3000/assets/BateraiAAA.png"
   },
   {
     "id": "ATK-023",
     "nama": "Baterai AA",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BateraiAA.png"
+    "img": "http://192.168.221.44:3000/assets/BateraiAA.png"
   },
   {
     "id": "ATK-024",
     "nama": "Toner 83A",
     "stok": 2,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Toner83A.png"
+    "img": "http://192.168.221.44:3000/assets/Toner83A.png"
   },
   {
     "id": "ATK-025",
     "nama": "Toner 107A",
     "stok": 3,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Toner107A.png"
+    "img": "http://192.168.221.44:3000/assets/Toner107A.png"
   },
   {
     "id": "ATK-026",
     "nama": "Toner 76A",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Toner76A.png"
+    "img": "http://192.168.221.44:3000/assets/Toner76A.png"
   },
   {
     "id": "ATK-027",
     "nama": "Toner 202A Pink",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Toner202APink.png"
+    "img": "http://192.168.221.44:3000/assets/Toner202APink.png"
   },
   {
     "id": "ATK-028",
     "nama": "Toner 202A Kuning",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Toner202AKuning.png"
+    "img": "http://192.168.221.44:3000/assets/Toner202AKuning.png"
   },
   {
     "id": "ATK-029",
     "nama": "Toner 202A Biru",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Toner202ABiru.png"
+    "img": "http://192.168.221.44:3000/assets/Toner202ABiru.png"
   },
   {
     "id": "ATK-030",
     "nama": "Toner 202A Hitam",
     "stok": 2,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Toner202AHitam.png"
+    "img": "http://192.168.221.44:3000/assets/Toner202AHitam.png"
   },
   {
     "id": "ATK-031",
     "nama": "Canon 054 Biru",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Canon054Biru.png"
+    "img": "http://192.168.221.44:3000/assets/Canon054Biru.png"
   },
   {
     "id": "ATK-032",
     "nama": "Canon 054 Hitam",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Canon054Hitam.png"
+    "img": "http://192.168.221.44:3000/assets/Canon054Hitam.png"
   },
   {
     "id": "ATK-033",
     "nama": "Canon 054 Kuning",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Canon054Kuning.png"
+    "img": "http://192.168.221.44:3000/assets/Canon054Kuning.png"
   },
   {
     "id": "ATK-034",
     "nama": "Binder Clip No.155",
     "stok": 1,
     "satuan": "Box",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.155.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.155.png"
   },
   {
     "id": "ATK-035",
     "nama": "Binder Clip No.111",
     "stok": 1,
     "satuan": "Box",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.111.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.111.png"
   },
   {
     "id": "ATK-036",
     "nama": "Binder Clip No.200",
     "stok": 7,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.200.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.200.png"
   },
   {
     "id": "ATK-037",
     "nama": "Binder Clip No.300",
     "stok": 3,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.300.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.300.png"
   },
   {
     "id": "ATK-038",
     "nama": "Binder Clip No.280",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.280.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.280.png"
   },
   {
     "id": "ATK-039",
     "nama": "Binder Clip No.260",
     "stok": 3,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.260.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.260.png"
   },
   {
     "id": "ATK-040",
     "nama": "Binder Clip No.320",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.320.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.320.png"
   },
   {
     "id": "ATK-041",
     "nama": "Bantex Filing Pockets",
     "stok": 105,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/BantexFilingPockets.png"
+    "img": "http://192.168.221.44:3000/assets/BantexFilingPockets.png"
   },
   {
     "id": "ATK-042",
     "nama": "Penghapus",
     "stok": 2,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/Penghapus.png"
+    "img": "http://192.168.221.44:3000/assets/Penghapus.png"
   },
   {
     "id": "ATK-043",
     "nama": "Spidol Snowman",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/SpidolSnowman.png"
+    "img": "http://192.168.221.44:3000/assets/SpidolSnowman.png"
   },
   {
     "id": "ATK-044",
     "nama": "Tali Plastik",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/TaliPlastik.png"
+    "img": "http://192.168.221.44:3000/assets/TaliPlastik.png"
   },
   {
     "id": "ATK-045",
     "nama": "Isi Cutter",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/IsiCutter.png"
+    "img": "http://192.168.221.44:3000/assets/IsiCutter.png"
   },
   {
     "id": "ATK-046",
     "nama": "Isi Staples No.10-1M",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/IsiStaplesNo.10-1m.png"
+    "img": "http://192.168.221.44:3000/assets/IsiStaplesNo.10-1m.png"
   },
   {
     "id": "ATK-047",
     "nama": "Paper Clip No.5",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/PaperClipNo.5.png"
+    "img": "http://192.168.221.44:3000/assets/PaperClipNo.5.png"
   },
   {
     "id": "ATK-048",
     "nama": "Staples HD-50",
     "stok": 2,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/StaplesHD-50.png"
+    "img": "http://192.168.221.44:3000/assets/StaplesHD-50.png"
   },
   {
     "id": "ATK-049",
     "nama": "Pensil 2B",
     "stok": 1,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/Pensil2B.png"
+    "img": "http://192.168.221.44:3000/assets/Pensil2B.png"
   },
   {
     "id": "ATK-050",
     "nama": "Flashdisk",
     "stok": 2,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/Flashdisk.png"
+    "img": "http://192.168.221.44:3000/assets/Flashdisk.png"
   },
   {
     "id": "ATK-051",
     "nama": "Tipex Kertas",
     "stok": 4,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/TipexKertas.png"
+    "img": "http://192.168.221.44:3000/assets/TipexKertas.png"
   },
   {
     "id": "ATK-052",
     "nama": "Rautan Pensil",
     "stok": 3,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/RautanPensil.png"
+    "img": "http://192.168.221.44:3000/assets/RautanPensil.png"
   },
   {
     "id": "ATK-053",
     "nama": "Gunting",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/Gunting.png"
+    "img": "http://192.168.221.44:3000/assets/Gunting.png"
   },
   {
     "id": "ATK-054",
     "nama": "Binder Clip No.107",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/BinderClipNo.107.png"
+    "img": "http://192.168.221.44:3000/assets/BinderClipNo.107.png"
   },
   {
     "id": "ATK-055",
     "nama": "Tinta Stempel Bantal",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/TintaStempelBantal.png"
+    "img": "http://192.168.221.44:3000/assets/TintaStempelBantal.png"
   },
   {
     "id": "ATK-056",
     "nama": "Tinta Stempel Otomatis",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/TintaStempelOtomatis.png"
+    "img": "http://192.168.221.44:3000/assets/TintaStempelOtomatis.png"
   },
   {
     "id": "ATK-057",
     "nama": "Bak Bantal Stempel",
     "stok": 1,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/BakBantalStempel.png"
+    "img": "http://192.168.221.44:3000/assets/BakBantalStempel.png"
   },
   {
     "id": "ATK-058",
     "nama": "Spidol Snowman Permanen",
     "stok": 2,
     "satuan": "Pack",
-    "img": "http://192.168.221.44:3000/public/assets/SpidolSnowmanPermanen.png"
+    "img": "http://192.168.221.44:3000/assets/SpidolSnowmanPermanen.png"
   },
   {
     "id": "ATK-059",
     "nama": "Keyboard Fullset",
     "stok": 3,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/KeyboardFullSet.png"
+    "img": "http://192.168.221.44:3000/assets/KeyboardFullSet.png"
   },
   {
     "id": "ATK-060",
     "nama": "Trigonal Clip 01",
     "stok": 5,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/TrigonalClip01.png"
+    "img": "http://192.168.221.44:3000/assets/TrigonalClip01.png"
   },
   {
     "id": "ATK-061",
     "nama": "Trigonal Clip 03",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/TrigonalClip03.png"
+    "img": "http://192.168.221.44:3000/assets/TrigonalClip03.png"
   },
   {
     "id": "ATK-062",
     "nama": "Penggaris Aluminium",
     "stok": 0,
     "satuan": "Kosong",
-    "img": "http://192.168.221.44:3000/public/assets/PenggarisAluminium.png"
+    "img": "http://192.168.221.44:3000/assets/PenggarisAluminium.png"
   },
   {
     "id": "ATK-063",
     "nama": "Cutter Kecil",
     "stok": 5,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/CutterKecil.png"
+    "img": "http://192.168.221.44:3000/assets/CutterKecil.png"
   },
   {
     "id": "ATK-064",
     "nama": "Pulpen Zebra",
     "stok": 4,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assets/PulpenZebra.png"
+    "img": "http://192.168.221.44:3000/assets/PulpenZebra.png"
   }
 ]
