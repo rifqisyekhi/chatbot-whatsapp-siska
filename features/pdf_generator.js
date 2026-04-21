@@ -411,28 +411,21 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         let x = startX;
 
-        doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
-        doc.text(`${i + 1}.`, x + 2, currentY + 5, { width: colWidths[0] - 4, align: "center" });
-        x += colWidths[0];
-
         doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
-        doc.text(item.kegiatan || "-", x + 2, currentY + 5, { width: colWidths[1] - 4, align: "left" });
+        doc.text(item.kegiatan || "-", x + 4, currentY + 5, { width: colWidths[1] - 8, align: "justify" });
         x += colWidths[1];
 
         doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
-        doc.text(item.output || "-", x + 2, currentY + 5, { width: colWidths[2] - 4, align: "center" });
+        doc.text(item.output || "-", x + 4, currentY + 5, { width: colWidths[2] - 8, align: "justify" });
         x += colWidths[2];
 
         doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
-        doc.text(item.capaian || "-", x + 2, currentY + 5, { width: colWidths[3] - 4, align: "center" });
+        doc.text(item.capaian || "-", x + 4, currentY + 5, { width: colWidths[3] - 8, align: "justify" });
         x += colWidths[3];
 
         doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
-        doc.text(item.satuan || "-", x + 2, currentY + 5, { width: colWidths[4] - 4, align: "center" });
+        doc.text(item.satuan || "-", x + 4, currentY + 5, { width: colWidths[4] - 8, align: "justify" });
         x += colWidths[4];
-
-        // doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
-        // doc.text(item.keterangan || "-", x + 4, currentY + 5, { width: colWidths[5] - 8, align: "left" });
 
         doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
         
@@ -491,15 +484,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
     doc.fontSize(12).text("Pejabat Penilai/Atasan Langsung", 50, startY);
     doc.text("Pejabat yang dinilai,", 350, startY);
-
-    // const yNama = startY + 75;
-    // const yNIP = yNama + 14;
-
-    // doc.font("TMR-Bold").fontSize(12).text(`${data.atasan_nama}`, 50, yNama);
-    // doc.font("TMR").fontSize(12).text(`NIP. ${data.atasan_nip}`, 50, yNIP);
-
-    // doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama);
-    // doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNIP);
 
     const yNama = startY + 75; 
     

@@ -13,9 +13,7 @@ function bacaDataHelpdesk() {
   try {
     const filePath = path.join(__dirname, "..", "data", DATA_FILE);
     
-    // Jika file belum ada, buat file kosong
     if (!fs.existsSync(filePath)) {
-      // Pastikan folder "data" ada sebelum membuat file txt
       const dirPath = path.dirname(filePath);
       if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
@@ -24,7 +22,6 @@ function bacaDataHelpdesk() {
       return "";
     }
     
-    // Baca isi file
     const data = fs.readFileSync(filePath, "utf-8");
     return data;
   } catch (err) {
@@ -58,10 +55,7 @@ function simpanDataBaru(pertanyaan, jawaban) {
 // --- FUNGSI 3: Otak AI (Menjawab Pertanyaan) ---
 async function jawabHelpdeskAI(pertanyaan) {
   try {
-    // 1. Ambil semua pengetahuan dari file txt
     const knowledgeBase = bacaDataHelpdesk();
-
-    // 2. Kirim ke Groq (Llama-3.3)
     const completion = await groq.chat.completions.create({
       messages: [
         {
@@ -95,13 +89,12 @@ INSTRUKSI TEKNIS SUPER KETAT:
         },
       ],
       model: "llama-3.3-70b-versatile",
-      temperature: 0, // Rendah agar tidak halusinasi
+      temperature: 0,
       max_tokens: 800,
     });
 
     const jawaban = completion.choices[0]?.message?.content || "";
 
-    // 3. Cek apakah AI menyerah
     if (jawaban.includes("UNKNOWN_ESKALASI")) {
       return "UNKNOWN_ESKALASI";
     }
@@ -109,7 +102,6 @@ INSTRUKSI TEKNIS SUPER KETAT:
     return jawaban;
   } catch (error) {
     console.error("[GROQ ERROR]", error.message);
-    // Jika API Error, kita anggap unknown biar dilempar ke admin
     return "UNKNOWN_ESKALASI"; 
   }
 }
