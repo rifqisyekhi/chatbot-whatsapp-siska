@@ -26,7 +26,8 @@ const {
   NIP_PAK_ALPHA,
   NAMA_PAK_ALPHA,
   JABATAN_PAK_ALPHA,
-  PORT_WEB
+  PORT_WEB,
+  LINK_WEB_KATALOG
 } = require("./config/config");
 
 // Connect Database MongoDB
