@@ -8,6 +8,8 @@
     "express": "^5.2.1",
     "groq-sdk": "^0.37.0",
     "image-size": "^2.0.2",
+    "mongodb": "^7.2.0",
+    "mongoose": "^9.5.0",
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.31.0",
     "qrcode-terminal": "^0.12.0",

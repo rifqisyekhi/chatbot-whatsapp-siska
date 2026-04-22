@@ -29,6 +29,16 @@ const {
   PORT_WEB
 } = require("./config/config");
 
+// Connect Database MongoDB
+const mongoose = require('mongoose');
+require('dotenv').config();
+
+const uri = process.env.MONGO_URI;
+
+mongoose.connect(uri)
+  .then(() => console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas'))
+  .catch(err => console.error('Waduh, koneksi gagal:', err));
+
 // ==========================================
 // II. SERVER WEB UNTUK KATALOG BARANG 
 // ==========================================

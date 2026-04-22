@@ -331,13 +331,13 @@ async function buatLaporanWFAAsync(data, chatId, client) {
       for (let i = 0; i < data.wfaList.length; i++) {
         const item = data.wfaList[i];
 
-        doc.font("TMR").fontSize(9); 
+        doc.font("TMR").fontSize(9);
 
         let validImg1 = false, validImg2 = false;
         let buf1 = null, buf2 = null;
         let dim1 = null, dim2 = null;
 
-        // Load Foto 1
+        //Load Foto 1
         if (item.fotoPath1) {
           try {
             buf1 = await fsPromises.readFile(item.fotoPath1);
@@ -348,7 +348,7 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           }
         }
 
-        // Load Foto 2
+        // Loaf Foto2
         if (item.fotoPath2) {
           try {
             buf2 = await fsPromises.readFile(item.fotoPath2);
@@ -361,25 +361,25 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         let img1Width = 0, img1Height = 0;
         let img2Width = 0, img2Height = 0;
-        
-        const maxImgW = colWidths[5] - 20; 
-        const maxImgH = 130; 
+
+        const maxImgW = colWidths[5] - 20;
+        const maxImgH = 130;
 
         if (validImg1) {
           img1Width = maxImgW;
           img1Height = (img1Width / dim1.width) * dim1.height;
-          if (img1Height > maxImgH) { 
-            img1Height = maxImgH; 
-            img1Width = (maxImgH / dim1.height) * dim1.width; 
+          if (img1Height > maxImgH) {
+            img1Height = maxImgH;
+            img1Width = (maxImgH / dim1.height) * dim1.width;
           }
         }
 
         if (validImg2) {
           img2Width = maxImgW;
           img2Height = (img2Width / dim2.width) * dim2.height;
-          if (img2Height > maxImgH) { 
-            img2Height = maxImgH; 
-            img2Width = (maxImgH / dim2.height) * dim2.width; 
+          if (img2Height > maxImgH) {
+            img2Height = maxImgH;
+            img2Width = (maxImgH / dim2.height) * dim2.width;
           }
         }
 
@@ -387,19 +387,19 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         if (validImg1) col5ImagesHeight += img1Height + 10;
         if (validImg2) col5ImagesHeight += img2Height + 10;
 
-        let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8 });
+        let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8, align: "left" });
         let col5TotalHeight = textHeight5 + (col5ImagesHeight > 0 ? col5ImagesHeight + 10 : 0);
 
-        let textHeights = [
-          doc.heightOfString(`${i + 1}.`, { width: colWidths[0] - 4 }),
-          doc.heightOfString(item.kegiatan || "-", { width: colWidths[1] - 4 }),
-          doc.heightOfString(item.output || "-", { width: colWidths[2] - 4 }),
-          doc.heightOfString(item.capaian || "-", { width: colWidths[3] - 4 }),
-          doc.heightOfString(item.satuan || "-", { width: colWidths[4] - 4 }),
+        let textHeight = [
+          doc.heightOfString(`${i + 1}.`, { width: colWidths[0] - 4, align: "center" }),
+          doc.heightOfString(item.kegiatan || "-", { width: colWidths[1] - 8, align: "justify" }),
+          doc.heightOfString(item.output || "-", { width: colWidths[2] - 8, align: "justify" }),
+          doc.heightOfString(item.capaian || "-", { width: colWidths[3] - 8, align: "justify" }),
+          doc.heightOfString(item.satuan || "-", { width: colWidths[4] - 8, align: "justify" }),
           col5TotalHeight
         ];
-        
-        let maxTextHeight = Math.max(...textHeights);
+
+        let maxTextHeight = Math.max(...textHeight);
         let rowHeight = Math.max(maxTextHeight + 15, 30);
 
         if (currentY + rowHeight > doc.page.height - 50) {
@@ -411,29 +411,38 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         let x = startX;
 
+        // Kolom 0 (No.)
+        doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
+        doc.text(`${i + 1}.`, x + 2, currentY + 5, { width: colWidths[0] - 4, align: "center" });
+        x += colWidths[0];
+
+        // Kolom 1 (Kegiatan)
         doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
         doc.text(item.kegiatan || "-", x + 4, currentY + 5, { width: colWidths[1] - 8, align: "justify" });
         x += colWidths[1];
 
+        // Kolom 2 (Output)
         doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
         doc.text(item.output || "-", x + 4, currentY + 5, { width: colWidths[2] - 8, align: "justify" });
         x += colWidths[2];
 
+        // Kolom 3 (Capaian Kinerja)
         doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
         doc.text(item.capaian || "-", x + 4, currentY + 5, { width: colWidths[3] - 8, align: "justify" });
         x += colWidths[3];
 
+        // Kolom 4 (Satuan)
         doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
         doc.text(item.satuan || "-", x + 4, currentY + 5, { width: colWidths[4] - 8, align: "justify" });
         x += colWidths[4];
 
+        // Kolom 5 (Keterangan & Bukti Dukung)
         doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
         
         let ketText = item.keterangan || "-";
         let textOptions = { width: colWidths[5] - 8, align: "left" };
         
         let urlDitemukan = ketText.match(/(https?:\/\/[^\s]+)/);
-        
         if (urlDitemukan) {
           textOptions.link = urlDitemukan[0]; 
           doc.fillColor("blue");
@@ -441,7 +450,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         }
         
         doc.text(ketText, x + 4, currentY + 5, textOptions);
-        
         doc.fillColor("black");
 
         let currentImgY = currentY + 5 + textHeight5 + 10;
