@@ -53,7 +53,7 @@
     "nama": "Mouse Wireless",
     "stok": 3,
     "satuan": "Pcs",
-    "img": "http://192.168.221.44:3000/public/assetsMouseWireless.png"
+    "img": "http://192.168.221.44:3000/assets/MouseWireless.png"
   },
   {
     "id": "ATK-009",
