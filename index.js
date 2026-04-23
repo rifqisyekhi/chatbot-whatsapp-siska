@@ -738,20 +738,17 @@ client.on("message", async (message) => {
             }
             delete pengajuanBySender[pemohonId];
           } else if (jenis === "Persediaan") {
-            // 1. Pesan Notif ke Pegawai (Suruh Ambil)
-            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Gudang sedang menyiapkan pesanan Anda. *Silakan lakukan pengambilan barang di ruang Tata Usaha (TU).*`;
+            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Persediaan sedang menyiapkan pesanan Anda.`;
             
-            // 2. Pesan Notif ke Tim Gudang (Japri Broadcast)
             const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Gudang segera mengambil dan menyiapkan pesanan tersebut._`;
             
-            // Tembak japri ke masing-masing anggota Tim Gudang
             if (dbTimGudang && dbTimGudang.length > 0) {
               for (const staf of dbTimGudang) {
                 const noWaStaf = staf["No. HP (WA) aktif"];
                 if (noWaStaf) {
                   const targetStaf = formatNomorId(noWaStaf) + "@c.us";
                   await kirimDenganTyping(client, targetStaf, notifTim);
-                  await new Promise((r) => setTimeout(r, 1000)); // Jeda 1 detik biar ga kena spam
+                  await new Promise((r) => setTimeout(r, 1000));
                 }
               }
             } else {
