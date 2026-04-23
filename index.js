@@ -40,6 +40,9 @@ mongoose.connect(uri)
   .then(() => console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas'))
   .catch(err => console.error('Waduh, koneksi gagal:', err));
 
+// Panggil model Barang biar bot bisa baca dan ngurangin stok
+const Barang = require('./models/Barang'); 
+
 // ==========================================
 // II. SERVER WEB UNTUK KATALOG BARANG 
 // ==========================================
@@ -51,10 +54,18 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-app.get('/api/barang', (req, res) => {
+// Rute API udah dialihkan pakai MongoDB
+app.get('/api/barang', async (req, res) => {
     try {
-        const data = fs.readFileSync(path.join(__dirname, 'stok_barang.json'), 'utf8');
-        res.json(JSON.parse(data));
+        const dataDB = await Barang.find({});
+        const dataSiapKirim = dataDB.map(item => ({
+            id: item.id_barang,
+            nama: item.nama,
+            stok: item.stok,
+            satuan: item.satuan,
+            img: item.img
+        }));
+        res.json(dataSiapKirim);
     } catch (err) {
         console.error("Gagal membaca database barang:", err);
         res.status(500).json({ error: "Gagal memuat data persediaan" });
@@ -272,6 +283,14 @@ function loadDatabase() {
 
 dbPegawai = loadDatabase();
 console.log(`[INIT] Berhasil memuat ${dbPegawai.length} data pegawai.`);
+
+let dbTimGudang = [];
+try {
+  const rawData = fs.readFileSync(path.join(__dirname, "database", "DatabasePegawaiBiroKeuangan.json"), "utf8");
+  dbTimGudang = JSON.parse(rawData).TimGudang || [];
+} catch (err) {
+  console.log("Tim Gudang belum di-set di JSON.");
+}
 
 function formatNomorId(hp) {
   let str = String(hp || "")
@@ -720,14 +739,48 @@ client.on("message", async (message) => {
             delete pengajuanBySender[pemohonId];
           } else if (jenis === "Persediaan") {
             // 1. Pesan Notif ke Pegawai (Suruh Ambil)
-            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Tenaga Ahli sedang menyiapkan pesanan Anda. *Silakan lakukan pengambilan barang di ruang Tata Usaha (TU).*`;
+            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Gudang sedang menyiapkan pesanan Anda. *Silakan lakukan pengambilan barang di ruang Tata Usaha (TU).*`;
             
-            // 2. Pesan Notif ke Tim Tenaga Ahli (Di Grup Helpdesk)
-            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Tenaga Ahli segera mengambil dan menyiapkan barang tersebut karena pemohon akan datang mengambilnya._`;
+            // 2. Pesan Notif ke Tim Gudang (Japri Broadcast)
+            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Gudang segera mengambil dan menyiapkan pesanan tersebut._`;
             
-            if(HELPDESK_GROUP_ID) {
-              await kirimDenganTyping(client, HELPDESK_GROUP_ID, notifTim);
+            // Tembak japri ke masing-masing anggota Tim Gudang
+            if (dbTimGudang && dbTimGudang.length > 0) {
+              for (const staf of dbTimGudang) {
+                const noWaStaf = staf["No. HP (WA) aktif"];
+                if (noWaStaf) {
+                  const targetStaf = formatNomorId(noWaStaf) + "@c.us";
+                  await kirimDenganTyping(client, targetStaf, notifTim);
+                  await new Promise((r) => setTimeout(r, 1000)); // Jeda 1 detik biar ga kena spam
+                }
+              }
+            } else {
+               console.log("[WARNING] Array TimGudang kosong atau tidak ditemukan di JSON!");
             }
+
+            // ==========================================
+            // 3. LOGIKA KASIR (PENGURANGAN STOK OTOMATIS)
+            // ==========================================
+            const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
+            let hasilBedah;
+            
+            while ((hasilBedah = regexKasir.exec(pengajuan.pesanan)) !== null) {
+              const idBarangTarget = hasilBedah[1]; 
+              const jumlahDiambil = parseInt(hasilBedah[2], 10); 
+
+              if (idBarangTarget && !isNaN(jumlahDiambil)) {
+                try {
+                  await Barang.findOneAndUpdate(
+                    { id_barang: idBarangTarget },
+                    { $inc: { stok: -jumlahDiambil } } 
+                  );
+                  console.log(`[STOK UPDATE] ${idBarangTarget} berhasil dikurangi ${jumlahDiambil}`);
+                } catch (dbErr) {
+                  console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}:`, dbErr);
+                }
+              }
+            }
+
             delete pengajuanBySender[pemohonId];
           }
 
@@ -755,7 +808,7 @@ client.on("message", async (message) => {
         if (bodyLower === "menu") {
           delete helpdeskQueue[chatId];
           if (pegawai) {
-            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFA`;
+            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
             await kirimDenganTyping(client, chatId, menu);
             pengajuanBySender[chatId] = { step: "menu", pegawai };
           } else {
@@ -895,7 +948,7 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFA`;
+      const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -978,7 +1031,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "Silakan ketik *Hari dan Tanggal* pelaksanaan WFA Anda.\n\nContoh: *Jumat, 3 April 2026*",
+          "Silakan ketik *Hari dan Tanggal* pelaksanaan WFH Anda.\n\nContoh: *Jumat, 3 April 2026*",
         );
         pengajuanBySender[chatId] = {
           step: "wfa-tanggal",
@@ -1001,14 +1054,30 @@ client.on("message", async (message) => {
     // 9. STATE MACHINE (PROSES ALUR SEMUA MENU)
     // ==========================================
 
-    // --- ALUR WFA ---
+    // --- ALUR WFH (SISTEM FIXED LOOP) ---
     if (flow.step === "wfa-tanggal") {
       pengajuanBySender[chatId].tanggalWFA = message.body.trim();
+      pengajuanBySender[chatId].step = "wfa-jumlah";
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Tanggal WFH: *${message.body.trim()}*.\n\nAda *berapa banyak kegiatan* yang ingin Anda laporkan hari ini? (Ketik angka saja, contoh: 2)`
+      );
+      return;
+    }
+
+    if (flow.step === "wfa-jumlah") {
+      const jumlah = parseInt(message.body.trim(), 10);
+      if (isNaN(jumlah) || jumlah <= 0) {
+        await kirimDenganTyping(client, chatId, "❌ Harap masukkan angka yang valid (contoh: 1, 2, atau 3).");
+        return;
+      }
+      pengajuanBySender[chatId].totalKegiatan = jumlah;
       pengajuanBySender[chatId].step = "wfa-kegiatan";
       await kirimDenganTyping(
         client,
         chatId,
-        `Tanggal WFA: *${message.body.trim()}*.\n\nSilakan tuliskan *Kegiatan* yang Anda lakukan.`,
+        `Baik, sistem mencatat target *${jumlah} Kegiatan*.\n\nSilakan tuliskan *Kegiatan ke-1* yang Anda lakukan hari ini.`
       );
       return;
     }
@@ -1016,11 +1085,7 @@ client.on("message", async (message) => {
     if (flow.step === "wfa-kegiatan") {
       pengajuanBySender[chatId].kegiatan = message.body.trim();
       pengajuanBySender[chatId].step = "wfa-output";
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "Tuliskan *Output* dari kegiatan tersebut.",
-      );
+      await kirimDenganTyping(client, chatId, "Tuliskan *Output* dari kegiatan tersebut.");
       return;
     }
 
@@ -1034,11 +1099,7 @@ client.on("message", async (message) => {
     if (flow.step === "wfa-capaian") {
       pengajuanBySender[chatId].capaian = message.body.trim();
       pengajuanBySender[chatId].step = "wfa-satuan";
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "Tuliskan *Satuan* (misal: Dokumen, Kegiatan, Laporan).",
-      );
+      await kirimDenganTyping(client, chatId, "Tuliskan *Satuan* (misal: Dokumen, Kegiatan, Laporan).");
       return;
     }
 
@@ -1048,7 +1109,7 @@ client.on("message", async (message) => {
       await kirimDenganTyping(
         client,
         chatId,
-        "Silakan tuliskan *Keterangan / Tautan (Link)* bukti dukung Anda (misal: Link Google Drive).\n\nJika *TIDAK ADA*, cukup ketik tanda strip *-*",
+        "Silakan tuliskan *Keterangan / Tautan (Link)* bukti dukung Anda (misal: Link Google Drive).\n\nJika *TIDAK ADA*, cukup ketik tanda strip *-*"
       );
       return;
     }
@@ -1057,12 +1118,14 @@ client.on("message", async (message) => {
       let ket = message.body.trim();
       if (ket === "-" || ket.toLowerCase() === "tidak ada") ket = "";
       pengajuanBySender[chatId].keterangan = ket;
-
       pengajuanBySender[chatId].step = "wfa-foto-1";
+      
+      const urutan = flow.wfaList.length + 1;
+
       await kirimDenganTyping(
         client,
         chatId,
-        "Silakan kirimkan *Foto Pertama (1)* untuk bukti dukung kegiatan ini.",
+        `Silakan kirimkan *Foto Bukti (Wajib)* untuk kegiatan ke-${urutan}.`
       );
       return;
     }
@@ -1071,14 +1134,8 @@ client.on("message", async (message) => {
       if (message.hasMedia) {
         const media = await message.downloadMedia();
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype
-          .split("/")
-          .pop()
-          .replace("jpeg", "jpg");
-        const fotoPath = path.join(
-          UPLOADS_DIR,
-          `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
-        );
+        const extension = media.mimetype.split("/").pop().replace("jpeg", "jpg");
+        const fotoPath = path.join(UPLOADS_DIR, `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`);
         await fsPromises.writeFile(fotoPath, media.data, "base64");
 
         pengajuanBySender[chatId].fotoPath1 = fotoPath;
@@ -1086,42 +1143,28 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "Foto pertama diterima!\n\nJika ada *Foto Kedua (2)*, silakan kirimkan sekarang.\nJika *TIDAK ADA*, cukup ketik kata *lanjut* atau *skip*.",
+          "✅ Foto bukti pertama diterima!\n\nJika ada *Foto Tambahan (Opsional)*, silakan kirimkan sekarang.\nJika *TIDAK ADA*, cukup ketik kata *lanjut* atau *skip*."
         );
-      } else if (bodyLower !== "") {
+      } else {
         await kirimDenganTyping(
           client,
           chatId,
-          "Mohon kirimkan *foto* (gambar) untuk bukti dukung WFA, bukan pesan teks.",
+          "❌ Laporan WFH wajib menyertakan bukti! Mohon kirimkan *foto/gambar*, bukan pesan teks biasa."
         );
       }
       return;
     }
 
+    // LOGIKA PENENTUAN: LOOPING ATAU CETAK PDF
     if (flow.step === "wfa-foto-2") {
       let fotoPath2 = null;
 
       if (message.hasMedia) {
         const media = await message.downloadMedia();
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype
-          .split("/")
-          .pop()
-          .replace("jpeg", "jpg");
-        fotoPath2 = path.join(
-          UPLOADS_DIR,
-          `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
-        );
+        const extension = media.mimetype.split("/").pop().replace("jpeg", "jpg");
+        fotoPath2 = path.join(UPLOADS_DIR, `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`);
         await fsPromises.writeFile(fotoPath2, media.data, "base64");
-      } else {
-        const text = bodyLower.trim();
-        if (
-          text !== "lanjut" &&
-          text !== "skip" &&
-          text !== "-" &&
-          text !== "tidak"
-        ) {
-        }
       }
 
       pengajuanBySender[chatId].wfaList.push({
@@ -1134,43 +1177,35 @@ client.on("message", async (message) => {
         fotoPath2: fotoPath2,
       });
 
-      pengajuanBySender[chatId].step = "wfa-konfirmasi-tambah";
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "Kegiatan berhasil ditambahkan!\n\nApakah ada kegiatan lain yang ingin Anda laporkan untuk tanggal ini?\n*1.* Ya, tambah kegiatan lagi\n*2.* Tidak, cetak laporan sekarang",
-      );
-      return;
-    }
+      const urutanSelesai = pengajuanBySender[chatId].wfaList.length;
+      const target = flow.totalKegiatan;
 
-    if (flow.step === "wfa-konfirmasi-tambah") {
-      if (bodyLower === "1" || bodyLower === "ya") {
+      // CEK APAKAH TARGET KEGIATAN SUDAH TERCAPAI
+      if (urutanSelesai < target) {
+        // BELUM TERCAPAI -> Kembali ke step wfa-kegiatan
         pengajuanBySender[chatId].step = "wfa-kegiatan";
         await kirimDenganTyping(
           client,
           chatId,
-          "Silakan tuliskan *Kegiatan* selanjutnya yang Anda lakukan.",
+          `✅ Kegiatan ke-${urutanSelesai} berhasil disimpan!\n\nMari lanjutkan, silakan tuliskan *Kegiatan ke-${urutanSelesai + 1}* Anda.`
         );
         return;
-      } else if (bodyLower === "2" || bodyLower === "tidak") {
+      } else {
+        // SUDAH TERCAPAI -> Otomatis Generate PDF (Tanpa nanya lagi)
         await kirimDenganTyping(
           client,
           chatId,
-          "Sedang menyusun dan merapikan Laporan Kinerja Harian WFA Anda...",
+          `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian WFH Anda menjadi PDF...`
         );
 
         let atasan = cariAtasanPegawai(flow.pegawai);
         
-        // JIKA ATASAN TIDAK DITEMUKAN, JADIKAN PAK ALPHA SEBAGAI DEFAULT DI PDF
         if (!atasan || !atasan["No. HP (WA) aktif"]) {
           atasan = DATA_PAK_ALPHA;
         }
 
-        // --- PENCEGAT KHUSUS KOOR (WFA) ---
-        // Bot ngecek kolom Jabatan atau Subunit
         const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
         
-        // Trigger jalan JIKA dia Koor, TAPI BUKAN Kepala Biro
         if (jabatanUser.includes("KOOR") && !jabatanUser.includes("KEPALA BIRO")) {
           const dataKepalaBiro = dbPegawai.find(p => {
             const jab = (p["Jabatan"] || p["JABATAN"] || "").toUpperCase();
@@ -1220,18 +1255,11 @@ client.on("message", async (message) => {
           await kirimDenganTyping(
             client,
             chatId,
-            `Gagal membuat PDF WFA. Cek log error server.\nInfo: ${e.message}`,
+            `Gagal membuat PDF WFH. Cek log error server.\nInfo: ${e.message}`,
           );
         }
 
         delete pengajuanBySender[chatId];
-        return;
-      } else {
-        await kirimDenganTyping(
-          client,
-          chatId,
-          "Pilihan tidak valid. Ketik *1* untuk tambah kegiatan, atau *2* untuk selesai.",
-        );
         return;
       }
     }
@@ -1457,7 +1485,7 @@ client.on("message", async (message) => {
             if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
 
             text += `\n~- ${m.nama} (${m.plat})~`;
-            text += `\n   └ Dipakai: ${namaPeminjam}`;
+            text += `\n   └ Dipakai: ${namaPeminjam}`;
           });
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;

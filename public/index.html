@@ -50,7 +50,6 @@
         let databaseBarang = [];
         let keranjang = {};
 
-        // 1. Ambil data dari API lu (Pastikan endpoint /api/barang jalan)
         fetch('/api/barang')
             .then(res => res.json())
             .then(data => {
@@ -102,7 +101,8 @@
                 const qty = keranjang[b.id] || 0;
                 if (qty > 0) {
                     list.push(`<li>• <b>${b.nama}</b> (${qty} ${b.satuan})</li>`);
-                    teks += `- ${b.nama} (${qty} ${b.satuan})\n`;
+                    
+                    teks += `- [${b.id}] ${b.nama} (${qty} ${b.satuan})\n`;
                     adaBarang = true;
                 }
             });
@@ -110,7 +110,7 @@
             if (!adaBarang) return alert("Pilih barang dulu, brad!");
 
             document.getElementById('list-konfirmasi').innerHTML = list.join('');
-            window.teksWA = teks; // Simpan teks global
+            window.teksWA = teks;
             document.getElementById('modal').style.display = 'flex';
         }
 
