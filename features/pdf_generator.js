@@ -310,7 +310,8 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
     const startX = 50;
     let currentY = doc.y;
-    const colWidths = [30, 120, 60, 70, 50, 180];
+    
+    const colWidths = [25, 85, 85, 100, 55, 160];
     const headers = ["No.", "KEGIATAN", "OUTPUT", "CAPAIAN KINERJA", "SATUAN", "KETERANGAN\n(Bukti dukung)"];
 
     function drawWFAHeaders(y) {
@@ -390,12 +391,13 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8, align: "left" });
         let col5TotalHeight = textHeight5 + (col5ImagesHeight > 0 ? col5ImagesHeight + 10 : 0);
 
+        // PERBAIKAN ALIGNMENT: Ubah "justify" jadi "left" dan "center" agar tidak renggang/patah
         let textHeight = [
           doc.heightOfString(`${i + 1}.`, { width: colWidths[0] - 4, align: "center" }),
-          doc.heightOfString(item.kegiatan || "-", { width: colWidths[1] - 8, align: "justify" }),
-          doc.heightOfString(item.output || "-", { width: colWidths[2] - 8, align: "justify" }),
-          doc.heightOfString(item.capaian || "-", { width: colWidths[3] - 8, align: "justify" }),
-          doc.heightOfString(item.satuan || "-", { width: colWidths[4] - 8, align: "justify" }),
+          doc.heightOfString(item.kegiatan || "-", { width: colWidths[1] - 8, align: "left" }),
+          doc.heightOfString(item.output || "-", { width: colWidths[2] - 8, align: "left" }),
+          doc.heightOfString(item.capaian || "-", { width: colWidths[3] - 8, align: "center" }),
+          doc.heightOfString(item.satuan || "-", { width: colWidths[4] - 8, align: "center" }),
           col5TotalHeight
         ];
 
@@ -418,22 +420,22 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         // Kolom 1 (Kegiatan)
         doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
-        doc.text(item.kegiatan || "-", x + 4, currentY + 5, { width: colWidths[1] - 8, align: "justify" });
+        doc.text(item.kegiatan || "-", x + 4, currentY + 5, { width: colWidths[1] - 8, align: "left" });
         x += colWidths[1];
 
         // Kolom 2 (Output)
         doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
-        doc.text(item.output || "-", x + 4, currentY + 5, { width: colWidths[2] - 8, align: "justify" });
+        doc.text(item.output || "-", x + 4, currentY + 5, { width: colWidths[2] - 8, align: "left" });
         x += colWidths[2];
 
         // Kolom 3 (Capaian Kinerja)
         doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
-        doc.text(item.capaian || "-", x + 4, currentY + 5, { width: colWidths[3] - 8, align: "justify" });
+        doc.text(item.capaian || "-", x + 4, currentY + 5, { width: colWidths[3] - 8, align: "center" });
         x += colWidths[3];
 
         // Kolom 4 (Satuan)
         doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
-        doc.text(item.satuan || "-", x + 4, currentY + 5, { width: colWidths[4] - 8, align: "justify" });
+        doc.text(item.satuan || "-", x + 4, currentY + 5, { width: colWidths[4] - 8, align: "center" });
         x += colWidths[4];
 
         // Kolom 5 (Keterangan & Bukti Dukung)
@@ -519,10 +521,10 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
           try {
             await client.sendMessage(chatId, media, {
-              caption: "Berikut Laporan Kinerja WFA Anda.\n\nMohon berkenan untuk melengkapi tanda tangan Anda beserta Pejabat Penilai/Atasan Langsung pada dokumen ini sebelum diunggah/dilaporkan. Terima kasih.",
+              caption: "Berikut Laporan Kinerja WFH Anda.\n\nMohon berkenan untuk melengkapi tanda tangan Anda beserta Pejabat Penilai/Atasan Langsung pada dokumen ini sebelum diunggah/dilaporkan. Terima kasih.",
             });
           } catch(e) {
-             console.error("❌ Gagal kirim WFA ke user:", e);
+             console.error("❌ Gagal kirim WFH ke user:", e);
           }
 
           if (Array.isArray(data.wfaList)) {
@@ -538,7 +540,7 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           
           resolve();
         } catch (err) {
-          console.error("❌ Error di dalam stream finish WFA:", err);
+          console.error("❌ Error di dalam stream finish WFH:", err);
           reject(err);
         }
       });
@@ -546,7 +548,7 @@ async function buatLaporanWFAAsync(data, chatId, client) {
     });
   } catch (err) {
     doc.end();
-    console.error("❌ Error fatal saat pembuatan PDF WFA:", err);
+    console.error("❌ Error fatal saat pembuatan PDF WFH:", err);
     throw err;
   }
 }

@@ -1080,28 +1080,80 @@ client.on("message", async (message) => {
     }
 
     if (flow.step === "wfa-kegiatan") {
-      pengajuanBySender[chatId].kegiatan = message.body.trim();
+      const teks = message.body.trim();
+      const maxKata = 50; // Batas maksimal kata
+      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+
+      if (jumlahKata > maxKata) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Kegiatan* Anda.`
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].kegiatan = teks;
       pengajuanBySender[chatId].step = "wfa-output";
       await kirimDenganTyping(client, chatId, "Tuliskan *Output* dari kegiatan tersebut.");
       return;
     }
 
     if (flow.step === "wfa-output") {
-      pengajuanBySender[chatId].output = message.body.trim();
+      const teks = message.body.trim();
+      const maxKata = 50;
+      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+
+      if (jumlahKata > maxKata) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Output* Anda.`
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].output = teks;
       pengajuanBySender[chatId].step = "wfa-capaian";
       await kirimDenganTyping(client, chatId, "Tuliskan *Capaian Kinerja*.");
       return;
     }
 
     if (flow.step === "wfa-capaian") {
-      pengajuanBySender[chatId].capaian = message.body.trim();
+      const teks = message.body.trim();
+      const maxKata = 50;
+      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+
+      if (jumlahKata > maxKata) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel tidak rusak. Silakan ringkas dan kirimkan kembali *Capaian Kinerja* Anda.`
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].capaian = teks;
       pengajuanBySender[chatId].step = "wfa-satuan";
       await kirimDenganTyping(client, chatId, "Tuliskan *Satuan* (misal: Dokumen, Kegiatan, Laporan).");
       return;
     }
 
     if (flow.step === "wfa-satuan") {
-      pengajuanBySender[chatId].satuan = message.body.trim();
+      const teks = message.body.trim();
+      const maxKata = 50;
+      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+
+      if (jumlahKata > maxKata) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Satuan* Anda.`
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].satuan = teks;
       pengajuanBySender[chatId].step = "wfa-keterangan";
       await kirimDenganTyping(
         client,
@@ -1177,9 +1229,7 @@ client.on("message", async (message) => {
       const urutanSelesai = pengajuanBySender[chatId].wfaList.length;
       const target = flow.totalKegiatan;
 
-      // CEK APAKAH TARGET KEGIATAN SUDAH TERCAPAI
       if (urutanSelesai < target) {
-        // BELUM TERCAPAI -> Kembali ke step wfa-kegiatan
         pengajuanBySender[chatId].step = "wfa-kegiatan";
         await kirimDenganTyping(
           client,
@@ -1188,7 +1238,6 @@ client.on("message", async (message) => {
         );
         return;
       } else {
-        // SUDAH TERCAPAI -> Otomatis Generate PDF (Tanpa nanya lagi)
         await kirimDenganTyping(
           client,
           chatId,
@@ -1482,7 +1531,7 @@ client.on("message", async (message) => {
             if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
 
             text += `\n~- ${m.nama} (${m.plat})~`;
-            text += `\n   └ Dipakai: ${namaPeminjam}`;
+            text += `\n   └ Dipakai: ${namaPeminjam}`;
           });
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;
@@ -1817,6 +1866,22 @@ process.on("unhandledRejection", (reason, p) => {
 process.on("uncaughtException", (err) => {
   console.error("[UNCAUGHT EXCEPTION]", err);
   logToFile("error", "UNCAUGHT", err.stack || String(err));
+});
+
+process.on('SIGINT', async () => {
+  console.log('[(SIGINT)] Mematikan bot SisKA dengan aman...');
+  try {
+    await client.destroy();
+  } catch (e) {}
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('[(SIGTERM)] Mematikan bot SisKA dengan aman (PM2 Restart)...');
+  try {
+    await client.destroy();
+  } catch (e) {}
+  process.exit(0);
 });
 
 client.initialize();
