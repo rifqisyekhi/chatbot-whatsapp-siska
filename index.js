@@ -54,6 +54,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
 // --- RUTE API: AMBIL SEMUA BARANG (GET) ---
+app.get('/api/barang', async (req, res) => {
+    try {
+        const dataDB = await Barang.find({});
+        const dataSiapKirim = dataDB.map(item => ({
+            id: item.id_barang,
+            nama: item.nama,
+            stok: item.stok,
+            kategori: item.kategori || "Belum ada kategori",
+            img: item.img
+        }));
+        res.json(dataSiapKirim);
+    } catch (err) {
+        console.error("Gagal membaca database barang:", err);
+        res.status(500).json({ error: "Gagal memuat data persediaan" });
+    }
+});
+
+// --- RUTE API: TAMBAH BARANG BARU (POST) ---
 app.post('/api/barang', async (req, res) => {
     try {
         // 1. Tangkap data dari Front-End (Gak ada id_barang lagi!)
