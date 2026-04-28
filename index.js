@@ -40,7 +40,6 @@ mongoose.connect(uri)
   .then(() => console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas'))
   .catch(err => console.error('Waduh, koneksi gagal:', err));
 
-// Panggil model Barang biar bot bisa baca dan ngurangin stok
 const Barang = require('./models/Barang'); 
 
 // ==========================================
@@ -54,21 +53,100 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-// Rute API udah dialihkan pakai MongoDB
-app.get('/api/barang', async (req, res) => {
+// --- RUTE API: AMBIL SEMUA BARANG (GET) ---
+app.post('/api/barang', async (req, res) => {
     try {
-        const dataDB = await Barang.find({});
-        const dataSiapKirim = dataDB.map(item => ({
-            id: item.id_barang,
-            nama: item.nama,
-            stok: item.stok,
-            satuan: item.satuan,
-            img: item.img
-        }));
-        res.json(dataSiapKirim);
+        // 1. Tangkap data dari Front-End (Gak ada id_barang lagi!)
+        const { nama, kategori, stok, img } = req.body;
+
+        // 2. Validasi
+        if (!nama || stok == null || !kategori) {
+            return res.status(400).json({ 
+                error: "Data kurang lengkap! Pastikan Nama, Kategori, dan Stok terisi." 
+            });
+        }
+
+        // 3. LOGIKA AUTO-GENERATE KODE BARANG (SKU)
+        // Tentukan awalan (prefix) berdasarkan kategori
+        let prefix = kategori === 'ATK' ? 'ATK-' : 'ELK-';
+
+        // Tarik semua barang di database yang kategorinya sama untuk nyari angka terbesarnya
+        const barangSejenis = await Barang.find({ kategori: kategori }, 'id_barang');
+        
+        let angkaTertinggi = 0;
+        
+        // Loop satu-satu buat nyari angka paling gede
+        barangSejenis.forEach(barang => {
+            // Misalnya kode "ATK-040", kita belah dua berdasarkan tanda "-"
+            const bagian = barang.id_barang.split('-');
+            if (bagian.length === 2) {
+                // Ambil angka di belakangnya (040 -> 40)
+                const angka = parseInt(bagian[1], 10);
+                if (!isNaN(angka) && angka > angkaTertinggi) {
+                    angkaTertinggi = angka;
+                }
+            }
+        });
+
+        // Tambah 1 dari angka tertinggi yang ditemuin
+        const angkaBaru = angkaTertinggi + 1;
+        const id_barang_baru = `${prefix}${angkaBaru.toString().padStart(3, '0')}`;
+        const barangBaru = new Barang({
+            id_barang: id_barang_baru,
+            nama: nama,
+            kategori: kategori,
+            stok: Number(stok),
+            img: img || ""
+        });
+
+        // 5. Simpan ke MongoDB
+        await barangBaru.save();
+        console.log(`[DATABASE] Barang baru auto-SKU: ${nama} [${id_barang_baru}]`);
+
+        // 6. Respon sukses
+        res.status(201).json({ 
+            message: `Barang berhasil ditambah dengan kode ${id_barang_baru}!`, 
+            data: barangBaru 
+        });
+
     } catch (err) {
-        console.error("Gagal membaca database barang:", err);
-        res.status(500).json({ error: "Gagal memuat data persediaan" });
+        console.error("[ERROR API] Gagal menambah barang:", err);
+        res.status(500).json({ error: "Terjadi kesalahan pada server." });
+    }
+});
+
+// --- RUTE API: EDIT BARANG (PUT) ---
+app.put('/api/barang/:id_barang', async (req, res) => {
+    try {
+        // Tangkap ID barang dari URL (misal: /api/barang/ATK-001)
+        const targetId = req.params.id_barang; 
+        
+        // Tangkap data baru dari form admin
+        const { nama, kategori, stok, img } = req.body; 
+
+        // Suruh MongoDB nyari barang pakai targetId, lalu timpa datanya dengan yang baru
+        const barangDiupdate = await Barang.findOneAndUpdate(
+            { id_barang: targetId }, // Cari yang ID-nya cocok
+            { 
+                nama: nama, 
+                kategori: kategori, 
+                stok: Number(stok),
+                img: img || ""
+            },
+            { new: true } // Opsi biar DB ngembaliin data yang udah paling baru
+        );
+
+        // Kalau barangnya gak ketemu (mungkin salah ID)
+        if (!barangDiupdate) {
+            return res.status(404).json({ error: "Barang tidak ditemukan di database!" });
+        }
+
+        console.log(`[DATABASE] Barang di-edit: ${nama} [${targetId}]`);
+        res.json({ message: "Barang berhasil di-update!", data: barangDiupdate });
+
+    } catch (err) {
+        console.error("[ERROR API] Gagal edit barang:", err);
+        res.status(500).json({ error: "Terjadi kesalahan server saat update data." });
     }
 });
 
