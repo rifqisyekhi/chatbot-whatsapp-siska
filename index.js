@@ -137,25 +137,21 @@ app.post('/api/barang', async (req, res) => {
 // --- RUTE API: EDIT BARANG (PUT) ---
 app.put('/api/barang/:id_barang', async (req, res) => {
     try {
-        // Tangkap ID barang dari URL (misal: /api/barang/ATK-001)
         const targetId = req.params.id_barang; 
         
-        // Tangkap data baru dari form admin
         const { nama, kategori, stok, img } = req.body; 
 
-        // Suruh MongoDB nyari barang pakai targetId, lalu timpa datanya dengan yang baru
         const barangDiupdate = await Barang.findOneAndUpdate(
-            { id_barang: targetId }, // Cari yang ID-nya cocok
+            { id_barang: targetId },
             { 
                 nama: nama, 
                 kategori: kategori, 
                 stok: Number(stok),
                 img: img || ""
             },
-            { new: true } // Opsi biar DB ngembaliin data yang udah paling baru
+            { returnDocument: 'after' }
         );
 
-        // Kalau barangnya gak ketemu (mungkin salah ID)
         if (!barangDiupdate) {
             return res.status(404).json({ error: "Barang tidak ditemukan di database!" });
         }
