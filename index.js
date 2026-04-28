@@ -62,6 +62,7 @@ app.get('/api/barang', async (req, res) => {
             nama: item.nama,
             stok: item.stok,
             kategori: item.kategori || "Belum ada kategori",
+            satuan: item.satuan || "Pcs",
             img: item.img
         }));
         res.json(dataSiapKirim);
