@@ -139,16 +139,22 @@ app.put('/api/barang/:id_barang', async (req, res) => {
     try {
         const targetId = req.params.id_barang; 
         
-        const { nama, kategori, stok, img } = req.body; 
+        const { nama, kategori, stok, satuan, img } = req.body;
+
+        const dataUpdate = { 
+            nama: nama, 
+            kategori: kategori, 
+            stok: Number(stok),
+            satuan: satuan || "Pcs"
+        };
+
+        if (img && img.trim() !== "") {
+            dataUpdate.img = img;
+        }
 
         const barangDiupdate = await Barang.findOneAndUpdate(
             { id_barang: targetId },
-            { 
-                nama: nama, 
-                kategori: kategori, 
-                stok: Number(stok),
-                img: img || ""
-            },
+            { $set: dataUpdate },
             { returnDocument: 'after' }
         );
 
