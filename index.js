@@ -383,7 +383,7 @@ try {
   const rawData = fs.readFileSync(path.join(__dirname, "database", "DatabasePegawaiBiroKeuangan.json"), "utf8");
   dbTimGudang = JSON.parse(rawData).TimGudang || [];
 } catch (err) {
-  console.log("Tim Gudang belum di-set di JSON.");
+  console.log("Tim Persediaan belum di-set di JSON.");
 }
 
 function formatNomorId(hp) {
@@ -773,7 +773,7 @@ client.on("message", async (message) => {
         const { pemohonId, namaPemohon, pesanan } = orderGudang;
 
         if (isApprovalYes(message.body)) {
-          await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Gudang.\n\nSilakan datang ke ruangan penyimpanan/gudang untuk mengambil barangnya. Terima kasih!`);
+          await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nMohon ditunggu. Terima kasih!`);
           await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
 
           for (let key in orderGudangMsgId) {
@@ -783,7 +783,7 @@ client.on("message", async (message) => {
           }
 
         } else if (isApprovalNo(message.body)) {
-          await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui pimpinan, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Gudang untuk informasi lebih lanjut.`);
+          await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
           await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
 
           const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
