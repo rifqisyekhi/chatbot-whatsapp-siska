@@ -171,6 +171,27 @@ app.put('/api/barang/:id_barang', async (req, res) => {
     }
 });
 
+// --- RUTE API: HAPUS BARANG (DELETE) ---
+app.delete('/api/barang/:id_barang', async (req, res) => {
+    try {
+        const targetId = req.params.id_barang; 
+        
+        // Suruh MongoDB nyari ID-nya dan langsung hapus dari database
+        const barangDihapus = await Barang.findOneAndDelete({ id_barang: targetId });
+
+        if (!barangDihapus) {
+            return res.status(404).json({ error: "Barang tidak ditemukan di database!" });
+        }
+
+        console.log(`[DATABASE] Barang dihapus: ${targetId}`);
+        res.json({ message: "Barang berhasil dihapus!" });
+
+    } catch (err) {
+        console.error("[ERROR API] Gagal hapus barang:", err);
+        res.status(500).json({ error: "Terjadi kesalahan server saat hapus data." });
+    }
+});
+
 app.listen(PORT_WEB, '0.0.0.0', () => {
   console.log(`[WEB SERVER] API & Katalog aktif di port ${PORT_WEB}`);
 });
