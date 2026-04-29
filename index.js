@@ -792,182 +792,221 @@ client.on("message", async (message) => {
     // ==========================================
     // 5. HANDLER APPROVAL ATASAN (DM)
     // ==========================================
+    let qid = null;
+    let pengajuan = null;
+    let orderGudang = null;
+
     if (message.hasQuotedMsg) {
       const quoted = await message.getQuotedMessage();
-      const qid = quoted.id._serialized;
-      const pengajuan = pengajuanByAtasanMsgId[qid];
-      const orderGudang = orderGudangMsgId[qid];
+      qid = quoted.id._serialized;
+      pengajuan = pengajuanByAtasanMsgId[qid];
+      orderGudang = orderGudangMsgId[qid];
+    } else {
+      if (isApprovalYes(message.body) || isApprovalNo(message.body)) {
+        const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(([id, data]) => {
+          let atasanWa = data.atasan["No. HP (WA) aktif"];
+          if (atasanWa) {
+            atasanWa = atasanWa.replace(/[^0-9]/g, "");
+            if (atasanWa.startsWith("08")) atasanWa = "62" + atasanWa.slice(1);
+            return atasanWa + "@c.us" === chatId;
+          }
+          return false;
+        });
 
-      if (orderGudang) {
-        const { pemohonId, namaPemohon, pesanan } = orderGudang;
+        if (pendingPengajuan.length === 1) {
+          qid = pendingPengajuan[0][0];
+          pengajuan = pendingPengajuan[0][1];
+        } else if (pendingPengajuan.length > 1) {
+          await kirimDenganTyping(client, chatId, "⚠️ *Perhatian:* Bapak/Ibu memiliki lebih dari 1 pengajuan yang menunggu persetujuan.\n\nMohon *balas (Quote Reply/Geser Pesan)* tepat pada pesan pengajuan yang ingin disetujui/ditolak agar sistem tidak salah memproses.");
+          return;
+        }
 
-        if (isApprovalYes(message.body)) {
-          await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nMohon ditunggu. Terima kasih!`);
-          await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
+        const isTimGudang = dbTimGudang.find(staf => {
+            let waf = staf["No. HP (WA) aktif"];
+            if (waf) {
+                waf = waf.replace(/[^0-9]/g, "");
+                if (waf.startsWith("08")) waf = "62" + waf.slice(1);
+                return waf + "@c.us" === chatId;
+            }
+            return false;
+        });
 
-          for (let key in orderGudangMsgId) {
-            if (orderGudangMsgId[key].pemohonId === pemohonId) {
-              delete orderGudangMsgId[key];
+        if (isTimGudang && !pengajuan) {
+             const pendingOrder = Object.entries(orderGudangMsgId);
+             if (pendingOrder.length === 1) {
+                 qid = pendingOrder[0][0];
+                 orderGudang = pendingOrder[0][1];
+             } else if (pendingOrder.length > 1) {
+                 await kirimDenganTyping(client, chatId, "⚠️ Tim Gudang memiliki lebih dari 1 pesanan masuk. Mohon *Quote Reply* pesan yang ingin diproses.");
+                 return;
+             }
+        }
+      }
+    }
+
+    // --- EKSEKUSI PERSETUJUAN GUDANG ---
+    if (orderGudang) {
+      const { pemohonId, namaPemohon, pesanan } = orderGudang;
+
+      if (isApprovalYes(message.body)) {
+        await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nMohon ditunggu. Terima kasih!`);
+        await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
+
+        for (let key in orderGudangMsgId) {
+          if (orderGudangMsgId[key].pemohonId === pemohonId) {
+            delete orderGudangMsgId[key];
+          }
+        }
+
+      } else if (isApprovalNo(message.body)) {
+        await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
+        await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
+
+        const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
+        let hasilBedah;
+        while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
+          const idBarangTarget = hasilBedah[1];
+          const jumlahDiambil = parseInt(hasilBedah[2], 10);
+          if (idBarangTarget && !isNaN(jumlahDiambil)) {
+            try {
+              await Barang.findOneAndUpdate(
+                { id_barang: idBarangTarget },
+                { $inc: { stok: +jumlahDiambil } }
+              );
+              console.log(`[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`);
+            } catch (dbErr) {
+              console.error(`[STOK ERROR] Gagal rollback stok`, dbErr);
+            }
+          }
+        }
+
+        for (let key in orderGudangMsgId) {
+          if (orderGudangMsgId[key].pemohonId === pemohonId) {
+            delete orderGudangMsgId[key];
+          }
+        }
+      }
+      return;
+    }
+    
+    // --- EKSEKUSI PERSETUJUAN ATASAN ---
+    if (pengajuan) {
+      const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar } = pengajuan;
+
+      if (isApprovalYes(message.body)) {
+        let pesanPegawai = "";
+        
+        if (jenis === "Lembur") {
+          pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;
+          pengajuanBySender[pemohonId] = { step: "upload-foto", pegawai: p, atasan: pengajuan.atasan, alasan, jamMasuk, jamKeluar, fotoList: [] };
+        } else if (jenis === "Cuti") {
+          pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
+          delete pengajuanBySender[pemohonId];
+        } else if (jenis === "Kendaraan") {
+          const allKendaraan = await getStatusKendaraan();
+          const index = allKendaraan.findIndex((m) => m.id === pengajuan.kendaraanId);
+
+          if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
+            allKendaraan[index].status = "DIPAKAI";
+            allKendaraan[index].peminjam_saat_ini = p["nip"];
+            allKendaraan[index].waktu_pinjam = new Date().toISOString();
+            allKendaraan[index].tujuan_aktif = pengajuan.alasan;
+
+            await updateStatusKendaraanAsync(allKendaraan);
+
+            pesanPegawai = `Pengajuan peminjaman kendaraan *${pengajuan.namaKendaraan}* Anda telah *DISETUJUI* oleh Penanggung Jawab.\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`;
+            
+            await kirimDenganTyping(client, pemohonId, pesanPegawai);
+            await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p["Nama Pegawai"]}`);
+
+            try {
+              const dataPDFMobil = {
+                penanggungJawab: {
+                  nama: DATA_PAK_ALPHA["Nama Pegawai"],
+                  nip: DATA_PAK_ALPHA.nip,
+                  jabatan: DATA_PAK_ALPHA.Jabatan,
+                },
+                pemakai: {
+                  nama: p["Nama Pegawai"] || "Nama Pemakai",
+                  nip: p["nip"] || p["NIP"] || "-",
+                  jabatan: p["Jabatan"] || "-",
+                },
+                kendaraan: {
+                  merek: allKendaraan[index].nama || "-",
+                  tnkb: allKendaraan[index].plat || "-",
+                  keperluan: pengajuan.alasan || "-",
+                  tanggalMulai: new Date().toLocaleDateString("id-ID"),
+                  tanggalSelesai: "-",
+                },
+                pengembalian: {
+                  kondisi: "-",
+                },
+              };
+              await buatSuratIzinMobilAwalAsync(dataPDFMobil, pemohonId, client);
+            } catch (pdfErr) {
+              console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
+            }
+            pesanPegawai = null;
+          } else {
+            pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
+          }
+          delete pengajuanBySender[pemohonId];
+        } else if (jenis === "Persediaan") {
+          pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
+          
+          const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
+          
+          const dataOrder = {
+            pemohonId: pemohonId,
+            namaPemohon: p ? p["Nama Pegawai"] : "User",
+            pesanan: pengajuan.pesanan
+          };
+
+          if (dbTimGudang && dbTimGudang.length > 0) {
+            for (const staf of dbTimGudang) {
+              const noWaStaf = staf["No. HP (WA) aktif"];
+              if (noWaStaf) {
+                const targetStaf = formatNomorId(noWaStaf) + "@c.us";
+                const sentMsg = await client.sendMessage(targetStaf, notifTim);
+                orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
+                await new Promise((r) => setTimeout(r, 1000));
+              }
             }
           }
 
-        } else if (isApprovalNo(message.body)) {
-          await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
-          await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
-
           const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
           let hasilBedah;
-          while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
-            const idBarangTarget = hasilBedah[1];
-            const jumlahDiambil = parseInt(hasilBedah[2], 10);
+          while ((hasilBedah = regexKasir.exec(pengajuan.pesanan)) !== null) {
+            const idBarangTarget = hasilBedah[1]; 
+            const jumlahDiambil = parseInt(hasilBedah[2], 10); 
             if (idBarangTarget && !isNaN(jumlahDiambil)) {
               try {
                 await Barang.findOneAndUpdate(
                   { id_barang: idBarangTarget },
-                  { $inc: { stok: +jumlahDiambil } }
+                  { $inc: { stok: -jumlahDiambil } } 
                 );
-                console.log(`[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`);
               } catch (dbErr) {
-                console.error(`[STOK ERROR] Gagal rollback stok`, dbErr);
+                console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
               }
             }
           }
 
-          for (let key in orderGudangMsgId) {
-            if (orderGudangMsgId[key].pemohonId === pemohonId) {
-              delete orderGudangMsgId[key];
-            }
-          }
-        }
-        return;
-      }
-      
-      // --- HANDLER APPROVAL ATASAN ---
-      if (pengajuan) {
-        const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar } = pengajuan;
-
-        if (isApprovalYes(message.body)) {
-          let pesanPegawai = "";
-          
-          if (jenis === "Lembur") {
-            pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;
-            pengajuanBySender[pemohonId] = { step: "upload-foto", pegawai: p, atasan: pengajuan.atasan, alasan, jamMasuk, jamKeluar, fotoList: [] };
-          } else if (jenis === "Cuti") {
-            pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
-            delete pengajuanBySender[pemohonId];
-          } else if (jenis === "Kendaraan") {
-            const allKendaraan = await getStatusKendaraan();
-            const index = allKendaraan.findIndex((m) => m.id === pengajuan.kendaraanId);
-
-            if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
-              allKendaraan[index].status = "DIPAKAI";
-              allKendaraan[index].peminjam_saat_ini = p["nip"];
-              allKendaraan[index].waktu_pinjam = new Date().toISOString();
-              allKendaraan[index].tujuan_aktif = pengajuan.alasan;
-
-              await updateStatusKendaraanAsync(allKendaraan);
-
-              pesanPegawai = `Pengajuan peminjaman kendaraan *${pengajuan.namaKendaraan}* Anda telah *DISETUJUI* oleh Penanggung Jawab.\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`;
-              
-              await kirimDenganTyping(client, pemohonId, pesanPegawai);
-              await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p["Nama Pegawai"]}`);
-
-              try {
-                const dataPDFMobil = {
-                  penanggungJawab: {
-                    nama: DATA_PAK_ALPHA["Nama Pegawai"],
-                    nip: DATA_PAK_ALPHA.nip,
-                    jabatan: DATA_PAK_ALPHA.Jabatan,
-                  },
-                  pemakai: {
-                    nama: p["Nama Pegawai"] || "Nama Pemakai",
-                    nip: p["nip"] || p["NIP"] || "-",
-                    jabatan: p["Jabatan"] || "-",
-                  },
-                  kendaraan: {
-                    merek: allKendaraan[index].nama || "-",
-                    tnkb: allKendaraan[index].plat || "-",
-                    keperluan: pengajuan.alasan || "-",
-                    tanggalMulai: new Date().toLocaleDateString("id-ID"),
-                    tanggalSelesai: "-",
-                  },
-                  pengembalian: {
-                    kondisi: "-",
-                  },
-                };
-                await buatSuratIzinMobilAwalAsync(dataPDFMobil, pemohonId, client);
-              } catch (pdfErr) {
-                console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
-              }
-              pesanPegawai = null;
-            } else {
-              pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
-            }
-            delete pengajuanBySender[pemohonId];
-          } else if (jenis === "Persediaan") {
-            // 1. Kasih tau pemohon kalau pimpinan udah setuju
-            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
-            
-            // 2. Modif teks buat Tim Gudang (tambah opsi balas 1 atau 2)
-            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
-            
-            // 3. Siapin data buat dilempar ke memori Gudang
-            const dataOrder = {
-              pemohonId: pemohonId,
-              namaPemohon: p ? p["Nama Pegawai"] : "User",
-              pesanan: pengajuan.pesanan
-            };
-
-            // 4. Kirim ke semua orang di Tim Gudang dan simpan ID pesannya
-            if (dbTimGudang && dbTimGudang.length > 0) {
-              for (const staf of dbTimGudang) {
-                const noWaStaf = staf["No. HP (WA) aktif"];
-                if (noWaStaf) {
-                  const targetStaf = formatNomorId(noWaStaf) + "@c.us";
-                  const sentMsg = await client.sendMessage(targetStaf, notifTim);
-                  orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
-                  await new Promise((r) => setTimeout(r, 1000));
-                }
-              }
-            } else {
-               console.log("[WARNING] Array TimGudang kosong atau tidak ditemukan di JSON!");
-            }
-
-            // 5. Potong stok otomatis kayak biasa
-            const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
-            let hasilBedah;
-            while ((hasilBedah = regexKasir.exec(pengajuan.pesanan)) !== null) {
-              const idBarangTarget = hasilBedah[1]; 
-              const jumlahDiambil = parseInt(hasilBedah[2], 10); 
-              if (idBarangTarget && !isNaN(jumlahDiambil)) {
-                try {
-                  await Barang.findOneAndUpdate(
-                    { id_barang: idBarangTarget },
-                    { $inc: { stok: -jumlahDiambil } } 
-                  );
-                } catch (dbErr) {
-                  console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
-                }
-              }
-            }
-
-            delete pengajuanBySender[pemohonId];
-          }
-
-          if (pesanPegawai) {
-            await kirimDenganTyping(client, pemohonId, pesanPegawai);
-            await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p ? p["Nama Pegawai"] : "User"}`);
-          }
-          
-        } else if (isApprovalNo(message.body)) {
-          await kirimDenganTyping(client, pemohonId, `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`);
-          await kirimDenganTyping(client, chatId, `[APPROVAL] Ditolak untuk ${p ? p["Nama Pegawai"] : "User"}`);
           delete pengajuanBySender[pemohonId];
         }
 
-        delete pengajuanByAtasanMsgId[qid];
-        return;
+        if (pesanPegawai) {
+          await kirimDenganTyping(client, pemohonId, pesanPegawai);
+          await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p ? p["Nama Pegawai"] : "User"}`);
+        }
+        
+      } else if (isApprovalNo(message.body)) {
+        await kirimDenganTyping(client, pemohonId, `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`);
+        await kirimDenganTyping(client, chatId, `[APPROVAL] Ditolak untuk ${p ? p["Nama Pegawai"] : "User"}`);
+        delete pengajuanBySender[pemohonId];
       }
+
+      delete pengajuanByAtasanMsgId[qid];
+      return;
     }
 
     // ==========================================
