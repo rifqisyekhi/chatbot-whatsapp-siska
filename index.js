@@ -273,6 +273,7 @@ const DATA_PAK_ALPHA = {
 let dbPegawai = [];
 const pengajuanBySender = {};
 const pengajuanByAtasanMsgId = {};
+const orderGudangMsgId = {};
 const helpdeskQueue = {};
 const helpdeskInstruksiMap = {};
 
@@ -566,7 +567,6 @@ client.on("message", async (message) => {
       const pesananClean = message.body.replace("!ORDER_BARANG", "").trim();
       const namaPemesan = pegawai ? pegawai["Nama Pegawai"] : "Pegawai (Tidak ada di DB)";
       
-      // Beri tahu pemesan
       await kirimDenganTyping(
         client, 
         chatId, 
@@ -578,7 +578,6 @@ client.on("message", async (message) => {
       if(NO_PAK_ALPHA) {
         const sentToPJ = await client.sendMessage(NO_PAK_ALPHA, teksPengajuan);
 
-        // Masukkan ke memori antrean Approval
         pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
           sender: chatId,
           jenis: "Persediaan",
@@ -768,7 +767,53 @@ client.on("message", async (message) => {
       const quoted = await message.getQuotedMessage();
       const qid = quoted.id._serialized;
       const pengajuan = pengajuanByAtasanMsgId[qid];
+      const orderGudang = orderGudangMsgId[qid];
 
+      if (orderGudang) {
+        const { pemohonId, namaPemohon, pesanan } = orderGudang;
+
+        if (isApprovalYes(message.body)) {
+          await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Gudang.\n\nSilakan datang ke ruangan penyimpanan/gudang untuk mengambil barangnya. Terima kasih!`);
+          await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
+
+          for (let key in orderGudangMsgId) {
+            if (orderGudangMsgId[key].pemohonId === pemohonId) {
+              delete orderGudangMsgId[key];
+            }
+          }
+
+        } else if (isApprovalNo(message.body)) {
+          await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui pimpinan, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Gudang untuk informasi lebih lanjut.`);
+          await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
+
+          const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
+          let hasilBedah;
+          while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
+            const idBarangTarget = hasilBedah[1];
+            const jumlahDiambil = parseInt(hasilBedah[2], 10);
+            if (idBarangTarget && !isNaN(jumlahDiambil)) {
+              try {
+                await Barang.findOneAndUpdate(
+                  { id_barang: idBarangTarget },
+                  { $inc: { stok: +jumlahDiambil } }
+                );
+                console.log(`[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`);
+              } catch (dbErr) {
+                console.error(`[STOK ERROR] Gagal rollback stok`, dbErr);
+              }
+            }
+          }
+
+          for (let key in orderGudangMsgId) {
+            if (orderGudangMsgId[key].pemohonId === pemohonId) {
+              delete orderGudangMsgId[key];
+            }
+          }
+        }
+        return;
+      }
+      
+      // --- HANDLER APPROVAL ATASAN ---
       if (pengajuan) {
         const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar } = pengajuan;
 
@@ -831,16 +876,27 @@ client.on("message", async (message) => {
             }
             delete pengajuanBySender[pemohonId];
           } else if (jenis === "Persediaan") {
-            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nPengajuan permintaan persediaan barang Anda telah disetujui oleh Penanggung Jawab.\n\nTim Persediaan sedang menyiapkan pesanan Anda.`;
+            // 1. Kasih tau pemohon kalau pimpinan udah setuju
+            pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
             
-            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Gudang segera mengambil dan menyiapkan pesanan tersebut._`;
+            // 2. Modif teks buat Tim Gudang (tambah opsi balas 1 atau 2)
+            const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pengajuan.pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
             
+            // 3. Siapin data buat dilempar ke memori Gudang
+            const dataOrder = {
+              pemohonId: pemohonId,
+              namaPemohon: p ? p["Nama Pegawai"] : "User",
+              pesanan: pengajuan.pesanan
+            };
+
+            // 4. Kirim ke semua orang di Tim Gudang dan simpan ID pesannya
             if (dbTimGudang && dbTimGudang.length > 0) {
               for (const staf of dbTimGudang) {
                 const noWaStaf = staf["No. HP (WA) aktif"];
                 if (noWaStaf) {
                   const targetStaf = formatNomorId(noWaStaf) + "@c.us";
-                  await kirimDenganTyping(client, targetStaf, notifTim);
+                  const sentMsg = await client.sendMessage(targetStaf, notifTim);
+                  orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
                   await new Promise((r) => setTimeout(r, 1000));
                 }
               }
@@ -848,25 +904,20 @@ client.on("message", async (message) => {
                console.log("[WARNING] Array TimGudang kosong atau tidak ditemukan di JSON!");
             }
 
-            // ==========================================
-            // 3. LOGIKA KASIR (PENGURANGAN STOK OTOMATIS)
-            // ==========================================
+            // 5. Potong stok otomatis kayak biasa
             const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
             let hasilBedah;
-            
             while ((hasilBedah = regexKasir.exec(pengajuan.pesanan)) !== null) {
               const idBarangTarget = hasilBedah[1]; 
               const jumlahDiambil = parseInt(hasilBedah[2], 10); 
-
               if (idBarangTarget && !isNaN(jumlahDiambil)) {
                 try {
                   await Barang.findOneAndUpdate(
                     { id_barang: idBarangTarget },
                     { $inc: { stok: -jumlahDiambil } } 
                   );
-                  console.log(`[STOK UPDATE] ${idBarangTarget} berhasil dikurangi ${jumlahDiambil}`);
                 } catch (dbErr) {
-                  console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}:`, dbErr);
+                  console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
                 }
               }
             }
@@ -898,7 +949,7 @@ client.on("message", async (message) => {
         if (bodyLower === "menu") {
           delete helpdeskQueue[chatId];
           if (pegawai) {
-            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
+            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
             await kirimDenganTyping(client, chatId, menu);
             pengajuanBySender[chatId] = { step: "menu", pegawai };
           } else {
@@ -1101,7 +1152,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `*Formulir Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${LINK_WEB_KATALOG}`,
+          `*Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${LINK_WEB_KATALOG}`,
         );
         delete pengajuanBySender[chatId];
         return;
@@ -1174,7 +1225,7 @@ client.on("message", async (message) => {
 
     if (flow.step === "wfa-kegiatan") {
       const teks = message.body.trim();
-      const maxKata = 50; // Batas maksimal kata
+      const maxKata = 50;
       const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
