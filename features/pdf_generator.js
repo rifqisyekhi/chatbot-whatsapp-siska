@@ -1238,11 +1238,246 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
   }
 }
 
+// ==========================================
+// PDF SERAH TERIMA BARANG PERSEDIAAN
+// ==========================================
+async function buatSuratPermintaanBarangAsync(data, chatId, client) {
+  await ensureDirAsync(REPORTS_DIR);
+
+  // Bikin format file name
+  const tanggalPembuatan = new Date().toISOString().split("T")[0];
+  const safeBidang = (data.bidang || "UMUM").replace(/[\/\\]/g, "_");
+  const namaFile = `Serah_Terima_Barang_${safeBidang}_${tanggalPembuatan}.pdf`;
+  const filePath = path.join(REPORTS_DIR, namaFile);
+
+  const cm = 28.3465;
+
+  // Ukuran kertas A4 standar dokumen persediaan
+  const doc = new PDFDocument({
+    size: "A4",
+    margins: { top: 3 * cm, bottom: 2.5 * cm, left: 2.5 * cm, right: 2.5 * cm }
+  });
+
+  const stream = fs.createWriteStream(filePath);
+  doc.pipe(stream);
+
+  try {
+    let fontNormal = "Times-Roman";
+    let fontBold = "Times-Bold";
+
+    // Setup Font Custom (Bawaan dari script lu)
+    const fontDir = path.join(__dirname, "..", "assets", "fonts");
+    try {
+      doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
+      doc.registerFont("TMR-Bold", path.join(fontDir, "times-bold.ttf"));
+      fontNormal = "TMR";
+      fontBold = "TMR-Bold";
+    } catch (e) {
+      console.log("Font custom tidak ditemukan, menggunakan Helvetica/Times");
+    }
+
+    const marginLeft = doc.page.margins.left;
+    const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    
+    // --- 1. KOP SURAT ---
+    const headerX = 1 * cm; 
+    const headerWidth = doc.page.width - (2 * cm); 
+    const headerY = 0.5 * cm;
+
+    const kopSuratPath = path.join(__dirname, "..", "assets", "images", "kop-kemnaker.png");
+    let yAfterCop = headerY;
+    
+    if (fs.existsSync(kopSuratPath)) {
+      try {
+        const bufKop = await fsPromises.readFile(kopSuratPath);
+        const dimKop = imageSize(bufKop);
+        const aspectRatio = dimKop.width / dimKop.height;
+        const imgHeight = headerWidth / aspectRatio;
+        
+        doc.image(bufKop, headerX, headerY, { width: headerWidth, height: imgHeight });
+        yAfterCop = headerY + imgHeight + 5; 
+      } catch (err) {
+        doc.font(fontBold).fontSize(14).text("KEMENTERIAN KETENAGAKERJAAN REPUBLIK INDONESIA", headerX, headerY, { align: "center", width: headerWidth });
+        yAfterCop = headerY + 30;
+      }
+    } else {
+      doc.font(fontBold).fontSize(14).text("KEMENTERIAN KETENAGAKERJAAN REPUBLIK INDONESIA\nSEKRETARIAT JENDERAL", headerX, headerY, { align: "center", width: headerWidth });
+      yAfterCop = headerY + 40;
+    }
+
+    // Garis Kop Surat
+    doc.lineWidth(1);
+    doc.moveTo(headerX, yAfterCop).lineTo(headerX + headerWidth, yAfterCop).stroke(); 
+    doc.moveTo(headerX, yAfterCop + 2).lineTo(headerX + headerWidth, yAfterCop + 2).stroke(); 
+
+    doc.y = yAfterCop + 20;
+
+    // --- 2. JUDUL SURAT ---
+    const tahunAnggaran = new Date().getFullYear();
+    doc.font(fontBold).fontSize(12).text("SERAH TERIMA BARANG PERSEDIAAN", { align: "center" }); 
+    doc.font(fontBold).fontSize(12).text(`TAHUN ANGGARAN ${tahunAnggaran}`, { align: "center" });
+    doc.moveDown(1.5);
+
+    // --- 3. METADATA SURAT ---
+    doc.font(fontNormal).fontSize(11);
+    const metaLabelX = marginLeft;
+    const metaTitikDuaX = marginLeft + 110;
+    const metaValueX = marginLeft + 120;
+
+    const metadata = [
+      ["Nomor", data.nomor || "-"],
+      ["Tanggal", data.tanggal || "-"],
+      ["UAKPB", data.uakpb || "Sekretariat Jenderal Kemnaker"],
+      ["Unit Kerja", data.unitKerja || "Biro Keuangan dan BMN"],
+      ["Bidang/Subbagian", data.bidang || "-"],
+      ["Jenis Transaksi", data.jenisTransaksi || "-"]
+    ];
+
+    metadata.forEach(([label, value]) => {
+      const startY = doc.y;
+      doc.text(label, metaLabelX, startY);
+      doc.text(":", metaTitikDuaX, startY);
+      doc.text(value, metaValueX, startY, { width: availableWidth - 120 });
+    });
+    doc.moveDown(1.5);
+
+    // --- 4. TABEL BARANG ---
+    const colWidths = [30, 200, 60, 60, availableWidth - 350]; 
+    const headers = ["NO", "Jenis dan Uraian Barang", "Jumlah", "Satuan", "Kelompok Persediaan"];
+    let startX = marginLeft;
+    let currentY = doc.y;
+
+    // Fungsi Render Header Tabel
+    function drawTableHeader(y) {
+      let x = startX;
+      doc.font(fontBold).fontSize(10);
+      const rowHeight = 30; // Tinggi header dibuat fix
+      
+      headers.forEach((h, i) => {
+        doc.rect(x, y, colWidths[i], rowHeight).stroke();
+        doc.text(h, x, y + 10, { width: colWidths[i], align: "center" });
+        x += colWidths[i];
+      });
+      return y + rowHeight;
+    }
+
+    currentY = drawTableHeader(currentY);
+    doc.font(fontNormal).fontSize(10);
+
+    // Render Isi Tabel
+    const barangList = data.barangList || [];
+    for (let i = 0; i < barangList.length; i++) {
+      const b = barangList[i];
+      
+      const textHNama = doc.heightOfString(b.nama, { width: colWidths[1] - 10 });
+      const textHKelompok = doc.heightOfString(b.kelompok, { width: colWidths[4] - 10 });
+      const rowHeight = Math.max(textHNama, textHKelompok, 20) + 10; // Padding 10
+
+      // Cek apakah tabel nabrak batas bawah kertas
+      if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom) {
+        doc.addPage();
+        currentY = doc.page.margins.top;
+        currentY = drawTableHeader(currentY);
+        doc.font(fontNormal).fontSize(10);
+      }
+
+      let x = startX;
+
+      // NO
+      doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
+      doc.text(`${i + 1}`, x, currentY + 5, { width: colWidths[0], align: "center" });
+      x += colWidths[0];
+
+      // Uraian Barang
+      doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
+      doc.text(b.nama, x + 5, currentY + 5, { width: colWidths[1] - 10, align: "left" });
+      x += colWidths[1];
+
+      // Jumlah
+      doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
+      doc.text(`${b.jumlah}`, x, currentY + 5, { width: colWidths[2], align: "center" });
+      x += colWidths[2];
+
+      // Satuan
+      doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
+      doc.text(b.satuan, x, currentY + 5, { width: colWidths[3], align: "center" });
+      x += colWidths[3];
+
+      // Kelompok Persediaan
+      doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
+      doc.text(b.kelompok, x + 5, currentY + 5, { width: colWidths[4] - 10, align: "center" });
+
+      currentY += rowHeight;
+    }
+
+    // --- 5. TANDA TANGAN ---
+    // Cek apakah sisa ruang cukup buat tanda tangan (butuh minimal 150px)
+    if (doc.y + 150 > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+    } else {
+      doc.moveDown(3);
+    }
+
+    const startY_ttd = doc.y;
+    const ttdWidth = 200;
+    const rightTtdX = marginLeft + availableWidth - ttdWidth;
+
+    doc.font(fontNormal).fontSize(11);
+    
+    // Kiri (Kepala TU)
+    doc.text("Kepala Subbagian Tata Usaha", marginLeft, startY_ttd, { align: "center", width: ttdWidth });
+    
+    // Kanan (Pemohon / PUM)
+    const labelPemohon = data.pemohon.jabatan || "PUM AKLAP";
+    doc.text(labelPemohon, rightTtdX, startY_ttd, { align: "center", width: ttdWidth });
+
+    // Kasih jarak kosong buat TTD asli
+    doc.y = startY_ttd + 60;
+
+    // Nama Kiri
+    doc.font(fontBold).text(data.atasan.nama, marginLeft, doc.y, { align: "center", width: ttdWidth, underline: true });
+    doc.font(fontNormal).text(`NIP ${data.atasan.nip}`, marginLeft, doc.y, { align: "center", width: ttdWidth });
+
+    // Tarik Y ke posisi sebelum render NIP Kiri biar sejajar
+    const nipY = doc.y - doc.heightOfString(`NIP ${data.atasan.nip}`) - doc.heightOfString(data.atasan.nama);
+
+    // Nama Kanan
+    doc.font(fontBold).text(data.pemohon.nama, rightTtdX, nipY, { align: "center", width: ttdWidth, underline: true });
+    doc.font(fontNormal).text(`NIP ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      stream.on("finish", async () => {
+        try {
+          const media = MessageMedia.fromFilePath(filePath);
+          try {
+            await client.sendMessage(chatId, media, {
+              caption: `Berikut adalah *Bukti Serah Terima Barang Persediaan* untuk bidang ${data.bidang}. Silakan dicetak dan ditandatangani.`,
+            });
+          } catch(e) {
+             console.error("❌ Gagal kirim PDF Permintaan Barang ke user:", e);
+          }
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
+      });
+      stream.on("error", (err) => reject(err));
+    });
+  } catch (err) {
+    doc.end();
+    console.error("❌ Error fatal saat pembuatan PDF Permintaan Barang:", err);
+    throw err;
+  }
+}
+
 module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
   buatPDFRekapBulanan,
   buatSuratIzinMobilAwalAsync,
   buatSuratIzinMobilAkhirAsync,
+  buatSuratPermintaanBarangAsync,
   calculateDuration
 };
