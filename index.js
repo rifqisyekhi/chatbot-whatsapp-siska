@@ -78,31 +78,22 @@ app.get('/api/barang', async (req, res) => {
 // --- RUTE API: TAMBAH BARANG BARU (POST) ---
 app.post('/api/barang', async (req, res) => {
     try {
-        // 1. Tangkap data dari Front-End (Gak ada id_barang lagi!)
         const { nama, kategori, stok, img } = req.body;
 
-        // 2. Validasi
         if (!nama || stok == null || !kategori) {
             return res.status(400).json({ 
                 error: "Data kurang lengkap! Pastikan Nama, Kategori, dan Stok terisi." 
             });
         }
 
-        // 3. LOGIKA AUTO-GENERATE KODE BARANG (SKU)
-        // Tentukan awalan (prefix) berdasarkan kategori
         let prefix = kategori === 'ATK' ? 'ATK-' : 'ELK-';
-
-        // Tarik semua barang di database yang kategorinya sama untuk nyari angka terbesarnya
         const barangSejenis = await Barang.find({ kategori: kategori }, 'id_barang');
         
         let angkaTertinggi = 0;
         
-        // Loop satu-satu buat nyari angka paling gede
         barangSejenis.forEach(barang => {
-            // Misalnya kode "ATK-040", kita belah dua berdasarkan tanda "-"
             const bagian = barang.id_barang.split('-');
             if (bagian.length === 2) {
-                // Ambil angka di belakangnya (040 -> 40)
                 const angka = parseInt(bagian[1], 10);
                 if (!isNaN(angka) && angka > angkaTertinggi) {
                     angkaTertinggi = angka;
@@ -110,7 +101,6 @@ app.post('/api/barang', async (req, res) => {
             }
         });
 
-        // Tambah 1 dari angka tertinggi yang ditemuin
         const angkaBaru = angkaTertinggi + 1;
         const id_barang_baru = `${prefix}${angkaBaru.toString().padStart(3, '0')}`;
         const barangBaru = new Barang({
@@ -121,11 +111,9 @@ app.post('/api/barang', async (req, res) => {
             img: img || ""
         });
 
-        // 5. Simpan ke MongoDB
         await barangBaru.save();
         console.log(`[DATABASE] Barang baru auto-SKU: ${nama} [${id_barang_baru}]`);
 
-        // 6. Respon sukses
         res.status(201).json({ 
             message: `Barang berhasil ditambah dengan kode ${id_barang_baru}!`, 
             data: barangBaru 
@@ -179,7 +167,6 @@ app.delete('/api/barang/:id_barang', async (req, res) => {
     try {
         const targetId = req.params.id_barang; 
         
-        // Suruh MongoDB nyari ID-nya dan langsung hapus dari database
         const barangDihapus = await Barang.findOneAndDelete({ id_barang: targetId });
 
         if (!barangDihapus) {
@@ -608,11 +595,10 @@ client.on("message", async (message) => {
       const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       if(NO_PAK_ALPHA) {
-        const sentToPJ = await client.sendMessage(NO_PAK_ALPHA, teksPengajuan);
+        const sentToPJ = await client.sendMessage(`${NO_PAK_ALPHA}@c.us`, teksPengajuan);
 
-        // Kumpulkan data mentah (raw) pesanan untuk diolah nanti saat jadi PDF
         const listBarangOrder = [];
-        const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; // Match: [ATK-001] Map Plastik (1 Pack)
+        const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; 
         let hasilParse;
         while ((hasilParse = regexParser.exec(pesananClean)) !== null) {
           listBarangOrder.push({
@@ -630,7 +616,7 @@ client.on("message", async (message) => {
           pegawai: pegawai,
           atasan: DATA_PAK_ALPHA,
           pesanan: pesananClean,
-          barangListParsed: listBarangOrder // <--- Simpan array barang yang udah di-parse
+          barangListParsed: listBarangOrder 
         };
       }
 
@@ -862,14 +848,30 @@ client.on("message", async (message) => {
       }
     }
 
-    // --- EKSEKUSI PERSETUJUAN GUDANG ---
+    // ===============================================
+    // --- EKSEKUSI PERSETUJUAN TIM GUDANG / PERSEDIAAN
+    // ===============================================
     if (orderGudang) {
-      const { pemohonId, namaPemohon, pesanan, barangListParsed, pData } = orderGudang; // <-- pData di passing dari flow atas
+      const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; // <-- Tambah semuaTargetGudang
+
+      // Cari tau nama petugas gudang yang ngeklik tombol setuju/batal
+      const dataStaf = cariPegawaiByWa(chatId);
+      const namaStaf = dataStaf ? dataStaf["Nama Pegawai"] : "Petugas Gudang";
 
       if (isApprovalYes(message.body)) {
         // Kasih notif ke atasan/gudang dan pemohon
         await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nSedang mengenerate PDF Serah Terima... Mohon ditunggu.`);
         await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
+
+        // --- NOTIFIKASI KE ANGGOTA TIM LAINNYA ---
+        if (semuaTargetGudang && semuaTargetGudang.length > 0) {
+            for (const target of semuaTargetGudang) {
+                if (target !== chatId) { // Jangan kirim ke petugas yang lagi memproses ini
+                    await kirimDenganTyping(client, target, `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* sudah diproses/diambil alih oleh *${namaStaf}*.`);
+                }
+            }
+        }
+        // -----------------------------------------
 
         // === EKSEKUSI GENERATE PDF PERMINTAAN ATK ===
         try {
@@ -878,13 +880,13 @@ client.on("message", async (message) => {
           const nipPemohon = pData ? (pData["nip"] || pData["NIP"] || "-") : "-";
           
           const dataPDFBarang = {
-            nomor: `AKLAP-${Math.floor(Math.random() * 1000)}`, // Nomor auto gen sementara
+            nomor: `AKLAP-${Math.floor(Math.random() * 1000)}`, 
             tanggal: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
             uakpb: "Sekretariat Jenderal Kemnaker",
             unitKerja: "Biro Keuangan dan BMN",
             bidang: unitKerjaAtauSubstansi,
             jenisTransaksi: "Permintaan Persediaan",
-            barangList: barangListParsed || [], // Hasil parse dari !ORDER_BARANG
+            barangList: barangListParsed || [], 
             atasan: {
               nama: DATA_PAK_ALPHA["Nama Pegawai"],
               nip: DATA_PAK_ALPHA.nip
@@ -911,6 +913,16 @@ client.on("message", async (message) => {
       } else if (isApprovalNo(message.body)) {
         await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
         await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
+
+        // --- NOTIFIKASI KE ANGGOTA TIM LAINNYA ---
+        if (semuaTargetGudang && semuaTargetGudang.length > 0) {
+            for (const target of semuaTargetGudang) {
+                if (target !== chatId) { 
+                    await kirimDenganTyping(client, target, `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* telah dibatalkan / ditandai kosong oleh *${namaStaf}*.`);
+                }
+            }
+        }
+        // -----------------------------------------
 
         const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
         let hasilBedah;
@@ -941,7 +953,7 @@ client.on("message", async (message) => {
     
     // --- EKSEKUSI PERSETUJUAN ATASAN ---
     if (pengajuan) {
-      const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar, barangListParsed, pesanan } = pengajuan; // Ambil barangListParsed
+      const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar, barangListParsed, pesanan } = pengajuan; 
 
       if (isApprovalYes(message.body)) {
         let pesanPegawai = "";
@@ -1006,23 +1018,32 @@ client.on("message", async (message) => {
           
           const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
           
-          const dataOrder = {
-            pemohonId: pemohonId,
-            namaPemohon: p ? p["Nama Pegawai"] : "User",
-            pesanan: pesanan,
-            barangListParsed: barangListParsed, // Lempar data yang udah rapi ke orderGudang
-            pData: p // Lempar data pegawai buat ditaruh di PDF nanti
-          };
-
+          // === KUMPULIN SEMUA NOMOR TIM GUDANG DULU ===
+          const targetGudangList = [];
           if (dbTimGudang && dbTimGudang.length > 0) {
             for (const staf of dbTimGudang) {
               const noWaStaf = staf["No. HP (WA) aktif"];
               if (noWaStaf) {
-                const targetStaf = formatNomorId(noWaStaf) + "@c.us";
+                targetGudangList.push(formatNomorId(noWaStaf) + "@c.us");
+              }
+            }
+          }
+
+          const dataOrder = {
+            pemohonId: pemohonId,
+            namaPemohon: p ? p["Nama Pegawai"] : "User",
+            pesanan: pesanan,
+            barangListParsed: barangListParsed, 
+            pData: p,
+            semuaTargetGudang: targetGudangList // <-- Simpan data teman-temannya di sini
+          };
+
+          // === BROADCAST KE SEMUA TIM GUDANG ===
+          if (targetGudangList.length > 0) {
+            for (const targetStaf of targetGudangList) {
                 const sentMsg = await client.sendMessage(targetStaf, notifTim);
                 orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
                 await new Promise((r) => setTimeout(r, 1000));
-              }
             }
           }
 
