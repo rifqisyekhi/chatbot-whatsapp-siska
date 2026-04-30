@@ -61,7 +61,7 @@ async function getDummySignature(nip) {
 }
 
 // ==========================================
-// PDF LEMBUR 
+// PDF LEMBUR (Sistem Paksa 1 Halaman & Grup TTD)
 // ==========================================
 async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetAtasan, client) {
   await ensureDirAsync(REPORTS_DIR);
@@ -109,7 +109,7 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
 
     // Jarak 1.5 space
     doc.y += (doc.heightOfString("A") * 0.5);
-    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center" });
+    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center", underline: true });
 
     // Jarak 1.15 space
     doc.y += (doc.heightOfString("A") * 0.15);
@@ -238,15 +238,14 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     const leftColX = 57;
     const rightColX = doc.page.width - 57 - colTtdWidth;
     
-    // 1. Ukur dulu TINGGI TOTAL seluruh rombongan Tanda Tangan ini
     doc.fontSize(11);
     const hMengetahui = doc.heightOfString("Mengetahui,", { width: colTtdWidth });
     
     const hJabatanAtasan = doc.heightOfString(data.atasan_jabatan, { width: colTtdWidth });
     const hJabatanPegawai = doc.heightOfString(data.jabatan, { width: colTtdWidth });
-    const hMaxJabatan = Math.max(hJabatanAtasan, hJabatanPegawai); // Ambil jabatan yg paling panjang/tinggi
+    const hMaxJabatan = Math.max(hJabatanAtasan, hJabatanPegawai); 
     
-    const hSpaceTtd = 60; // Jarak kosong buat ttd asli
+    const hSpaceTtd = 60; 
     
     const hNamaAtasan = doc.font("TMR-Bold").heightOfString(data.atasan_nama, { width: colTtdWidth });
     const hNamaPegawai = doc.font("TMR-Bold").heightOfString(data.nama, { width: colTtdWidth });
@@ -256,15 +255,12 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     const hNipPegawai = doc.font("TMR").heightOfString(`NIP. ${data.nip}`, { width: colTtdWidth });
     const hMaxNip = Math.max(hNipAtasan, hNipPegawai);
 
-    // Ini total tinggi rombongannya dari tulisan "Mengetahui" sampai "NIP"
     const totalGrupTtdHeight = hMengetahui + hMaxJabatan + hSpaceTtd + hMaxNama + hMaxNip + 15; 
 
-    // 2. CEK SISA KERTAS! Kalau sisa kertas lebih kecil dari tinggi rombongan, PINDAH HALAMAN.
     if (doc.y + totalGrupTtdHeight > doc.page.height - doc.page.margins.bottom) {
       doc.addPage();
     }
 
-    // 3. BARU KITA GAMBAR (Sekarang dijamin se-grup tetep barengan)
     const startY_ttd = doc.y;
 
     doc.font("TMR").fontSize(11);
@@ -328,6 +324,9 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
   }
 }
 
+// ==========================================
+// PDF WFA / KINERJA HARIAN
+// ==========================================
 async function buatLaporanWFAAsync(data, chatId, client) {
   await ensureDirAsync(REPORTS_DIR);
   
@@ -619,6 +618,9 @@ async function buatLaporanWFAAsync(data, chatId, client) {
   }
 }
 
+// ==========================================
+// PDF REKAP BULANAN
+// ==========================================
 async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
   ensureDir(REPORTS_DIR);
   const timestamp = Date.now();
@@ -768,6 +770,9 @@ function extractDateTime(dateStr) {
   return { tgl: dateStr, jam: "-" };
 }
 
+// ==========================================
+// PDF SURAT IZIN MOBIL (AWAL / PINJAM)
+// ==========================================
 async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
   await ensureDirAsync(REPORTS_DIR);
 
@@ -975,6 +980,9 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
   }
 }
 
+// ==========================================
+// PDF SURAT IZIN MOBIL (AKHIR / KEMBALI)
+// ==========================================
 async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
   await ensureDirAsync(REPORTS_DIR);
 
@@ -1265,7 +1273,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     let fontNormal = "Times-Roman";
     let fontBold = "Times-Bold";
 
-    // Setup Font Custom (Bawaan dari script lu)
+    // Setup Font Custom
     const fontDir = path.join(__dirname, "..", "assets", "fonts");
     try {
       doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
@@ -1347,11 +1355,10 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     let startX = marginLeft;
     let currentY = doc.y;
 
-    // Fungsi Render Header Tabel
     function drawTableHeader(y) {
       let x = startX;
       doc.font(fontBold).fontSize(10);
-      const rowHeight = 30; // Tinggi header dibuat fix
+      const rowHeight = 30; 
       
       headers.forEach((h, i) => {
         doc.rect(x, y, colWidths[i], rowHeight).stroke();
@@ -1364,16 +1371,14 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     currentY = drawTableHeader(currentY);
     doc.font(fontNormal).fontSize(10);
 
-    // Render Isi Tabel
     const barangList = data.barangList || [];
     for (let i = 0; i < barangList.length; i++) {
       const b = barangList[i];
       
       const textHNama = doc.heightOfString(b.nama, { width: colWidths[1] - 10 });
       const textHKelompok = doc.heightOfString(b.kelompok, { width: colWidths[4] - 10 });
-      const rowHeight = Math.max(textHNama, textHKelompok, 20) + 10; // Padding 10
+      const rowHeight = Math.max(textHNama, textHKelompok, 20) + 10;
 
-      // Cek apakah tabel nabrak batas bawah kertas
       if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom) {
         doc.addPage();
         currentY = doc.page.margins.top;
@@ -1383,27 +1388,22 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 
       let x = startX;
 
-      // NO
       doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
       doc.text(`${i + 1}`, x, currentY + 5, { width: colWidths[0], align: "center" });
       x += colWidths[0];
 
-      // Uraian Barang
       doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
       doc.text(b.nama, x + 5, currentY + 5, { width: colWidths[1] - 10, align: "left" });
       x += colWidths[1];
 
-      // Jumlah
       doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
       doc.text(`${b.jumlah}`, x, currentY + 5, { width: colWidths[2], align: "center" });
       x += colWidths[2];
 
-      // Satuan
       doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
       doc.text(b.satuan, x, currentY + 5, { width: colWidths[3], align: "center" });
       x += colWidths[3];
 
-      // Kelompok Persediaan
       doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
       doc.text(b.kelompok, x + 5, currentY + 5, { width: colWidths[4] - 10, align: "center" });
 
@@ -1411,7 +1411,6 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     }
 
     // --- 5. TANDA TANGAN ---
-    // Cek apakah sisa ruang cukup buat tanda tangan (butuh minimal 150px)
     if (doc.y + 150 > doc.page.height - doc.page.margins.bottom) {
       doc.addPage();
     } else {
@@ -1424,24 +1423,18 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 
     doc.font(fontNormal).fontSize(11);
     
-    // Kiri (Kepala TU)
     doc.text("Kepala Subbagian Tata Usaha", marginLeft, startY_ttd, { align: "center", width: ttdWidth });
     
-    // Kanan (Pemohon / PUM)
     const labelPemohon = data.pemohon.jabatan || "PUM AKLAP";
     doc.text(labelPemohon, rightTtdX, startY_ttd, { align: "center", width: ttdWidth });
 
-    // Kasih jarak kosong buat TTD asli
     doc.y = startY_ttd + 60;
 
-    // Nama Kiri
     doc.font(fontBold).text(data.atasan.nama, marginLeft, doc.y, { align: "center", width: ttdWidth, underline: true });
     doc.font(fontNormal).text(`NIP ${data.atasan.nip}`, marginLeft, doc.y, { align: "center", width: ttdWidth });
 
-    // Tarik Y ke posisi sebelum render NIP Kiri biar sejajar
     const nipY = doc.y - doc.heightOfString(`NIP ${data.atasan.nip}`) - doc.heightOfString(data.atasan.nama);
 
-    // Nama Kanan
     doc.font(fontBold).text(data.pemohon.nama, rightTtdX, nipY, { align: "center", width: ttdWidth, underline: true });
     doc.font(fontNormal).text(`NIP ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
 
