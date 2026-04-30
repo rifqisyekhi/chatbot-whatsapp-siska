@@ -1270,7 +1270,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
   doc.pipe(stream);
 
   try {
-    // PDFKit bawaan punya Helvetica yang setara persis dengan Arial
+    // Pakai Helvetica yang setara persis dengan Arial
     let fontNormal = "Helvetica";
     let fontBold = "Helvetica-Bold";
     doc.font(fontNormal);
@@ -1324,7 +1324,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     const metaValueX = marginLeft + 120;
 
     const metadata = [
-      ["Nomor", ""], // Dikosongkan sesuai request
+      ["Nomor", " "], // FIX: Diisi spasi " " agar tidak numpuk dengan Tanggal
       ["Tanggal", data.tanggal || "-"],
       ["UAKPB", data.uakpb || "Sekretariat Jenderal Kemnaker"],
       ["Unit Kerja", data.unitKerja || "Biro Keuangan dan BMN"],
@@ -1349,11 +1349,13 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     function drawTableHeader(y) {
       let x = startX;
       doc.font(fontBold).fontSize(10);
-      const rowHeight = 30; 
+      const rowHeight = 35; // FIX: Diperbesar agar teks 2 baris tidak mepet
       
       headers.forEach((h, i) => {
         doc.rect(x, y, colWidths[i], rowHeight).stroke();
-        doc.text(h, x, y + 10, { width: colWidths[i], align: "center" });
+        // FIX: Rumus Vertical Center = y + (Tinggi_Kotak - Tinggi_Teks) / 2
+        const tH = doc.heightOfString(h, { width: colWidths[i] });
+        doc.text(h, x, y + (rowHeight - tH) / 2, { width: colWidths[i], align: "center" });
         x += colWidths[i];
       });
       return y + rowHeight;
@@ -1368,7 +1370,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
       
       const textHNama = doc.heightOfString(b.nama, { width: colWidths[1] - 10 });
       const textHKelompok = doc.heightOfString(b.kelompok, { width: colWidths[4] - 10 });
-      const rowHeight = Math.max(textHNama, textHKelompok, 20) + 10;
+      const rowHeight = Math.max(textHNama, textHKelompok, 20) + 15; // Padding ditambah biar lega
 
       if (currentY + rowHeight > doc.page.height - doc.page.margins.bottom) {
         doc.addPage();
@@ -1379,24 +1381,34 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 
       let x = startX;
 
+      // NO (Vertical Center)
       doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
-      doc.text(`${i + 1}`, x, currentY + 5, { width: colWidths[0], align: "center" });
+      let tH = doc.heightOfString(`${i + 1}`, { width: colWidths[0] });
+      doc.text(`${i + 1}`, x, currentY + (rowHeight - tH) / 2, { width: colWidths[0], align: "center" });
       x += colWidths[0];
 
+      // Uraian Barang (Vertical Center - Left Align)
       doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
-      doc.text(b.nama, x + 5, currentY + 5, { width: colWidths[1] - 10, align: "left" });
+      tH = doc.heightOfString(b.nama, { width: colWidths[1] - 10 });
+      doc.text(b.nama, x + 5, currentY + (rowHeight - tH) / 2, { width: colWidths[1] - 10, align: "left" });
       x += colWidths[1];
 
+      // Jumlah (Vertical Center)
       doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
-      doc.text(`${b.jumlah}`, x, currentY + 5, { width: colWidths[2], align: "center" });
+      tH = doc.heightOfString(`${b.jumlah}`, { width: colWidths[2] });
+      doc.text(`${b.jumlah}`, x, currentY + (rowHeight - tH) / 2, { width: colWidths[2], align: "center" });
       x += colWidths[2];
 
+      // Satuan (Vertical Center)
       doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
-      doc.text(b.satuan, x, currentY + 5, { width: colWidths[3], align: "center" });
+      tH = doc.heightOfString(b.satuan, { width: colWidths[3] });
+      doc.text(b.satuan, x, currentY + (rowHeight - tH) / 2, { width: colWidths[3], align: "center" });
       x += colWidths[3];
 
+      // Kelompok Persediaan (Vertical Center)
       doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
-      doc.text(b.kelompok, x + 5, currentY + 5, { width: colWidths[4] - 10, align: "center" });
+      tH = doc.heightOfString(b.kelompok, { width: colWidths[4] - 10 });
+      doc.text(b.kelompok, x + 5, currentY + (rowHeight - tH) / 2, { width: colWidths[4] - 10, align: "center" });
 
       currentY += rowHeight;
     }
@@ -1409,8 +1421,6 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     }
 
     const startY_ttd = doc.y;
-    
-    // Lebarin kolom TTD nya biar nama Pak Sandro yang panjang nggak turun baris
     const ttdWidth = 226; 
     const rightTtdX = marginLeft + availableWidth - ttdWidth;
 
@@ -1423,11 +1433,9 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 
     doc.y = startY_ttd + 60;
 
-    // Nama dibikin Normal (gak bold) dan nggak underline
     doc.text(data.atasan.nama, marginLeft, doc.y, { align: "center", width: ttdWidth });
     doc.text(`NIP ${data.atasan.nip}`, marginLeft, doc.y, { align: "center", width: ttdWidth });
 
-    // Kalkulasi Y untuk kanan biar sejajar
     const hNamaKiri = doc.heightOfString(data.atasan.nama, { width: ttdWidth });
     const hNipKiri = doc.heightOfString(`NIP ${data.atasan.nip}`, { width: ttdWidth });
     const nipY = doc.y - hNipKiri - hNamaKiri;
