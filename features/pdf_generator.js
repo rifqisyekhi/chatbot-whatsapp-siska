@@ -110,13 +110,20 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     
     doc.text("SEKRETARIAT JENDERAL - BIRO KEUANGAN DAN BMN", { align: "center" });
 
-    // Jarak pakai 1.15 space dari SEKRETARIAT JENDERAL ke LAPORAN LEMBUR
-    doc.y += (doc.heightOfString("A") * 0.15);
+    // REQ: Jarak pakai 1.5 space dari SEKRETARIAT JENDERAL ke LAPORAN LEMBUR
+    doc.y += (doc.heightOfString("A") * 0.5);
 
     doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center", underline: true });
 
-    // Hapus jarak kosong besar, ganti ke spasi 1.15 biasa biar nama nempel
+    // Jarak dari LAPORAN LEMBUR ke tulisan Nama pakai spasi 1.15 biasa
     doc.y += (doc.heightOfString("A") * 0.15);
+
+    // Batas Kata Uraian Kegiatan Max 40 Kata
+    let uraianKegiatan = data.kegiatan || "";
+    const arrKata = uraianKegiatan.split(/\s+/); 
+    if (arrKata.length > 40) {
+      uraianKegiatan = arrKata.slice(0, 40).join(" ") + " ..."; 
+    }
 
     // IDENTITAS PEGAWAI (Spasi 1.15 & Titik Dua Lurus)
     doc.font("TMR").fontSize(11);
@@ -127,7 +134,7 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       ["Jam Mulai", data.jamMasuk],
       ["Jam Selesai", data.jamKeluar],
       ["Total Jam Lembur", calculateDuration(data.jamMasuk, data.jamKeluar)],
-      ["Uraian Kegiatan", data.kegiatan], // Dikembalikan murni tanpa fungsi potong slice
+      ["Uraian Kegiatan", uraianKegiatan], 
     ];
 
     const labelX = 57;             
