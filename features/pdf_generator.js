@@ -61,7 +61,7 @@ async function getDummySignature(nip) {
 }
 
 // ==========================================
-// PDF LEMBUR 
+// PDF LEMBUR (SISTEM TABEL FOTO ANTI-BOCOR)
 // ==========================================
 async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetAtasan, client) {
   await ensureDirAsync(REPORTS_DIR);
@@ -104,26 +104,15 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
 
     // KOP SURAT
     doc.font("TMR-Bold").fontSize(14).text("KEMENTERIAN KETENAGAKERJAAN RI", { align: "center" });
-    
-    // Spasi 1.15 dari teks pertama ke teks kedua
     doc.y += (doc.heightOfString("A") * 0.15);
-    
     doc.text("SEKRETARIAT JENDERAL - BIRO KEUANGAN DAN BMN", { align: "center" });
 
-    // REQ: Jarak pakai 1.5 space dari SEKRETARIAT JENDERAL ke LAPORAN LEMBUR
+    // Jarak 1.5 space
     doc.y += (doc.heightOfString("A") * 0.5);
-
     doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center", underline: true });
 
-    // Jarak dari LAPORAN LEMBUR ke tulisan Nama pakai spasi 1.15 biasa
+    // Jarak 1.15 space
     doc.y += (doc.heightOfString("A") * 0.15);
-
-    // Batas Kata Uraian Kegiatan Max 40 Kata
-    let uraianKegiatan = data.kegiatan || "";
-    const arrKata = uraianKegiatan.split(/\s+/); 
-    if (arrKata.length > 40) {
-      uraianKegiatan = arrKata.slice(0, 40).join(" ") + " ..."; 
-    }
 
     // IDENTITAS PEGAWAI (Spasi 1.15 & Titik Dua Lurus)
     doc.font("TMR").fontSize(11);
@@ -134,15 +123,13 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       ["Jam Mulai", data.jamMasuk],
       ["Jam Selesai", data.jamKeluar],
       ["Total Jam Lembur", calculateDuration(data.jamMasuk, data.jamKeluar)],
-      ["Uraian Kegiatan", uraianKegiatan], 
+      ["Uraian Kegiatan", data.kegiatan], 
     ];
 
     const labelX = 57;             
     const titikDuaX = 180;         
     const valueX = 190;            
     const maxValWidth = doc.page.width - valueX - 57; 
-
-    // Rumus Line Spacing 1.15
     const fontHeight = doc.heightOfString("A");
     const spacing115 = fontHeight * 0.15; 
 
@@ -161,59 +148,97 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       doc.y += spacing115;
     });
 
-    doc.moveDown(2);
+    doc.moveDown(1);
     doc.x = doc.page.margins.left;
 
     doc.font("TMR-Bold").fontSize(12).text("Dokumentasi Hasil Lembur", { align: "center" });
-    doc.font("TMR").moveDown();
+    
+    // --- TABEL FOTO ---
+    doc.moveDown(0.5);
+    doc.font("TMR").fontSize(11);
+    const startX = 57;
+    const tableWidth = doc.page.width - 114;
+    const colWidth = tableWidth / 2;
+    const padding = 10;
 
-    // RENDER FOTO (Tengah & Proporsional)
-    const addImageBlockMemory = (title, imgData) => {
-      doc.fontSize(11).text(`${title}`);
-      doc.moveDown(0.5);
-
-      if (imgData && imgData.valid) {
-        const imgWidth = imgData.dimensions.width;
-        const imgHeight = imgData.dimensions.height;
-        
-        const maxWidth = 380; 
-        const maxHeight = 230; 
-        
-        const aspectRatio = imgWidth / imgHeight;
-        let finalWidth = maxWidth;
-        let finalHeight = Math.round(maxWidth / aspectRatio);
-
-        if (finalHeight > maxHeight) {
-          finalHeight = maxHeight;
-          finalWidth = Math.round(maxHeight * aspectRatio);
-        }
-
-        const remainingSpace = doc.page.height - doc.y - doc.page.margins.bottom;
-        if (finalHeight + 30 > remainingSpace) {
-          doc.addPage();
-        }
-
-        const centerX = (doc.page.width - finalWidth) / 2;
-
-        try {
-          doc.image(imgData.buffer, centerX, doc.y, {
-            width: finalWidth,
-            height: finalHeight
-          });
-          doc.y += finalHeight + 15; 
-        } catch (renderErr) {
-          doc.text("(Gagal render gambar corrupt)", { align: "center" });
-        }
-      } else {
-        doc.text("(Gambar tidak dapat dimuat/rusak)", { align: "center" });
+    // Fungsi canggih untuk Auto-Scale Gambar di dalam kotak
+    const getFitDim = (imgData, maxW, maxH) => {
+      if (!imgData || !imgData.valid) return { width: 0, height: 0 };
+      const ratio = imgData.dimensions.width / imgData.dimensions.height;
+      let w = maxW;
+      let h = w / ratio;
+      if (h > maxH) {
+        h = maxH;
+        w = h * ratio;
       }
-      doc.moveDown(1);
+      return { width: w, height: h };
     };
 
-    addImageBlockMemory("1. Foto Hasil Lembur:", loadedImages[0]);
-    if (doc.y > doc.page.height / 2) doc.addPage(); 
-    addImageBlockMemory("2. Foto Pegawai di Tempat Lembur:", loadedImages[1]);
-    addImageBlockMemory("3. Screenshot Approval:", loadedImages[2]);
+    // Batas Max Gambar (Anti-Bocor)
+    const maxImgW1 = colWidth - (padding * 2);
+    const maxImgH1 = 220; // Tinggi max foto atas (portrait aman)
+    const maxImgW3 = tableWidth - (padding * 2);
+    const maxImgH3 = 250; // Tinggi max foto bawah
+
+    const dim1 = getFitDim(loadedImages[0], maxImgW1, maxImgH1);
+    const dim2 = getFitDim(loadedImages[1], maxImgW1, maxImgH1);
+    const dim3 = getFitDim(loadedImages[2], maxImgW3, maxImgH3);
+
+    // Kunci ukuran tinggi sel tabelnya
+    const row1Height = maxImgH1 + 35; 
+    const row2Height = maxImgH3 + 35;
+
+    // Pengecekan Kertas (Kalau sisa kertas dikit, lempar tabelnya ke halaman 2)
+    if (doc.y + row1Height + row2Height > doc.page.height - 57) {
+      doc.addPage();
+    }
+
+    let currentY = doc.y;
+
+    // ----- BARIS 1 (KIRI - KANAN) -----
+    
+    // Kotak Kiri (Foto 1)
+    doc.rect(startX, currentY, colWidth, row1Height).stroke();
+    doc.text("1. Foto Hasil Lembur:", startX, currentY + padding, { width: colWidth, align: 'center' });
+    
+    if (loadedImages[0] && loadedImages[0].valid) {
+      const xOffset = startX + (colWidth - dim1.width) / 2;
+      const yOffset = currentY + 25 + (row1Height - 25 - dim1.height) / 2;
+      doc.image(loadedImages[0].buffer, xOffset, yOffset, { width: dim1.width, height: dim1.height });
+    } else {
+      doc.text("(Tidak ada/Rusak)", startX, currentY + row1Height/2, { width: colWidth, align: 'center' });
+    }
+
+    // Kotak Kanan (Foto 2)
+    doc.rect(startX + colWidth, currentY, colWidth, row1Height).stroke();
+    doc.text("2. Foto Pegawai di Tempat Lembur:", startX + colWidth, currentY + padding, { width: colWidth, align: 'center' });
+    
+    if (loadedImages[1] && loadedImages[1].valid) {
+      const xOffset = startX + colWidth + (colWidth - dim2.width) / 2;
+      const yOffset = currentY + 25 + (row1Height - 25 - dim2.height) / 2;
+      doc.image(loadedImages[1].buffer, xOffset, yOffset, { width: dim2.width, height: dim2.height });
+    } else {
+      doc.text("(Tidak ada/Rusak)", startX + colWidth, currentY + row1Height/2, { width: colWidth, align: 'center' });
+    }
+
+    currentY += row1Height;
+
+    // ----- BARIS 2 (FULL LEBAR) -----
+    
+    // Kotak Bawah (Foto 3)
+    doc.rect(startX, currentY, tableWidth, row2Height).stroke();
+    doc.text("3. Screenshot Approval:", startX, currentY + padding, { width: tableWidth, align: 'center' });
+    
+    if (loadedImages[2] && loadedImages[2].valid) {
+      const xOffset = startX + (tableWidth - dim3.width) / 2;
+      const yOffset = currentY + 25 + (row2Height - 25 - dim3.height) / 2;
+      doc.image(loadedImages[2].buffer, xOffset, yOffset, { width: dim3.width, height: dim3.height });
+    } else {
+      doc.text("(Tidak ada/Rusak)", startX, currentY + row2Height/2, { width: tableWidth, align: 'center' });
+    }
+
+    // Geser kursor ke bawah tabel buat nulis tanda tangan
+    doc.y = currentY + row2Height;
 
     // --- BLOK TANDA TANGAN ---
     const signatureHeight = 150;
@@ -226,24 +251,24 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     doc.moveDown(2);
     const startY = doc.y;
 
-    const colWidth = 230;
+    const colTtdWidth = 230;
     const leftColX = 57;
-    const rightColX = doc.page.width - 57 - colWidth;
+    const rightColX = doc.page.width - 57 - colTtdWidth;
 
     doc.fontSize(11);
-    doc.text("Mengetahui,", leftColX, startY, { align: "center", width: colWidth });
-    doc.text(data.atasan_jabatan, leftColX, doc.y, { align: "center", width: colWidth });
+    doc.text("Mengetahui,", leftColX, startY, { align: "center", width: colTtdWidth });
+    doc.text(data.atasan_jabatan, leftColX, doc.y, { align: "center", width: colTtdWidth });
 
-    doc.text("Dilaksanakan Oleh,", rightColX, startY, { align: "center", width: colWidth });
-    doc.text(data.jabatan, rightColX, doc.y, { align: "center", width: colWidth });
+    doc.text("Dilaksanakan Oleh,", rightColX, startY, { align: "center", width: colTtdWidth });
+    doc.text(data.jabatan, rightColX, doc.y, { align: "center", width: colTtdWidth });
 
     const yNama = doc.y + 70; 
 
-    doc.font("TMR-Bold").text(data.atasan_nama, leftColX, yNama, { align: "center", width: colWidth });
-    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, leftColX, doc.y, { align: "center", width: colWidth });
+    doc.font("TMR-Bold").text(data.atasan_nama, leftColX, yNama, { align: "center", width: colTtdWidth });
+    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, leftColX, doc.y, { align: "center", width: colTtdWidth });
 
-    doc.font("TMR-Bold").text(data.nama, rightColX, yNama, { align: "center", width: colWidth });
-    doc.font("TMR").text(`NIP. ${data.nip}`, rightColX, doc.y, { align: "center", width: colWidth });
+    doc.font("TMR-Bold").text(data.nama, rightColX, yNama, { align: "center", width: colTtdWidth });
+    doc.font("TMR").text(`NIP. ${data.nip}`, rightColX, doc.y, { align: "center", width: colTtdWidth });
 
     doc.end();
 
