@@ -1270,19 +1270,10 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
   doc.pipe(stream);
 
   try {
-    let fontNormal = "Times-Roman";
-    let fontBold = "Times-Bold";
-
-    // Setup Font Custom
-    const fontDir = path.join(__dirname, "..", "assets", "fonts");
-    try {
-      doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
-      doc.registerFont("TMR-Bold", path.join(fontDir, "times-bold.ttf"));
-      fontNormal = "TMR";
-      fontBold = "TMR-Bold";
-    } catch (e) {
-      console.log("Font custom tidak ditemukan, menggunakan Helvetica/Times");
-    }
+    // PDFKit bawaan punya Helvetica yang setara persis dengan Arial
+    let fontNormal = "Helvetica";
+    let fontBold = "Helvetica-Bold";
+    doc.font(fontNormal);
 
     const marginLeft = doc.page.margins.left;
     const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -1333,7 +1324,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     const metaValueX = marginLeft + 120;
 
     const metadata = [
-      ["Nomor", data.nomor || "-"],
+      ["Nomor", ""], // Dikosongkan sesuai request
       ["Tanggal", data.tanggal || "-"],
       ["UAKPB", data.uakpb || "Sekretariat Jenderal Kemnaker"],
       ["Unit Kerja", data.unitKerja || "Biro Keuangan dan BMN"],
@@ -1418,7 +1409,9 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     }
 
     const startY_ttd = doc.y;
-    const ttdWidth = 200;
+    
+    // Lebarin kolom TTD nya biar nama Pak Sandro yang panjang nggak turun baris
+    const ttdWidth = 226; 
     const rightTtdX = marginLeft + availableWidth - ttdWidth;
 
     doc.font(fontNormal).fontSize(11);
@@ -1430,13 +1423,17 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 
     doc.y = startY_ttd + 60;
 
-    doc.font(fontBold).text(data.atasan.nama, marginLeft, doc.y, { align: "center", width: ttdWidth, underline: true });
-    doc.font(fontNormal).text(`NIP ${data.atasan.nip}`, marginLeft, doc.y, { align: "center", width: ttdWidth });
+    // Nama dibikin Normal (gak bold) dan nggak underline
+    doc.text(data.atasan.nama, marginLeft, doc.y, { align: "center", width: ttdWidth });
+    doc.text(`NIP ${data.atasan.nip}`, marginLeft, doc.y, { align: "center", width: ttdWidth });
 
-    const nipY = doc.y - doc.heightOfString(`NIP ${data.atasan.nip}`) - doc.heightOfString(data.atasan.nama);
+    // Kalkulasi Y untuk kanan biar sejajar
+    const hNamaKiri = doc.heightOfString(data.atasan.nama, { width: ttdWidth });
+    const hNipKiri = doc.heightOfString(`NIP ${data.atasan.nip}`, { width: ttdWidth });
+    const nipY = doc.y - hNipKiri - hNamaKiri;
 
-    doc.font(fontBold).text(data.pemohon.nama, rightTtdX, nipY, { align: "center", width: ttdWidth, underline: true });
-    doc.font(fontNormal).text(`NIP ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
+    doc.text(data.pemohon.nama, rightTtdX, nipY, { align: "center", width: ttdWidth });
+    doc.text(`NIP ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
 
     doc.end();
 
