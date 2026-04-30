@@ -60,6 +60,9 @@ async function getDummySignature(nip) {
   }
 }
 
+// ==========================================
+// PDF LEMBUR 
+// ==========================================
 async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetAtasan, client) {
   await ensureDirAsync(REPORTS_DIR);
   await ensureDirAsync(UPLOADS_DIR);
@@ -99,16 +102,23 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       }),
     );
 
-    doc
-      .font("TMR-Bold")
-      .fontSize(14)
-      .text("KEMENTERIAN KETENAGAKERJAAN RI", { align: "center" });
+    // KOP SURAT
+    doc.font("TMR-Bold").fontSize(14).text("KEMENTERIAN KETENAGAKERJAAN RI", { align: "center" });
+    
+    // Spasi 1.15 dari teks pertama ke teks kedua
+    doc.y += (doc.heightOfString("A") * 0.15);
+    
     doc.text("SEKRETARIAT JENDERAL - BIRO KEUANGAN DAN BMN", { align: "center" });
-    doc.moveDown(2);
 
-    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center" });
-    doc.moveDown(2);
+    // Jarak pakai 1.15 space dari SEKRETARIAT JENDERAL ke LAPORAN LEMBUR
+    doc.y += (doc.heightOfString("A") * 0.15);
 
+    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center", underline: true });
+
+    // Hapus jarak kosong besar, ganti ke spasi 1.15 biasa biar nama nempel
+    doc.y += (doc.heightOfString("A") * 0.15);
+
+    // IDENTITAS PEGAWAI (Spasi 1.15 & Titik Dua Lurus)
     doc.font("TMR").fontSize(11);
     const identitas = [
       ["Nama", data.nama],
@@ -117,17 +127,31 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       ["Jam Mulai", data.jamMasuk],
       ["Jam Selesai", data.jamKeluar],
       ["Total Jam Lembur", calculateDuration(data.jamMasuk, data.jamKeluar)],
-      ["Uraian Kegiatan", data.kegiatan],
+      ["Uraian Kegiatan", data.kegiatan], // Dikembalikan murni tanpa fungsi potong slice
     ];
 
-    const labelX = doc.x;
-    const valueX = doc.x + 150;
+    const labelX = 57;             
+    const titikDuaX = 180;         
+    const valueX = 190;            
+    const maxValWidth = doc.page.width - valueX - 57; 
+
+    // Rumus Line Spacing 1.15
+    const fontHeight = doc.heightOfString("A");
+    const spacing115 = fontHeight * 0.15; 
 
     identitas.forEach(([label, value]) => {
-      const y = doc.y;
-      doc.text(label, labelX, y);
-      doc.text(`: ${value}`, valueX, y);
-      doc.moveDown(1);
+      const startY = doc.y;
+      
+      doc.text(label, labelX, startY);
+      doc.text(":", titikDuaX, startY);
+      
+      doc.text(value, valueX, startY, { 
+        width: maxValWidth, 
+        align: "left",
+        lineGap: spacing115 
+      });
+      
+      doc.y += spacing115;
     });
 
     doc.moveDown(2);
@@ -136,15 +160,18 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     doc.font("TMR-Bold").fontSize(12).text("Dokumentasi Hasil Lembur", { align: "center" });
     doc.font("TMR").moveDown();
 
+    // RENDER FOTO (Tengah & Proporsional)
     const addImageBlockMemory = (title, imgData) => {
-      doc.fontSize(11).text(`${title}:`);
+      doc.fontSize(11).text(`${title}`);
       doc.moveDown(0.5);
 
       if (imgData && imgData.valid) {
         const imgWidth = imgData.dimensions.width;
         const imgHeight = imgData.dimensions.height;
-        const maxWidth = 250;
-        const maxHeight = 160;
+        
+        const maxWidth = 380; 
+        const maxHeight = 230; 
+        
         const aspectRatio = imgWidth / imgHeight;
         let finalWidth = maxWidth;
         let finalHeight = Math.round(maxWidth / aspectRatio);
@@ -155,57 +182,61 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
         }
 
         const remainingSpace = doc.page.height - doc.y - doc.page.margins.bottom;
-        if (finalHeight + 20 > remainingSpace) {
+        if (finalHeight + 30 > remainingSpace) {
           doc.addPage();
         }
 
+        const centerX = (doc.page.width - finalWidth) / 2;
+
         try {
-          doc.image(imgData.buffer, {
+          doc.image(imgData.buffer, centerX, doc.y, {
             width: finalWidth,
-            height: finalHeight,
-            align: "center",
-            layout: "landscape",
+            height: finalHeight
           });
+          doc.y += finalHeight + 15; 
         } catch (renderErr) {
           doc.text("(Gagal render gambar corrupt)", { align: "center" });
         }
       } else {
         doc.text("(Gambar tidak dapat dimuat/rusak)", { align: "center" });
       }
-      doc.moveDown(2);
+      doc.moveDown(1);
     };
 
-    addImageBlockMemory("1. Foto Hasil Lembur", loadedImages[0]);
-    doc.addPage();
-    doc.moveDown(1);
-    addImageBlockMemory("2. Foto Pegawai di Tempat Lembur", loadedImages[1]);
-    addImageBlockMemory("3. Screenshot Approval", loadedImages[2]);
+    addImageBlockMemory("1. Foto Hasil Lembur:", loadedImages[0]);
+    if (doc.y > doc.page.height / 2) doc.addPage(); 
+    addImageBlockMemory("2. Foto Pegawai di Tempat Lembur:", loadedImages[1]);
+    addImageBlockMemory("3. Screenshot Approval:", loadedImages[2]);
 
-    // --- BLOK TANDA TANGAN MANUAL (KOSONG) ---
-    const signatureHeight = 120;
+    // --- BLOK TANDA TANGAN ---
+    const signatureHeight = 150;
     const remainingSpaceForSignature = doc.page.height - doc.y - doc.page.margins.bottom;
     
     if (signatureHeight > remainingSpaceForSignature) {
       doc.addPage();
     }
 
-    doc.moveDown(4);
+    doc.moveDown(2);
     const startY = doc.y;
 
-    // Label Jabatan
-    doc.fontSize(11).text(`Mengetahui,\n${data.atasan_jabatan}`, 50, startY);
-    doc.text(`Dilaksanakan Oleh,\n${data.jabatan}`, 330, startY);
+    const colWidth = 230;
+    const leftColX = 57;
+    const rightColX = doc.page.width - 57 - colWidth;
 
-    // Kita kasih jarak kosong sekitar 80 unit untuk tempat ttd manual
-    const yNama = startY + 80; 
-    const yNIP = yNama + 14;
+    doc.fontSize(11);
+    doc.text("Mengetahui,", leftColX, startY, { align: "center", width: colWidth });
+    doc.text(data.atasan_jabatan, leftColX, doc.y, { align: "center", width: colWidth });
 
-    // Nama dan NIP
-    doc.font("TMR-Bold").fontSize(11).text(`${data.atasan_nama}`, 50, yNama);
-    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, 50, yNIP);
+    doc.text("Dilaksanakan Oleh,", rightColX, startY, { align: "center", width: colWidth });
+    doc.text(data.jabatan, rightColX, doc.y, { align: "center", width: colWidth });
 
-    doc.font("TMR-Bold").text(`${data.nama}`, 330, yNama);
-    doc.font("TMR").text(`NIP. ${data.nip}`, 330, yNIP);
+    const yNama = doc.y + 70; 
+
+    doc.font("TMR-Bold").text(data.atasan_nama, leftColX, yNama, { align: "center", width: colWidth });
+    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, leftColX, doc.y, { align: "center", width: colWidth });
+
+    doc.font("TMR-Bold").text(data.nama, rightColX, yNama, { align: "center", width: colWidth });
+    doc.font("TMR").text(`NIP. ${data.nip}`, rightColX, doc.y, { align: "center", width: colWidth });
 
     doc.end();
 
@@ -338,7 +369,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         let buf1 = null, buf2 = null;
         let dim1 = null, dim2 = null;
 
-        //Load Foto 1
         if (item.fotoPath1) {
           try {
             buf1 = await fsPromises.readFile(item.fotoPath1);
@@ -349,7 +379,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           }
         }
 
-        // Loaf Foto2
         if (item.fotoPath2) {
           try {
             buf2 = await fsPromises.readFile(item.fotoPath2);
@@ -391,7 +420,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8, align: "left" });
         let col5TotalHeight = textHeight5 + (col5ImagesHeight > 0 ? col5ImagesHeight + 10 : 0);
 
-        // PERBAIKAN ALIGNMENT: Ubah "justify" jadi "left" dan "center" agar tidak renggang/patah
         let textHeight = [
           doc.heightOfString(`${i + 1}.`, { width: colWidths[0] - 4, align: "center" }),
           doc.heightOfString(item.kegiatan || "-", { width: colWidths[1] - 8, align: "left" }),
@@ -413,32 +441,26 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
         let x = startX;
 
-        // Kolom 0 (No.)
         doc.rect(x, currentY, colWidths[0], rowHeight).stroke();
         doc.text(`${i + 1}.`, x + 2, currentY + 5, { width: colWidths[0] - 4, align: "center" });
         x += colWidths[0];
 
-        // Kolom 1 (Kegiatan)
         doc.rect(x, currentY, colWidths[1], rowHeight).stroke();
         doc.text(item.kegiatan || "-", x + 4, currentY + 5, { width: colWidths[1] - 8, align: "left" });
         x += colWidths[1];
 
-        // Kolom 2 (Output)
         doc.rect(x, currentY, colWidths[2], rowHeight).stroke();
         doc.text(item.output || "-", x + 4, currentY + 5, { width: colWidths[2] - 8, align: "left" });
         x += colWidths[2];
 
-        // Kolom 3 (Capaian Kinerja)
         doc.rect(x, currentY, colWidths[3], rowHeight).stroke();
         doc.text(item.capaian || "-", x + 4, currentY + 5, { width: colWidths[3] - 8, align: "center" });
         x += colWidths[3];
 
-        // Kolom 4 (Satuan)
         doc.rect(x, currentY, colWidths[4], rowHeight).stroke();
         doc.text(item.satuan || "-", x + 4, currentY + 5, { width: colWidths[4] - 8, align: "center" });
         x += colWidths[4];
 
-        // Kolom 5 (Keterangan & Bukti Dukung)
         doc.rect(x, currentY, colWidths[5], rowHeight).stroke();
         
         let ketText = item.keterangan || "-";
@@ -630,13 +652,11 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
 
     let currentX = startX;
     
-    // Kolom 1 (NO) 
     doc.rect(currentX, currentY, colWidths[0], rowHeight).stroke();
     const hNo = doc.heightOfString((i + 1).toString(), { width: colWidths[0] });
     doc.text((i + 1).toString(), currentX, currentY + (rowHeight - hNo) / 2, { width: colWidths[0], align: "center" });
     currentX += colWidths[0];
 
-    // Kolom 2 (NAMA / NIP) 
     doc.rect(currentX, currentY, colWidths[1], rowHeight).stroke();
     const startY_Col2 = currentY + (rowHeight - hColNamaReal) / 2;
     doc.font("TMR-Bold").text(p.nama.toUpperCase(), currentX + 3, startY_Col2, { width: colWidths[1] - 6, align: "left" });
@@ -645,23 +665,19 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
     doc.font("TMR").text(p.nip, currentX + 3, lineY + 3, { width: colWidths[1] - 6, align: "left" });
     currentX += colWidths[1];
 
-    // Kolom 3 (GOL) 
     doc.rect(currentX, currentY, colWidths[2], rowHeight).stroke();
     const hGol = doc.heightOfString(p.gol, { width: colWidths[2] });
     doc.text(p.gol, currentX, currentY + (rowHeight - hGol) / 2, { width: colWidths[2], align: "center" });
     currentX += colWidths[2];
 
-    // Kolom 4 (JABATAN) 
     doc.rect(currentX, currentY, colWidths[3], rowHeight).stroke();
     doc.text(p.jabatan, currentX + 3, currentY + (rowHeight - hJabatan) / 2, { width: colWidths[3] - 6, align: "center" });
     currentX += colWidths[3];
 
-    // Kolom 5 (TANGGAL) 
     doc.rect(currentX, currentY, colWidths[4], rowHeight).stroke();
     doc.text(strTanggal, currentX + 3, currentY + (rowHeight - hTanggal) / 2, { width: colWidths[4] - 6, align: "center" });
     currentX += colWidths[4];
 
-    // Kolom 6 (KETERANGAN)
     doc.rect(currentX, currentY, colWidths[5], rowHeight).stroke();
     doc.text(strKegiatan, currentX + 3, currentY + (rowHeight - hKegiatan) / 2, { width: colWidths[5] - 6, align: "left" });
     currentX += colWidths[5];
@@ -688,10 +704,6 @@ async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
     stream.on("error", reject);
   });
 }
-
-// ==========================================
-// FUNGSI PDF KENDARAAN (VERSI AWAL: TANPA TABEL, HANYA TTD)
-// ==========================================
 
 function extractDateTime(dateStr) {
   if (!dateStr) return { tgl: "-", jam: "-" };
@@ -769,7 +781,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     const marginLeft = doc.page.margins.left;
     const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // 1. KOP SURAT
     const headerX = 1 * cm; 
     const headerWidth = doc.page.width - (2 * cm); 
     const headerY = 0.2 * cm;
@@ -801,7 +812,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
 
     doc.y = yAfterCop + 20;
 
-    // 2. JUDUL
     doc.font(fontNormal).fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
     doc.font(fontNormal).fontSize(11).text("Nomor: .....................................................", { align: "center" });
     doc.moveDown(0.8);
@@ -820,7 +830,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
       doc.y = Math.max(startY + hLabel, startY + hValue) + 2; 
     };
 
-    // 3. PENANGGUNG JAWAB
     doc.font(fontNormal).fontSize(11);
     doc.text("Yang bertanda tangan di bawah ini:", marginLeft, doc.y);
     doc.moveDown(0.2);
@@ -832,7 +841,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     doc.text("Selaku penanggung jawab kendaraan dinas.", marginLeft, doc.y);
     doc.moveDown(0.5);
 
-    // 4. PEMAKAI
     doc.text("Memberikan izin kepada:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
@@ -841,7 +849,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     printRow("Jabatan", data.pemakai.jabatan);
     doc.moveDown(0.5);
 
-    // 5. DETAIL KENDARAAN
     doc.text("Untuk memakai kendaraan operasional:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
@@ -852,11 +859,9 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     printRow("Tanggal peminjaman", data.kendaraan.tanggalMulai);
     doc.moveDown(0.8);
 
-    // 6. KETENTUAN
     doc.text("Dengan ketentuan pemakai bertanggung jawab terhadap resiko kehilangan, serta kerusakan yang terjadi selama dalam pemakaian dan wajib mengembalikan setelah pemakaian.", marginLeft, doc.y, { align: "justify", width: availableWidth });
     doc.moveDown(1);
 
-    // 7. TANDA TANGAN ATAS
     const tglTtd = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
     const yTtdAtas = doc.y;
     
@@ -889,7 +894,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
 
     doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
 
-    // 8. FOOTER BSrE
     doc.page.margins.bottom = 0;
     try {
       doc.font(fontItalic).fontSize(9);
@@ -926,10 +930,6 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     throw err;
   }
 }
-
-// ==========================================
-// FUNGSI PDF KENDARAAN (VERSI AKHIR: FULL DENGAN TABEL PENGEMBALIAN)
-// ==========================================
 
 async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
   await ensureDirAsync(REPORTS_DIR);
@@ -988,7 +988,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     const marginLeft = doc.page.margins.left;
     const availableWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
 
-    // 1. KOP SURAT
     const headerX = 1 * cm; 
     const headerWidth = doc.page.width - (2 * cm); 
     const headerY = 0.2 * cm;
@@ -1020,7 +1019,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
 
     doc.y = yAfterCop + 20;
 
-    // 2. JUDUL
     doc.font(fontNormal).fontSize(12).text("SURAT IZIN PEMAKAIAN KENDARAAN OPERASIONAL", { align: "center" }); 
     doc.font(fontNormal).fontSize(11).text("Nomor: .....................................................", { align: "center" });
     doc.moveDown(0.8);
@@ -1039,7 +1037,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
       doc.y = Math.max(startY + hLabel, startY + hValue) + 2; 
     };
 
-    // 3. PENANGGUNG JAWAB
     doc.font(fontNormal).fontSize(11);
     doc.text("Yang bertanda tangan di bawah ini:", marginLeft, doc.y);
     doc.moveDown(0.2);
@@ -1051,7 +1048,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     doc.text("Selaku penanggung jawab kendaraan dinas.", marginLeft, doc.y);
     doc.moveDown(0.5);
 
-    // 4. PEMAKAI
     doc.text("Memberikan izin kepada:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
@@ -1060,7 +1056,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     printRow("Jabatan", data.pemakai.jabatan);
     doc.moveDown(0.5);
 
-    // 5. DETAIL KENDARAAN
     doc.text("Untuk memakai kendaraan operasional:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
@@ -1075,11 +1070,9 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     printRow("Tanggal pemakaian", textTanggalPemakaian);
     doc.moveDown(0.8);
 
-    // 6. KETENTUAN
     doc.text("Dengan ketentuan pemakai bertanggung jawab terhadap resiko kehilangan, serta kerusakan yang terjadi selama dalam pemakaian dan wajib mengembalikan setelah pemakaian.", marginLeft, doc.y, { align: "justify", width: availableWidth });
     doc.moveDown(1);
 
-    // 7. TANDA TANGAN ATAS
     const tglTtd = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
     const yTtdAtas = doc.y;
     
@@ -1112,14 +1105,12 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
 
     doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
 
-    // --- BATAS GARIS GANDA & SPACING TABEL ---
     const doubleLineY = doc.y;
     doc.moveTo(marginLeft, doubleLineY).lineTo(marginLeft + availableWidth, doubleLineY).stroke();
     doc.moveTo(marginLeft, doubleLineY + 2).lineTo(marginLeft + availableWidth, doubleLineY + 2).stroke();
     
     doc.y = doubleLineY + 10;
 
-    // 8. TABEL PENGEMBALIAN
     doc.page.margins.bottom = 0; 
     
     doc.font(fontNormal).text("PENGEMBALIAN KENDARAAN OPERASIONAL", marginLeft, doc.y, { align: "center", width: availableWidth });
@@ -1134,21 +1125,17 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     const rowHeight = 170; 
     const headerHeight = 35; 
 
-    // Kotak Utama Tabel
     doc.rect(marginLeft, tableY, col1Width, rowHeight).stroke();
     doc.rect(marginLeft + col1Width, tableY, col2Width, rowHeight).stroke();
     doc.rect(marginLeft + col1Width + col2Width, tableY, col3Width, rowHeight).stroke();
 
-    // Garis Potong Horizontal didalam kolom 2 & 3
     doc.moveTo(marginLeft + col1Width, tableY + headerHeight)
        .lineTo(marginLeft + availableWidth, tableY + headerHeight)
        .stroke();
 
-    // --- Isi Kolom 1 (Kiri) ---
     doc.text("Kendaraan operasional tersebut diatas telah selesai digunakan dan dikembalikan kepada penanggung jawab kendaraan dinas dalam", marginLeft + 5, tableY + 10, { width: col1Width - 10, align: "left" });
     doc.text(`kondisi: ${data.pengembalian.kondisi}`, marginLeft + 5, tableY + rowHeight - 20, { width: col1Width - 10, align: "left" });
 
-    // --- Isi Kolom 2 (Tengah) ---
     const col2X = marginLeft + col1Width;
     doc.font(fontNormal).text("Pemakai", col2X + 5, tableY + 10, { width: col2Width - 10, align: "center" });
     
@@ -1160,7 +1147,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     const hPemakai = doc.heightOfString(namePemakai, { width: col2Width - 10 });
     doc.text(namePemakai, col2X + 5, tableY + rowHeight - hPemakai - 15, { width: col2Width - 10, align: "center" });
 
-    // --- Isi Kolom 3 (Kanan) ---
     const col3X = marginLeft + col1Width + col2Width;
     doc.font(fontNormal).text("Penanggung Jawab\nKendaraan Dinas", col3X + 5, tableY + 5, { width: col3Width - 10, align: "center" });
     
@@ -1172,7 +1158,6 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     const hPJ = doc.heightOfString(namePJ, { width: col3Width - 10 });
     doc.text(namePJ, col3X + 5, tableY + rowHeight - hPJ - 15, { width: col3Width - 10, align: "center" });
 
-    // 9. FOOTER BSrE
     try {
       doc.font(fontItalic).fontSize(9);
     } catch(e) {

@@ -1524,7 +1524,9 @@ client.on("message", async (message) => {
 
     // --- ALUR LEMBUR ---
     if (flow.step === "alasan-lembur") {
-      if (message.body.trim().length < 5) {
+      const teksAlasan = message.body.trim();
+
+      if (teksAlasan.length < 5) {
         await kirimDenganTyping(
           client,
           chatId,
@@ -1532,7 +1534,20 @@ client.on("message", async (message) => {
         );
         return;
       }
-      pengajuanBySender[chatId].alasan = message.body.trim();
+
+      const maxKata = 40;
+      const jumlahKata = teksAlasan.split(/\s+/).filter(w => w.length > 0).length;
+
+      if (jumlahKata > maxKata) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Uraian kegiatan terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel laporan PDF tidak rusak. Silakan ringkas dan ketik kembali uraian kegiatan lembur Anda.`
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].alasan = teksAlasan;
       pengajuanBySender[chatId].step = "tanya-jam-masuk";
       await kirimDenganTyping(
         client,
