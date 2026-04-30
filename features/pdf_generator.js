@@ -61,7 +61,7 @@ async function getDummySignature(nip) {
 }
 
 // ==========================================
-// PDF LEMBUR (SISTEM TABEL FOTO ANTI-BOCOR)
+// PDF LEMBUR 
 // ==========================================
 async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetAtasan, client) {
   await ensureDirAsync(REPORTS_DIR);
@@ -109,12 +109,12 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
 
     // Jarak 1.5 space
     doc.y += (doc.heightOfString("A") * 0.5);
-    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center", underline: true });
+    doc.font("TMR-Bold").fontSize(13).text("LAPORAN LEMBUR", { align: "center" });
 
     // Jarak 1.15 space
     doc.y += (doc.heightOfString("A") * 0.15);
 
-    // IDENTITAS PEGAWAI (Spasi 1.15 & Titik Dua Lurus)
+    // IDENTITAS PEGAWAI
     doc.font("TMR").fontSize(11);
     const identitas = [
       ["Nama", data.nama],
@@ -161,7 +161,13 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     const colWidth = tableWidth / 2;
     const padding = 10;
 
-    // Fungsi canggih untuk Auto-Scale Gambar di dalam kotak
+    const spaceForSignature = 180; 
+    const bottomMargin = doc.page.margins.bottom;
+    const availableTableHeight = doc.page.height - doc.y - bottomMargin - spaceForSignature;
+
+    const row1Height = availableTableHeight * 0.5;
+    const row2Height = availableTableHeight * 0.5;
+
     const getFitDim = (imgData, maxW, maxH) => {
       if (!imgData || !imgData.valid) return { width: 0, height: 0 };
       const ratio = imgData.dimensions.width / imgData.dimensions.height;
@@ -174,34 +180,19 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       return { width: w, height: h };
     };
 
-    // Batas Max Gambar (Anti-Bocor)
     const maxImgW1 = colWidth - (padding * 2);
-    const maxImgH1 = 220; // Tinggi max foto atas (portrait aman)
+    const maxImgH1 = row1Height - 30; 
     const maxImgW3 = tableWidth - (padding * 2);
-    const maxImgH3 = 250; // Tinggi max foto bawah
-
-    const dim1 = getFitDim(loadedImages[0], maxImgW1, maxImgH1);
-    const dim2 = getFitDim(loadedImages[1], maxImgW1, maxImgH1);
-    const dim3 = getFitDim(loadedImages[2], maxImgW3, maxImgH3);
-
-    // Kunci ukuran tinggi sel tabelnya
-    const row1Height = maxImgH1 + 35; 
-    const row2Height = maxImgH3 + 35;
-
-    // Pengecekan Kertas (Kalau sisa kertas dikit, lempar tabelnya ke halaman 2)
-    if (doc.y + row1Height + row2Height > doc.page.height - 57) {
-      doc.addPage();
-    }
+    const maxImgH3 = row2Height - 30;
 
     let currentY = doc.y;
 
     // ----- BARIS 1 (KIRI - KANAN) -----
-    
-    // Kotak Kiri (Foto 1)
     doc.rect(startX, currentY, colWidth, row1Height).stroke();
     doc.text("1. Foto Hasil Lembur:", startX, currentY + padding, { width: colWidth, align: 'center' });
     
     if (loadedImages[0] && loadedImages[0].valid) {
+      const dim1 = getFitDim(loadedImages[0], maxImgW1, maxImgH1);
       const xOffset = startX + (colWidth - dim1.width) / 2;
       const yOffset = currentY + 25 + (row1Height - 25 - dim1.height) / 2;
       doc.image(loadedImages[0].buffer, xOffset, yOffset, { width: dim1.width, height: dim1.height });
@@ -209,11 +200,11 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       doc.text("(Tidak ada/Rusak)", startX, currentY + row1Height/2, { width: colWidth, align: 'center' });
     }
 
-    // Kotak Kanan (Foto 2)
     doc.rect(startX + colWidth, currentY, colWidth, row1Height).stroke();
     doc.text("2. Foto Pegawai di Tempat Lembur:", startX + colWidth, currentY + padding, { width: colWidth, align: 'center' });
     
     if (loadedImages[1] && loadedImages[1].valid) {
+      const dim2 = getFitDim(loadedImages[1], maxImgW1, maxImgH1);
       const xOffset = startX + colWidth + (colWidth - dim2.width) / 2;
       const yOffset = currentY + 25 + (row1Height - 25 - dim2.height) / 2;
       doc.image(loadedImages[1].buffer, xOffset, yOffset, { width: dim2.width, height: dim2.height });
@@ -224,12 +215,11 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     currentY += row1Height;
 
     // ----- BARIS 2 (FULL LEBAR) -----
-    
-    // Kotak Bawah (Foto 3)
     doc.rect(startX, currentY, tableWidth, row2Height).stroke();
     doc.text("3. Screenshot Approval:", startX, currentY + padding, { width: tableWidth, align: 'center' });
     
     if (loadedImages[2] && loadedImages[2].valid) {
+      const dim3 = getFitDim(loadedImages[2], maxImgW3, maxImgH3);
       const xOffset = startX + (tableWidth - dim3.width) / 2;
       const yOffset = currentY + 25 + (row2Height - 25 - dim3.height) / 2;
       doc.image(loadedImages[2].buffer, xOffset, yOffset, { width: dim3.width, height: dim3.height });
@@ -237,32 +227,54 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
       doc.text("(Tidak ada/Rusak)", startX, currentY + row2Height/2, { width: tableWidth, align: 'center' });
     }
 
-    // Geser kursor ke bawah tabel buat nulis tanda tangan
     doc.y = currentY + row2Height;
 
-    // --- BLOK TANDA TANGAN ---
-    const signatureHeight = 150;
-    const remainingSpaceForSignature = doc.page.height - doc.y - doc.page.margins.bottom;
+    // ========================================================
+    // --- BLOK TANDA TANGAN (SISTEM GRUP ANTI-PISAH / KOMPAK)
+    // ========================================================
+    doc.moveDown(1.5);
     
-    if (signatureHeight > remainingSpaceForSignature) {
-      doc.addPage();
-    }
-
-    doc.moveDown(2);
-    const startY = doc.y;
-
     const colTtdWidth = 230;
     const leftColX = 57;
     const rightColX = doc.page.width - 57 - colTtdWidth;
-
+    
+    // 1. Ukur dulu TINGGI TOTAL seluruh rombongan Tanda Tangan ini
     doc.fontSize(11);
-    doc.text("Mengetahui,", leftColX, startY, { align: "center", width: colTtdWidth });
+    const hMengetahui = doc.heightOfString("Mengetahui,", { width: colTtdWidth });
+    
+    const hJabatanAtasan = doc.heightOfString(data.atasan_jabatan, { width: colTtdWidth });
+    const hJabatanPegawai = doc.heightOfString(data.jabatan, { width: colTtdWidth });
+    const hMaxJabatan = Math.max(hJabatanAtasan, hJabatanPegawai); // Ambil jabatan yg paling panjang/tinggi
+    
+    const hSpaceTtd = 60; // Jarak kosong buat ttd asli
+    
+    const hNamaAtasan = doc.font("TMR-Bold").heightOfString(data.atasan_nama, { width: colTtdWidth });
+    const hNamaPegawai = doc.font("TMR-Bold").heightOfString(data.nama, { width: colTtdWidth });
+    const hMaxNama = Math.max(hNamaAtasan, hNamaPegawai);
+    
+    const hNipAtasan = doc.font("TMR").heightOfString(`NIP. ${data.atasan_nip}`, { width: colTtdWidth });
+    const hNipPegawai = doc.font("TMR").heightOfString(`NIP. ${data.nip}`, { width: colTtdWidth });
+    const hMaxNip = Math.max(hNipAtasan, hNipPegawai);
+
+    // Ini total tinggi rombongannya dari tulisan "Mengetahui" sampai "NIP"
+    const totalGrupTtdHeight = hMengetahui + hMaxJabatan + hSpaceTtd + hMaxNama + hMaxNip + 15; 
+
+    // 2. CEK SISA KERTAS! Kalau sisa kertas lebih kecil dari tinggi rombongan, PINDAH HALAMAN.
+    if (doc.y + totalGrupTtdHeight > doc.page.height - doc.page.margins.bottom) {
+      doc.addPage();
+    }
+
+    // 3. BARU KITA GAMBAR (Sekarang dijamin se-grup tetep barengan)
+    const startY_ttd = doc.y;
+
+    doc.font("TMR").fontSize(11);
+    doc.text("Mengetahui,", leftColX, startY_ttd, { align: "center", width: colTtdWidth });
     doc.text(data.atasan_jabatan, leftColX, doc.y, { align: "center", width: colTtdWidth });
 
-    doc.text("Dilaksanakan Oleh,", rightColX, startY, { align: "center", width: colTtdWidth });
+    doc.text("Dilaksanakan Oleh,", rightColX, startY_ttd, { align: "center", width: colTtdWidth });
     doc.text(data.jabatan, rightColX, doc.y, { align: "center", width: colTtdWidth });
 
-    const yNama = doc.y + 70; 
+    const yNama = startY_ttd + hMengetahui + hMaxJabatan + hSpaceTtd; 
 
     doc.font("TMR-Bold").text(data.atasan_nama, leftColX, yNama, { align: "center", width: colTtdWidth });
     doc.font("TMR").text(`NIP. ${data.atasan_nip}`, leftColX, doc.y, { align: "center", width: colTtdWidth });

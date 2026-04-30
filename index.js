@@ -483,6 +483,8 @@ const client = new Client({
       "--disable-dev-shm-usage",
       "--disable-extensions",
       "--disable-gpu",
+      "--no-zygote",   
+      "--disable-application-cache",
     ],
   },
 });
