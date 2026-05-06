@@ -595,7 +595,9 @@ client.on("message", async (message) => {
       const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       if(NO_PAK_ALPHA) {
-        const sentToPJ = await client.sendMessage(`${NO_PAK_ALPHA}@c.us`, teksPengajuan);
+        // FIX: Wrap using formatNomorId
+        const pjWa = formatNomorId(NO_PAK_ALPHA) + "@c.us";
+        const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
         const listBarangOrder = [];
         const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; 
@@ -667,7 +669,7 @@ client.on("message", async (message) => {
           const atasanObj = flow.atasan || {};
           let targetAtasan = null;
           if (atasanObj["No. HP (WA) aktif"])
-            targetAtasan = hanyaAngka(atasanObj["No. HP (WA) aktif"]) + "@c.us";
+            targetAtasan = formatNomorId(atasanObj["No. HP (WA) aktif"]) + "@c.us";
 
           const unitKerjaAtauSubstansi =
             flow.pegawai["Unit Kerja"] ||
@@ -852,7 +854,7 @@ client.on("message", async (message) => {
     // --- EKSEKUSI PERSETUJUAN TIM GUDANG / PERSEDIAAN
     // ===============================================
     if (orderGudang) {
-      const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; // <-- Tambah semuaTargetGudang
+      const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; 
 
       // Cari tau nama petugas gudang yang ngeklik tombol setuju/batal
       const dataStaf = cariPegawaiByWa(chatId);
@@ -1710,7 +1712,8 @@ client.on("message", async (message) => {
         jamKeluar,
       };
 
-      const nomorAtasan = atasan["No. HP (WA) aktif"] + "@c.us";
+      // FIX: Wrap using formatNomorId
+      const nomorAtasan = formatNomorId(atasan["No. HP (WA) aktif"]) + "@c.us";
       const teksPengajuan = `*Pengajuan Lembur* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\nJam: ${jamMasuk} - ${jamKeluar} (${calculateDuration(jamMasuk, jamKeluar)})\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       const sentToAtasan = await client.sendMessage(nomorAtasan, teksPengajuan);
@@ -1759,7 +1762,9 @@ client.on("message", async (message) => {
         delete pengajuanBySender[chatId];
         return;
       }
-      const nomorAtasan = atasan["No. HP (WA) aktif"] + "@c.us";
+      
+      // FIX: Wrap using formatNomorId
+      const nomorAtasan = formatNomorId(atasan["No. HP (WA) aktif"]) + "@c.us";
       const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
       const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
 
@@ -1929,10 +1934,11 @@ client.on("message", async (message) => {
 
     if (flow.step === "isi-tujuan") {
       const tujuan = message.body.trim();
+      const pjWa = NO_PAK_ALPHA ? formatNomorId(NO_PAK_ALPHA) + "@c.us" : null; 
       const isPimpinan =
         !flow.pegawai["NO HP ATASAN"] ||
         flow.pegawai["NO HP ATASAN"].trim() === "" ||
-        chatId === (NO_PAK_ALPHA ? `${NO_PAK_ALPHA}@c.us` : null); 
+        chatId === pjWa; 
 
       if (isPimpinan) {
         const allKendaraan = await getStatusKendaraan();
@@ -1994,7 +2000,9 @@ client.on("message", async (message) => {
       const teksPengajuan = `*Pengajuan Peminjaman Kendaraan* dari ${flow.pegawai["Nama Pegawai"]}\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       if(NO_PAK_ALPHA) {
-        const sentToPJ = await client.sendMessage(`${NO_PAK_ALPHA}@c.us`, teksPengajuan);
+        // FIX: Wrap using formatNomorId
+        const pjWaStr = formatNomorId(NO_PAK_ALPHA) + "@c.us";
+        const sentToPJ = await client.sendMessage(pjWaStr, teksPengajuan);
 
         pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
           sender: chatId,

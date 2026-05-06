@@ -1469,7 +1469,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     throw err;
   }
 }
-
+ 
 module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
