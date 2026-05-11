@@ -8,7 +8,6 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const express = require('express');
 const cors = require('cors');
-
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
   buatLaporanLemburDenganFotoAsync,
@@ -18,7 +17,6 @@ const {
   buatSuratPermintaanBarangAsync,
   calculateDuration,
 } = require("./features/pdf_generator");
-
 const { 
   HELPDESK_GROUP_ID, 
   FORM_CUTI_URL, 
@@ -413,6 +411,12 @@ function formatNomorId(hp) {
   return str;
 }
 
+function getValidWaId(hp) {
+  const formatted = formatNomorId(hp);
+  if (!formatted || formatted.length < 8) return null;
+  return formatted + "@c.us";
+}
+
 function cariPegawaiByWa(rawId) {
   if (!Array.isArray(dbPegawai)) return null;
   const incomingDigits = hanyaAngka(rawId);
@@ -442,6 +446,7 @@ function cariAtasanPegawai(pegawai) {
 
 // VI. WHATSAPP CLIENT HELPER
 async function kirimDenganTyping(client, chatId, text) {
+  if (!chatId) return null;
   try {
     try {
       const chat = await client.getChatById(chatId);
@@ -562,11 +567,11 @@ client.on("message", async (message) => {
       const nomorMentah = teksTengah.substring(0, spasiPertama).trim();
       const isiPesan = teksTengah.substring(spasiPertama + 1).trim();
 
-      let nomorTujuan = hanyaAngka(nomorMentah);
-      if (nomorTujuan.startsWith("08")) {
-        nomorTujuan = "62" + nomorTujuan.slice(1);
+      const targetId = getValidWaId(nomorMentah);
+      if (!targetId) {
+        await kirimDenganTyping(client, chatId, `❌ *GAGAL*\nFormat nomor tidak valid.`);
+        return;
       }
-      const targetId = nomorTujuan + "@c.us";
 
       try {
         await client.sendMessage(targetId, isiPesan);
@@ -580,7 +585,7 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 1. PENANGKAP ORDER PERSEDIAAN DARI WEB (BARU)
+    // 1. PENANGKAP ORDER PERSEDIAAN DARI WEB
     // ==========================================
     if (message.body.startsWith("!ORDER_BARANG")) {
       const pesananClean = message.body.replace("!ORDER_BARANG", "").trim();
@@ -595,31 +600,36 @@ client.on("message", async (message) => {
       const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       if(NO_PAK_ALPHA) {
-        // FIX: Wrap using formatNomorId
-        const pjWa = formatNomorId(NO_PAK_ALPHA) + "@c.us";
-        const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
+        const pjWa = getValidWaId(NO_PAK_ALPHA);
+        if (pjWa) {
+          try {
+            const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
-        const listBarangOrder = [];
-        const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; 
-        let hasilParse;
-        while ((hasilParse = regexParser.exec(pesananClean)) !== null) {
-          listBarangOrder.push({
-            id: hasilParse[1],
-            nama: hasilParse[2],
-            jumlah: parseInt(hasilParse[3], 10),
-            satuan: hasilParse[4],
-            kelompok: hasilParse[1].startsWith("ATK") ? "ATK" : "Elektronik / Lainnya"
-          });
+            const listBarangOrder = [];
+            const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; 
+            let hasilParse;
+            while ((hasilParse = regexParser.exec(pesananClean)) !== null) {
+              listBarangOrder.push({
+                id: hasilParse[1],
+                nama: hasilParse[2],
+                jumlah: parseInt(hasilParse[3], 10),
+                satuan: hasilParse[4],
+                kelompok: hasilParse[1].startsWith("ATK") ? "ATK" : "Elektronik / Lainnya"
+              });
+            }
+
+            pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+              sender: chatId,
+              jenis: "Persediaan",
+              pegawai: pegawai,
+              atasan: DATA_PAK_ALPHA,
+              pesanan: pesananClean,
+              barangListParsed: listBarangOrder 
+            };
+          } catch (e) {
+            console.error("Gagal kirim notif order ke PJ:", e);
+          }
         }
-
-        pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
-          sender: chatId,
-          jenis: "Persediaan",
-          pegawai: pegawai,
-          atasan: DATA_PAK_ALPHA,
-          pesanan: pesananClean,
-          barangListParsed: listBarangOrder 
-        };
       }
 
       delete pengajuanBySender[chatId];
@@ -668,8 +678,9 @@ client.on("message", async (message) => {
 
           const atasanObj = flow.atasan || {};
           let targetAtasan = null;
-          if (atasanObj["No. HP (WA) aktif"])
-            targetAtasan = formatNomorId(atasanObj["No. HP (WA) aktif"]) + "@c.us";
+          if (atasanObj["No. HP (WA) aktif"]) {
+            targetAtasan = getValidWaId(atasanObj["No. HP (WA) aktif"]);
+          }
 
           const unitKerjaAtauSubstansi =
             flow.pegawai["Unit Kerja"] ||
@@ -812,9 +823,7 @@ client.on("message", async (message) => {
         const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(([id, data]) => {
           let atasanWa = data.atasan["No. HP (WA) aktif"];
           if (atasanWa) {
-            atasanWa = atasanWa.replace(/[^0-9]/g, "");
-            if (atasanWa.startsWith("08")) atasanWa = "62" + atasanWa.slice(1);
-            return atasanWa + "@c.us" === chatId;
+            return getValidWaId(atasanWa) === chatId;
           }
           return false;
         });
@@ -830,52 +839,48 @@ client.on("message", async (message) => {
         const isTimGudang = dbTimGudang.find(staf => {
             let waf = staf["No. HP (WA) aktif"];
             if (waf) {
-                waf = waf.replace(/[^0-9]/g, "");
-                if (waf.startsWith("08")) waf = "62" + waf.slice(1);
-                return waf + "@c.us" === chatId;
+                return getValidWaId(waf) === chatId;
             }
             return false;
         });
 
         if (isTimGudang && !pengajuan) {
              const pendingOrder = Object.entries(orderGudangMsgId);
-             if (pendingOrder.length === 1) {
-                 qid = pendingOrder[0][0];
-                 orderGudang = pendingOrder[0][1];
-             } else if (pendingOrder.length > 1) {
-                 await kirimDenganTyping(client, chatId, "⚠️ Tim Gudang memiliki lebih dari 1 pesanan masuk. Mohon *Quote Reply* pesan yang ingin diproses.");
+             const uniqueOrders = new Map();
+             pendingOrder.forEach(([id, data]) => {
+                 uniqueOrders.set(data.pemohonId, { id, data });
+             });
+
+             if (uniqueOrders.size === 1) {
+                 const firstOrder = Array.from(uniqueOrders.values())[0];
+                 qid = firstOrder.id;
+                 orderGudang = firstOrder.data;
+             } else if (uniqueOrders.size > 1) {
+                 await kirimDenganTyping(client, chatId, "⚠️ Tim Persediaan memiliki pesanan masuk dari pemohon yang berbeda. Mohon *Quote Reply* pesan yang ingin diproses.");
                  return;
              }
         }
       }
     }
 
-    // ===============================================
-    // --- EKSEKUSI PERSETUJUAN TIM GUDANG / PERSEDIAAN
-    // ===============================================
     if (orderGudang) {
       const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; 
 
-      // Cari tau nama petugas gudang yang ngeklik tombol setuju/batal
       const dataStaf = cariPegawaiByWa(chatId);
       const namaStaf = dataStaf ? dataStaf["Nama Pegawai"] : "Petugas Gudang";
 
       if (isApprovalYes(message.body)) {
-        // Kasih notif ke atasan/gudang dan pemohon
         await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nSedang mengenerate PDF Serah Terima... Mohon ditunggu.`);
         await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
 
-        // --- NOTIFIKASI KE ANGGOTA TIM LAINNYA ---
         if (semuaTargetGudang && semuaTargetGudang.length > 0) {
             for (const target of semuaTargetGudang) {
-                if (target !== chatId) { // Jangan kirim ke petugas yang lagi memproses ini
+                if (target !== chatId) { 
                     await kirimDenganTyping(client, target, `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* sudah diproses/diambil alih oleh *${namaStaf}*.`);
                 }
             }
         }
-        // -----------------------------------------
 
-        // === EKSEKUSI GENERATE PDF PERMINTAAN ATK ===
         try {
           const unitKerjaAtauSubstansi = pData ? (pData["Unit Kerja"] || pData["SUBUNIT"] || pData["Subbagian"] || pData["Unit"] || "Biro Keuangan dan BMN") : "Biro Keuangan dan BMN";
           const jabatanPemohon = pData ? (pData["Jabatan"] || pData["JABATAN"] || "PUM AKLAP") : "PUM AKLAP";
@@ -904,7 +909,6 @@ client.on("message", async (message) => {
         } catch (pdfErr) {
           console.error("Gagal buat PDF Permintaan ATK:", pdfErr);
         }
-        // ============================================
 
         for (let key in orderGudangMsgId) {
           if (orderGudangMsgId[key].pemohonId === pemohonId) {
@@ -916,7 +920,6 @@ client.on("message", async (message) => {
         await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
         await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
 
-        // --- NOTIFIKASI KE ANGGOTA TIM LAINNYA ---
         if (semuaTargetGudang && semuaTargetGudang.length > 0) {
             for (const target of semuaTargetGudang) {
                 if (target !== chatId) { 
@@ -924,7 +927,6 @@ client.on("message", async (message) => {
                 }
             }
         }
-        // -----------------------------------------
 
         const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
         let hasilBedah;
@@ -953,7 +955,6 @@ client.on("message", async (message) => {
       return;
     }
     
-    // --- EKSEKUSI PERSETUJUAN ATASAN ---
     if (pengajuan) {
       const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar, barangListParsed, pesanan } = pengajuan; 
 
@@ -1015,58 +1016,6 @@ client.on("message", async (message) => {
             pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
           }
           delete pengajuanBySender[pemohonId];
-        } else if (jenis === "Persediaan") {
-          pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
-          
-          const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
-          
-          // === KUMPULIN SEMUA NOMOR TIM GUDANG DULU ===
-          const targetGudangList = [];
-          if (dbTimGudang && dbTimGudang.length > 0) {
-            for (const staf of dbTimGudang) {
-              const noWaStaf = staf["No. HP (WA) aktif"];
-              if (noWaStaf) {
-                targetGudangList.push(formatNomorId(noWaStaf) + "@c.us");
-              }
-            }
-          }
-
-          const dataOrder = {
-            pemohonId: pemohonId,
-            namaPemohon: p ? p["Nama Pegawai"] : "User",
-            pesanan: pesanan,
-            barangListParsed: barangListParsed, 
-            pData: p,
-            semuaTargetGudang: targetGudangList // <-- Simpan data teman-temannya di sini
-          };
-
-          // === BROADCAST KE SEMUA TIM GUDANG ===
-          if (targetGudangList.length > 0) {
-            for (const targetStaf of targetGudangList) {
-                const sentMsg = await client.sendMessage(targetStaf, notifTim);
-                orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
-                await new Promise((r) => setTimeout(r, 1000));
-            }
-          }
-
-          const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
-          let hasilBedah;
-          while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
-            const idBarangTarget = hasilBedah[1]; 
-            const jumlahDiambil = parseInt(hasilBedah[2], 10); 
-            if (idBarangTarget && !isNaN(jumlahDiambil)) {
-              try {
-                await Barang.findOneAndUpdate(
-                  { id_barang: idBarangTarget },
-                  { $inc: { stok: -jumlahDiambil } } 
-                );
-              } catch (dbErr) {
-                console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
-              }
-            }
-          }
-
-          delete pengajuanBySender[pemohonId];
         }
 
         if (pesanPegawai) {
@@ -1092,7 +1041,7 @@ client.on("message", async (message) => {
         if (bodyLower === "menu") {
           delete helpdeskQueue[chatId];
           if (pegawai) {
-            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
+            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
             await kirimDenganTyping(client, chatId, menu);
             pengajuanBySender[chatId] = { step: "menu", pegawai };
           } else {
@@ -1232,7 +1181,8 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH`;
+      // UPDATE MENU UTAMA NO 7 JADI WFH / WFA
+      const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -1312,15 +1262,15 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "7") {
+        // TANYA DULU JENISNYA WFH ATAU WFA
         await kirimDenganTyping(
           client,
           chatId,
-          "Silakan ketik *Hari dan Tanggal* pelaksanaan WFH Anda.\n\nContoh: *Jumat, 3 April 2026*",
+          "*Laporan Kerja Remote*\n\nSilakan pilih jenis laporan Anda hari ini:\n1. WFH (Work From Home)\n2. WFA (Work From Anywhere)"
         );
         pengajuanBySender[chatId] = {
-          step: "wfa-tanggal",
+          step: "pilih-jenis-wfa",
           pegawai,
-          jenis: "WFA",
           wfaList: [],
         };
         return;
@@ -1338,14 +1288,36 @@ client.on("message", async (message) => {
     // 9. STATE MACHINE (PROSES ALUR SEMUA MENU)
     // ==========================================
 
-    // --- ALUR WFH (SISTEM FIXED LOOP) ---
+    // --- ALUR WFH / WFA (SISTEM FIXED LOOP) ---
+    
+    // TANGKEP PILIHAN WFH / WFA
+    if (flow.step === "pilih-jenis-wfa") {
+      let jenisPelaksanaan = "";
+      if (bodyLower === "1" || bodyLower === "wfh") jenisPelaksanaan = "WFH";
+      else if (bodyLower === "2" || bodyLower === "wfa") jenisPelaksanaan = "WFA";
+      else {
+          await kirimDenganTyping(client, chatId, "Pilihan tidak valid. Silakan ketik angka *1* untuk WFH atau *2* untuk WFA.");
+          return;
+      }
+
+      pengajuanBySender[chatId].jenisLaporan = jenisPelaksanaan; 
+      pengajuanBySender[chatId].step = "wfa-tanggal";
+      
+      await kirimDenganTyping(
+          client,
+          chatId,
+          `Baik, laporan *${jenisPelaksanaan}*.\n\nSilakan ketik *Hari dan Tanggal* pelaksanaannya.\n\nContoh: *Jumat, 3 April 2026*`
+      );
+      return;
+    }
+
     if (flow.step === "wfa-tanggal") {
       pengajuanBySender[chatId].tanggalWFA = message.body.trim();
       pengajuanBySender[chatId].step = "wfa-jumlah";
       await kirimDenganTyping(
         client,
         chatId,
-        `Tanggal WFH: *${message.body.trim()}*.\n\nAda *berapa banyak kegiatan* yang ingin Anda laporkan hari ini? (Ketik angka saja, contoh: 2)`
+        `Tanggal ${flow.jenisLaporan}: *${message.body.trim()}*.\n\nAda *berapa banyak kegiatan* yang ingin Anda laporkan hari ini? (Ketik angka saja, contoh: 2)`
       );
       return;
     }
@@ -1485,7 +1457,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "❌ Laporan WFH wajib menyertakan bukti! Mohon kirimkan *foto/gambar*, bukan pesan teks biasa."
+          `❌ Laporan ${flow.jenisLaporan} wajib menyertakan bukti! Mohon kirimkan *foto/gambar*, bukan pesan teks biasa.`
         );
       }
       return;
@@ -1528,7 +1500,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian WFH Anda menjadi PDF...`
+          `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian ${flow.jenisLaporan} Anda menjadi PDF...`
         );
 
         let atasan = cariAtasanPegawai(flow.pegawai);
@@ -1579,6 +1551,7 @@ client.on("message", async (message) => {
           atasan_nip: atasan["nip"] || "-",
           atasan_jabatan: atasan["Jabatan"] || "Jabatan Atasan",
           wfaList: flow.wfaList,
+          jenisLaporan: flow.jenisLaporan 
         };
 
         try {
@@ -1588,7 +1561,7 @@ client.on("message", async (message) => {
           await kirimDenganTyping(
             client,
             chatId,
-            `Gagal membuat PDF WFH. Cek log error server.\nInfo: ${e.message}`,
+            `Gagal membuat PDF ${flow.jenisLaporan}. Cek log error server.\nInfo: ${e.message}`,
           );
         }
 
@@ -1712,27 +1685,37 @@ client.on("message", async (message) => {
         jamKeluar,
       };
 
-      // FIX: Wrap using formatNomorId
-      const nomorAtasan = formatNomorId(atasan["No. HP (WA) aktif"]) + "@c.us";
+      const nomorAtasan = getValidWaId(atasan["No. HP (WA) aktif"]);
+      if (!nomorAtasan) {
+        await kirimDenganTyping(client, chatId, "Nomor atasan tidak valid di database.");
+        delete pengajuanBySender[chatId];
+        return;
+      }
+
       const teksPengajuan = `*Pengajuan Lembur* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\nJam: ${jamMasuk} - ${jamKeluar} (${calculateDuration(jamMasuk, jamKeluar)})\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      const sentToAtasan = await client.sendMessage(nomorAtasan, teksPengajuan);
+      try {
+        const sentToAtasan = await client.sendMessage(nomorAtasan, teksPengajuan);
 
-      pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
-        sender: chatId,
-        jenis: flow.jenis,
-        pegawai: flow.pegawai,
-        atasan,
-        alasan,
-        jamMasuk,
-        jamKeluar,
-      };
+        pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
+          sender: chatId,
+          jenis: flow.jenis,
+          pegawai: flow.pegawai,
+          atasan,
+          alasan,
+          jamMasuk,
+          jamKeluar,
+        };
 
-      await kirimDenganTyping(
-        client,
-        chatId,
-        `Pengajuan Lembur Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
-      );
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Pengajuan Lembur Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
+        );
+      } catch (err) {
+        await kirimDenganTyping(client, chatId, "Gagal mengirim pesan ke atasan.");
+        delete pengajuanBySender[chatId];
+      }
 
       return;
     }
@@ -1763,29 +1746,40 @@ client.on("message", async (message) => {
         return;
       }
       
-      // FIX: Wrap using formatNomorId
-      const nomorAtasan = formatNomorId(atasan["No. HP (WA) aktif"]) + "@c.us";
-      const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
-      const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
+      const nomorAtasan = getValidWaId(atasan["No. HP (WA) aktif"]);
+      if (!nomorAtasan) {
+        await kirimDenganTyping(client, chatId, "Nomor atasan tidak valid di database.");
+        delete pengajuanBySender[chatId];
+        return;
+      }
 
-      pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
-        sender: chatId,
-        jenis: flow.jenis,
-        pegawai: flow.pegawai,
-        atasan,
-        alasan,
-      };
-      pengajuanBySender[chatId] = {
-        ...flow,
-        step: "menunggu-persetujuan",
-        alasan,
-        atasan,
-      };
-      await kirimDenganTyping(
-        client,
-        chatId,
-        `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
-      );
+      const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
+      
+      try {
+        const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
+
+        pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
+          sender: chatId,
+          jenis: flow.jenis,
+          pegawai: flow.pegawai,
+          atasan,
+          alasan,
+        };
+        pengajuanBySender[chatId] = {
+          ...flow,
+          step: "menunggu-persetujuan",
+          alasan,
+          atasan,
+        };
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
+        );
+      } catch (err) {
+        await kirimDenganTyping(client, chatId, "Gagal mengirim pesan ke atasan.");
+        delete pengajuanBySender[chatId];
+      }
       return;
     }
 
@@ -1934,7 +1928,7 @@ client.on("message", async (message) => {
 
     if (flow.step === "isi-tujuan") {
       const tujuan = message.body.trim();
-      const pjWa = NO_PAK_ALPHA ? formatNomorId(NO_PAK_ALPHA) + "@c.us" : null; 
+      const pjWa = NO_PAK_ALPHA ? getValidWaId(NO_PAK_ALPHA) : null; 
       const isPimpinan =
         !flow.pegawai["NO HP ATASAN"] ||
         flow.pegawai["NO HP ATASAN"].trim() === "" ||
@@ -1999,20 +1993,22 @@ client.on("message", async (message) => {
 
       const teksPengajuan = `*Pengajuan Peminjaman Kendaraan* dari ${flow.pegawai["Nama Pegawai"]}\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      if(NO_PAK_ALPHA) {
-        // FIX: Wrap using formatNomorId
-        const pjWaStr = formatNomorId(NO_PAK_ALPHA) + "@c.us";
-        const sentToPJ = await client.sendMessage(pjWaStr, teksPengajuan);
+      if(pjWa) {
+        try {
+          const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
-        pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
-          sender: chatId,
-          jenis: "Kendaraan",
-          pegawai: flow.pegawai,
-          atasan: DATA_PAK_ALPHA,
-          alasan: tujuan,
-          kendaraanId: flow.kendaraanId,
-          namaKendaraan: flow.namaKendaraan,
-        };
+          pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+            sender: chatId,
+            jenis: "Kendaraan",
+            pegawai: flow.pegawai,
+            atasan: DATA_PAK_ALPHA,
+            alasan: tujuan,
+            kendaraanId: flow.kendaraanId,
+            namaKendaraan: flow.namaKendaraan,
+          };
+        } catch (err) {
+          console.error("Gagal kirim kendaraan ke PJ", err);
+        }
       }
 
       pengajuanBySender[chatId] = {
