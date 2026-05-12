@@ -507,24 +507,17 @@ client.on("message", async (message) => {
     return;
   }
   
-  // 3. FILTER TIPE PESAN LAINNYA
+  // 3. FILTER TIPE PESAN DILONGGARKAN (Biar Quote Reply gak ditelan bot)
   if (
     message.type === "e2e_notification" ||
     message.type === "protocol" ||
-    message.type === "call_log"
-  )
-    return;
-  if (message.type === "revoked") return;
-  if (
-    message.type !== "chat" &&
-    message.type !== "image" &&
-    message.type !== "document" &&
-    message.type !== "video" &&
-    message.type !== "audio"
+    message.type === "call_log" ||
+    message.type === "revoked" ||
+    message.type === "sticker" ||
+    message.type === "reaction"
   ) {
     return;
   }
-  // ----------------------------------------
 
   let chatId = message.from;
 
@@ -807,62 +800,65 @@ client.on("message", async (message) => {
     }
 
     // ==========================================
-    // 5. HANDLER APPROVAL ATASAN (DM)
+    // 5. HANDLER APPROVAL ATASAN & TIM GUDANG (DM)
     // ==========================================
     let qid = null;
     let pengajuan = null;
     let orderGudang = null;
 
     if (message.hasQuotedMsg) {
-      const quoted = await message.getQuotedMessage();
-      qid = quoted.id._serialized;
-      pengajuan = pengajuanByAtasanMsgId[qid];
-      orderGudang = orderGudangMsgId[qid];
-    } else {
-      if (isApprovalYes(message.body) || isApprovalNo(message.body)) {
-        const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(([id, data]) => {
-          let atasanWa = data.atasan["No. HP (WA) aktif"];
-          if (atasanWa) {
-            return getValidWaId(atasanWa) === chatId;
-          }
-          return false;
-        });
+      try {
+        const quoted = await message.getQuotedMessage();
+        qid = quoted.id._serialized;
+        pengajuan = pengajuanByAtasanMsgId[qid];
+        orderGudang = orderGudangMsgId[qid];
+      } catch (e) {}
+    }
 
-        if (pendingPengajuan.length === 1) {
-          qid = pendingPengajuan[0][0];
-          pengajuan = pendingPengajuan[0][1];
-        } else if (pendingPengajuan.length > 1) {
-          await kirimDenganTyping(client, chatId, "⚠️ *Perhatian:* Bapak/Ibu memiliki lebih dari 1 pengajuan yang menunggu persetujuan.\n\nMohon *balas (Quote Reply/Geser Pesan)* tepat pada pesan pengajuan yang ingin disetujui/ditolak agar sistem tidak salah memproses.");
-          return;
-        }
+    // FALLBACK SAKTI: Kalau Quote Reply ID-nya gak cocok ATAU bales polosan
+    if (!pengajuan && !orderGudang && (isApprovalYes(message.body) || isApprovalNo(message.body))) {
+      
+      // 1. Cek Antrian Atasan
+      const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(([id, data]) => {
+        let atasanWa = data.atasan["No. HP (WA) aktif"];
+        return atasanWa ? getValidWaId(atasanWa) === chatId : false;
+      });
 
-        const isTimGudang = dbTimGudang.find(staf => {
-            let waf = staf["No. HP (WA) aktif"];
-            if (waf) {
-                return getValidWaId(waf) === chatId;
-            }
-            return false;
-        });
+      if (pendingPengajuan.length === 1) {
+        qid = pendingPengajuan[0][0];
+        pengajuan = pendingPengajuan[0][1];
+      } else if (pendingPengajuan.length > 1) {
+        await kirimDenganTyping(client, chatId, "⚠️ *Perhatian:* Bapak/Ibu memiliki lebih dari 1 pengajuan yang menunggu persetujuan.\n\nMohon *balas (Quote Reply/Geser Pesan)* tepat pada pesan pengajuan yang ingin disetujui/ditolak.");
+        return;
+      }
 
-        if (isTimGudang && !pengajuan) {
-             const pendingOrder = Object.entries(orderGudangMsgId);
-             const uniqueOrders = new Map();
-             pendingOrder.forEach(([id, data]) => {
-                 uniqueOrders.set(data.pemohonId, { id, data });
-             });
+      // 2. Cek Antrian Tim Gudang
+      const isTimGudang = dbTimGudang.find(staf => {
+          let waf = staf["No. HP (WA) aktif"];
+          return waf ? getValidWaId(waf) === chatId : false;
+      });
 
-             if (uniqueOrders.size === 1) {
-                 const firstOrder = Array.from(uniqueOrders.values())[0];
-                 qid = firstOrder.id;
-                 orderGudang = firstOrder.data;
-             } else if (uniqueOrders.size > 1) {
-                 await kirimDenganTyping(client, chatId, "⚠️ Tim Persediaan memiliki pesanan masuk dari pemohon yang berbeda. Mohon *Quote Reply* pesan yang ingin diproses.");
-                 return;
-             }
-        }
+      if (isTimGudang && !pengajuan) {
+           const pendingOrder = Object.entries(orderGudangMsgId);
+           const uniqueOrders = new Map();
+           pendingOrder.forEach(([id, data]) => {
+               uniqueOrders.set(data.pemohonId, { id, data });
+           });
+
+           if (uniqueOrders.size === 1) {
+               const firstOrder = Array.from(uniqueOrders.values())[0];
+               qid = firstOrder.id;
+               orderGudang = firstOrder.data;
+           } else if (uniqueOrders.size > 1) {
+               await kirimDenganTyping(client, chatId, "⚠️ Tim Persediaan memiliki pesanan masuk dari pemohon yang berbeda. Mohon *Quote Reply* pesan yang spesifik.");
+               return;
+           }
       }
     }
 
+    // ===============================================
+    // --- EKSEKUSI PERSETUJUAN TIM GUDANG / PERSEDIAAN
+    // ===============================================
     if (orderGudang) {
       const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; 
 
@@ -955,6 +951,7 @@ client.on("message", async (message) => {
       return;
     }
     
+    // --- EKSEKUSI PERSETUJUAN ATASAN ---
     if (pengajuan) {
       const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar, barangListParsed, pesanan } = pengajuan; 
 
@@ -1015,6 +1012,56 @@ client.on("message", async (message) => {
           } else {
             pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
           }
+          delete pengajuanBySender[pemohonId];
+        } else if (jenis === "Persediaan") {
+          pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
+          
+          const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
+          
+          const targetGudangList = [];
+          if (dbTimGudang && dbTimGudang.length > 0) {
+            for (const staf of dbTimGudang) {
+              const noWaStaf = staf["No. HP (WA) aktif"];
+              if (noWaStaf) {
+                targetGudangList.push(formatNomorId(noWaStaf) + "@c.us");
+              }
+            }
+          }
+
+          const dataOrder = {
+            pemohonId: pemohonId,
+            namaPemohon: p ? p["Nama Pegawai"] : "User",
+            pesanan: pesanan,
+            barangListParsed: barangListParsed, 
+            pData: p,
+            semuaTargetGudang: targetGudangList
+          };
+
+          if (targetGudangList.length > 0) {
+            for (const targetStaf of targetGudangList) {
+                const sentMsg = await client.sendMessage(targetStaf, notifTim);
+                orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
+                await new Promise((r) => setTimeout(r, 1000));
+            }
+          }
+
+          const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
+          let hasilBedah;
+          while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
+            const idBarangTarget = hasilBedah[1]; 
+            const jumlahDiambil = parseInt(hasilBedah[2], 10); 
+            if (idBarangTarget && !isNaN(jumlahDiambil)) {
+              try {
+                await Barang.findOneAndUpdate(
+                  { id_barang: idBarangTarget },
+                  { $inc: { stok: -jumlahDiambil } } 
+                );
+              } catch (dbErr) {
+                console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
+              }
+            }
+          }
+
           delete pengajuanBySender[pemohonId];
         }
 
@@ -1181,7 +1228,6 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      // UPDATE MENU UTAMA NO 7 JADI WFH / WFA
       const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
 
       await kirimDenganTyping(client, chatId, menu);
@@ -1245,7 +1291,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `*Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini melalui HP Anda untuk memilih barang:\n${LINK_WEB_KATALOG}`,
+          `*Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini untuk memilih barang:\n${LINK_WEB_KATALOG}`,
         );
         delete pengajuanBySender[chatId];
         return;
@@ -1262,7 +1308,6 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "7") {
-        // TANYA DULU JENISNYA WFH ATAU WFA
         await kirimDenganTyping(
           client,
           chatId,
