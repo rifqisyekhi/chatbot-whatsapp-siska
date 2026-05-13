@@ -55,23 +55,33 @@ async function refreshDataPegawai() {
     }
 }
 
-mongoose.connect(uri)
-  .then(async () => {
-      console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas');
-      await refreshDataPegawai();
-      
-      try {
-          const antrianLama = await Antrian.find({});
-          antrianLama.forEach(doc => {
-              if (doc.tipe === "ATASAN") pengajuanByAtasanMsgId[doc.msgId] = doc.data;
-              if (doc.tipe === "GUDANG") orderGudangMsgId[doc.msgId] = doc.data;
-          });
-          console.log(`[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`);
-      } catch (e) {
-          console.error("Gagal memulihkan memori antrian:", e);
-      }
-  })
-  .catch(err => console.error('Waduh, koneksi gagal:', err));
+async function startApp() {
+  try {
+    await mongoose.connect(uri);
+    console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas');
+    await refreshDataPegawai();
+
+    try {
+      const antrianLama = await Antrian.find({});
+      antrianLama.forEach((doc) => {
+        if (doc.tipe === "ATASAN") pengajuanByAtasanMsgId[doc.msgId] = doc.data;
+        if (doc.tipe === "GUDANG") orderGudangMsgId[doc.msgId] = doc.data;
+      });
+      console.log(`[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`);
+    } catch (e) {
+      console.error("Gagal memulihkan memori antrian:", e);
+    }
+
+    app.listen(PORT_WEB, '0.0.0.0', () => {
+      console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
+    });
+
+    client.initialize();
+  } catch (err) {
+    console.error('Waduh, koneksi gagal:', err);
+    process.exit(1);
+  }
+}
 
 async function tambahAntrian(msgId, tipe, data) {
     if (tipe === "ATASAN") pengajuanByAtasanMsgId[msgId] = data;
@@ -273,10 +283,6 @@ app.delete('/api/barang/:id_barang', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: "Gagal hapus data barang" });
     }
-});
-
-app.listen(PORT_WEB, '0.0.0.0', () => {
-    console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
 });
 
 // --- SISTEM FILE LOKAL UNTUK RIWAYAT (Biar tetap jalan) ---
@@ -2349,4 +2355,4 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 
-client.initialize();
+startApp();
