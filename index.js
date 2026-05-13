@@ -515,21 +515,64 @@ const client = new Client({
       "--disable-gpu",
       "--no-zygote",   
       "--disable-application-cache",
+      "--disable-background-timer-throttling",
+      "--disable-breakpad",
+      "--disable-client-side-phishing-detection",
+      "--disable-default-apps",
+      "--disable-hang-monitor",
+      "--disable-popup-blocking",
+      "--disable-prompt-on-repost",
+      "--disable-sync",
+      "--enable-automation",
+      "--no-first-run",
     ],
+    timeout: 120000, // 2 menit timeout
   },
 });
+
+let botReady = false;
+let authStartTime = 0;
 
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
   console.log("[QR] Tersedia. Scan ya brad.");
+  authStartTime = Date.now();
+  botReady = false;
 });
 
-client.on("ready", () => console.log("[READY] Bot SisKA siap!"));
-client.on("authenticated", () => console.log("[WA] Authenticated!"));
-client.on("auth_failure", (msg) => console.error("[WA] Auth failure:", msg));
-client.on("disconnected", (reason) =>
-  console.log(`[WA] Bot disconnect: ${reason}`),
-);
+client.on("authenticated", () => {
+  const elapsed = ((Date.now() - authStartTime) / 1000).toFixed(2);
+  console.log(`[WA] Authenticated! (${elapsed}s) - Tunggu proses loading...`);
+});
+
+client.on("ready", () => {
+  const elapsed = ((Date.now() - authStartTime) / 1000).toFixed(2);
+  console.log(`[READY] Bot SisKA siap! (${elapsed}s)`);
+  botReady = true;
+});
+
+client.on("auth_failure", (msg) => {
+  console.error("[WA] Auth failure:", msg);
+  botReady = false;
+});
+
+client.on("disconnected", (reason) => {
+  console.log(`[WA] Bot disconnect: ${reason}`);
+  botReady = false;
+});
+
+// Health check untuk deteksi stuck
+setInterval(() => {
+  if (!botReady) {
+    const elapsed = (Date.now() - authStartTime) / 1000;
+    if (elapsed > 300 && authStartTime > 0) { // Lebih dari 5 menit
+      console.error(`[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`);
+      client.destroy().then(() => {
+        setTimeout(() => client.initialize(), 2000);
+      }).catch(e => console.error("Error destroying client:", e));
+    }
+  }
+}, 30000); // Check setiap 30 detik
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
