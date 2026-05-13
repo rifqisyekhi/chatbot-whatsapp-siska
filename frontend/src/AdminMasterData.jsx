@@ -200,11 +200,7 @@ export default function AdminMasterData() {
 
                           {/* FIX KOLOM NO WA (Pakai jurus OR / || biar ngebaca semua kemungkinan nama di database) */}
                           <td className="p-4 text-slate-600">
-                            {item["No. HP (WA) aktif"] ||
-                              item["No. HP (WA) Aktif"] ||
-                              item.wa ||
-                              item.no_hp ||
-                              "-"}
+                            {item.no_wa || "-"}
                           </td>
 
                           <td className="p-4 flex items-center justify-center gap-2">
@@ -352,10 +348,10 @@ export default function AdminMasterData() {
                       </label>
                       <input
                         type="text"
-                        name="No. HP (WA) aktif"
-                        value={formData["No. HP (WA) aktif"] || ""}
+                        name="no_wa"
+                        value={formData.no_wa || ""}
                         onChange={handleChange}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm"
+                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
                         placeholder="Contoh: 0812..."
                         required
                       />
