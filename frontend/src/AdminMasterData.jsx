@@ -8,15 +8,20 @@ import {
   FaTrash,
   FaTimes,
   FaSearch,
+  FaFilter,
 } from "react-icons/fa";
 
 const API_URL = "/api";
 
-export default function AdminMasterData() {
+export default function AdminMasterData({ onLogout }) {
   const [activeTab, setActiveTab] = useState("pegawai");
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [searchTerm, setSearchSearchTerm] = useState("");
+
+  // STATE FILTER BARU
+  const [filterSubUnit, setFilterSubUnit] = useState("Semua");
+  const [filterJenisKendaraan, setFilterJenisKendaraan] = useState("Semua");
 
   // STATE DATA ASLI DARI DB
   const [dataPegawai, setDataPegawai] = useState([]);
@@ -57,7 +62,6 @@ export default function AdminMasterData() {
         await axios.post(`${API_URL}/${activeTab}`, formData);
         alert("Data Berhasil Ditambah!");
       } else {
-        // Pake _id bawaan MongoDB
         await axios.put(`${API_URL}/${activeTab}/${formData._id}`, formData);
         alert("Data Berhasil Diperbarui!");
       }
@@ -84,23 +88,30 @@ export default function AdminMasterData() {
   // 5. FUNGSI BUKA MODAL
   const handleOpenModal = (tipe, data = {}) => {
     setModalType(tipe);
-    // Kalau tambah, form kosong. Kalau edit, form isi data lama.
     setFormData(tipe === "tambah" ? {} : data);
     setShowModal(true);
   };
 
-  // FILTER PENCARIAN
-  const filteredPegawai = dataPegawai.filter(
-    (p) =>
+  // FILTER PENCARIAN & DROPDOWN GANDA
+  const filteredPegawai = dataPegawai.filter((p) => {
+    const matchSearch =
       p["Nama Pegawai"]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.nip?.includes(searchTerm),
-  );
+      p.nip?.includes(searchTerm);
+    const matchFilter =
+      filterSubUnit === "Semua" ? true : p.SUBUNIT === filterSubUnit;
+    return matchSearch && matchFilter;
+  });
 
-  const filteredKendaraan = dataKendaraan.filter(
-    (k) =>
+  const filteredKendaraan = dataKendaraan.filter((k) => {
+    const matchSearch =
       k.nama?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      k.plat?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
+      k.plat?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchFilter =
+      filterJenisKendaraan === "Semua"
+        ? true
+        : k.jenis === filterJenisKendaraan;
+    return matchSearch && matchFilter;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
@@ -116,34 +127,86 @@ export default function AdminMasterData() {
             </p>
           </div>
 
-          <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto">
+          <div className="flex flex-col md:flex-row gap-3">
+            <div className="flex bg-slate-100 p-1 rounded-xl w-full md:w-auto">
+              <button
+                onClick={() => setActiveTab("pegawai")}
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${
+                  activeTab === "pegawai"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <FaUsers className="w-4 h-4" /> Pegawai
+              </button>
+              <button
+                onClick={() => setActiveTab("kendaraan")}
+                className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2 rounded-lg font-bold text-sm transition-all ${
+                  activeTab === "kendaraan"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <FaCar className="w-4 h-4" /> Kendaraan
+              </button>
+            </div>
+
+            {/* TOMBOL LOGOUT */}
             <button
-              onClick={() => setActiveTab("pegawai")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === "pegawai" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              onClick={onLogout}
+              className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-5 py-2 rounded-xl font-bold text-sm transition-all border border-red-100"
             >
-              <FaUsers className="w-4 h-4" /> Pegawai
-            </button>
-            <button
-              onClick={() => setActiveTab("kendaraan")}
-              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${activeTab === "kendaraan" ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-            >
-              <FaCar className="w-4 h-4" /> Kendaraan
+              Logout
             </button>
           </div>
         </div>
 
-        {/* TOOLBAR */}
-        <div className="flex flex-col sm:flex-row items-center justify-between mb-4 gap-3">
-          <div className="relative w-full sm:w-72">
-            <FaSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchSearchTerm(e.target.value)}
-              placeholder={`Cari data ${activeTab}...`}
-              className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all text-sm"
-            />
+        {/* TOOLBAR (SEARCH + FILTER + TAMBAH) */}
+        <div className="flex flex-col md:flex-row items-center justify-between mb-4 gap-3">
+          {/* Kelompok Search & Dropdown Filter */}
+          <div className="flex flex-col sm:flex-row w-full md:w-auto gap-3 flex-1">
+            <div className="relative w-full sm:w-72">
+              <FaSearch className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchSearchTerm(e.target.value)}
+                placeholder={`Cari data ${activeTab}...`}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all text-sm"
+              />
+            </div>
+
+            {/* Tombol Filter Dinamis */}
+            <div className="relative w-full sm:w-48">
+              <FaFilter className="w-3 h-3 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              {activeTab === "pegawai" ? (
+                <select
+                  value={filterSubUnit}
+                  onChange={(e) => setFilterSubUnit(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all text-sm appearance-none cursor-pointer"
+                >
+                  <option value="Semua">Semua Sub Unit</option>
+                  <option value="KOOR">KOOR</option>
+                  <option value="TU">TU</option>
+                  <option value="AKLAP">AKLAP</option>
+                  <option value="PA">PA</option>
+                  <option value="BMN">BMN</option>
+                  <option value="PTUK">PTUK</option>
+                </select>
+              ) : (
+                <select
+                  value={filterJenisKendaraan}
+                  onChange={(e) => setFilterJenisKendaraan(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all text-sm appearance-none cursor-pointer"
+                >
+                  <option value="Semua">Semua Jenis</option>
+                  <option value="Mobil">Mobil</option>
+                  <option value="Motor">Motor</option>
+                </select>
+              )}
+            </div>
           </div>
+
           <button
             onClick={() => handleOpenModal("tambah")}
             className="w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm shadow-lg shadow-blue-200 transition-all active:scale-95"
@@ -165,44 +228,44 @@ export default function AdminMasterData() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100">
-                        {/* TAMBAHAN HEADER NOMOR */}
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 whitespace-nowrap">
                         <th className="p-4 font-bold text-center w-16">No</th>
                         <th className="p-4 font-bold">Nama Pegawai</th>
-                        <th className="p-4 font-bold">NIP / Kategori</th>
+                        <th className="p-4 font-bold">NIP</th>
+                        <th className="p-4 font-bold">Sub Unit</th>
                         <th className="p-4 font-bold">Jabatan</th>
+                        <th className="p-4 font-bold">Kategori</th>
                         <th className="p-4 font-bold">No. WA</th>
                         <th className="p-4 font-bold text-center">Aksi</th>
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {/* TAMBAHKAN 'index' DI DALAM MAP */}
                       {filteredPegawai.map((item, index) => (
                         <tr
                           key={item._id}
                           className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
                         >
-                          {/* MENAMPILKAN NOMOR URUT (index + 1) */}
                           <td className="p-4 text-center text-slate-500 font-medium">
                             {index + 1}
                           </td>
-
                           <td className="p-4 font-bold text-slate-800">
                             {item["Nama Pegawai"]}
                           </td>
+                          <td className="p-4 text-slate-600">{item.nip}</td>
                           <td className="p-4">
-                            <div className="text-slate-700">{item.nip}</div>
-                            <div className="text-xs text-blue-600 font-semibold bg-blue-50 inline-block px-2 py-0.5 rounded mt-1">
+                            <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">
+                              {item.SUBUNIT || "-"}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-600">{item.Jabatan}</td>
+                          <td className="p-4">
+                            <div className="text-xs text-blue-600 font-semibold bg-blue-50 inline-block px-2 py-1 rounded">
                               {item.kategori_pegawai || "Internal"}
                             </div>
                           </td>
-                          <td className="p-4 text-slate-600">{item.Jabatan}</td>
-
-                          {/* FIX KOLOM NO WA (Pakai jurus OR / || biar ngebaca semua kemungkinan nama di database) */}
                           <td className="p-4 text-slate-600">
                             {item.no_wa || "-"}
                           </td>
-
                           <td className="p-4 flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleOpenModal("edit", item)}
@@ -231,8 +294,9 @@ export default function AdminMasterData() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100">
-                        <th className="p-4 font-bold">ID / Plat</th>
+                      <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 whitespace-nowrap">
+                        <th className="p-4 font-bold text-center w-16">No</th>
+                        <th className="p-4 font-bold">Plat</th>
                         <th className="p-4 font-bold">Nama Kendaraan</th>
                         <th className="p-4 font-bold">Jenis</th>
                         <th className="p-4 font-bold">Status</th>
@@ -240,18 +304,16 @@ export default function AdminMasterData() {
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {filteredKendaraan.map((item) => (
+                      {filteredKendaraan.map((item, index) => (
                         <tr
                           key={item._id}
                           className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
                         >
-                          <td className="p-4">
-                            <div className="font-bold text-slate-800">
-                              {item.plat}
-                            </div>
-                            <div className="text-xs text-slate-400 mt-0.5">
-                              {item.id}
-                            </div>
+                          <td className="p-4 text-center text-slate-500 font-medium">
+                            {index + 1}
+                          </td>
+                          <td className="p-4 font-bold text-slate-800">
+                            {item.plat}
                           </td>
                           <td className="p-4 font-medium text-slate-700">
                             {item.nama}
@@ -259,7 +321,11 @@ export default function AdminMasterData() {
                           <td className="p-4 text-slate-600">{item.jenis}</td>
                           <td className="p-4">
                             <span
-                              className={`px-3 py-1 rounded-full text-xs font-bold ${item.status === "TERSEDIA" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-600"}`}
+                              className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                item.status === "TERSEDIA"
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-red-100 text-red-600"
+                              }`}
                             >
                               {item.status}
                             </span>
@@ -372,7 +438,6 @@ export default function AdminMasterData() {
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
-                    {/* DROPDOWN SUBUNIT */}
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">
                         SUBUNIT
@@ -395,8 +460,6 @@ export default function AdminMasterData() {
                         <option value="PTUK">PTUK</option>
                       </select>
                     </div>
-
-                    {/* DROPDOWN KATEGORI */}
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">
                         Kategori
@@ -424,7 +487,7 @@ export default function AdminMasterData() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                        Kode ID
+                        Kode ID (Opsional)
                       </label>
                       <input
                         type="text"
@@ -433,7 +496,6 @@ export default function AdminMasterData() {
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm"
                         placeholder="Contoh: M01"
-                        required
                       />
                     </div>
                     <div>
