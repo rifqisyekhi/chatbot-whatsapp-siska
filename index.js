@@ -20,11 +20,11 @@ const {
 const { 
   HELPDESK_GROUP_ID, 
   FORM_CUTI_URL, 
-  NO_PAK_ALPHA, 
+  NO_KETUA_SUB_TU, 
   NO_ADMIN_SAKEH,
-  NIP_PAK_ALPHA,
-  NAMA_PAK_ALPHA,
-  JABATAN_PAK_ALPHA,
+  NIP_KETUA_SUB_TU,
+  NAMA_KETUA_SUB_TU,
+  JABATAN_KETUA_SUB_TU,
   PORT_WEB,
   LINK_WEB_KATALOG
 } = require("./config/config");
@@ -35,161 +35,251 @@ require('dotenv').config();
 
 const uri = process.env.MONGO_URI;
 
+const Barang = require('./models/Barang'); 
+const Pegawai = require('./models/Pegawai'); 
+const Kendaraan = require('./models/Kendaraan'); 
+const Antrian = require('./models/Antrian');
+
+let dbPegawai = [];
+let dbTimGudang = [];
+const pengajuanByAtasanMsgId = {};
+const orderGudangMsgId = {};
+
+async function refreshDataPegawai() {
+    try {
+        dbPegawai = await Pegawai.find({});
+        dbTimGudang = dbPegawai.filter(p => p.kategori_pegawai === 'TimGudang');
+        console.log(`[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari MongoDB Atlas.`);
+    } catch (err) {
+        console.error("[CRITICAL] Gagal memuat data pegawai dari MongoDB:", err);
+    }
+}
+
 mongoose.connect(uri)
-  .then(() => console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas'))
+  .then(async () => {
+      console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas');
+      await refreshDataPegawai();
+      
+      try {
+          const antrianLama = await Antrian.find({});
+          antrianLama.forEach(doc => {
+              if (doc.tipe === "ATASAN") pengajuanByAtasanMsgId[doc.msgId] = doc.data;
+              if (doc.tipe === "GUDANG") orderGudangMsgId[doc.msgId] = doc.data;
+          });
+          console.log(`[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`);
+      } catch (e) {
+          console.error("Gagal memulihkan memori antrian:", e);
+      }
+  })
   .catch(err => console.error('Waduh, koneksi gagal:', err));
 
-const Barang = require('./models/Barang'); 
+async function tambahAntrian(msgId, tipe, data) {
+    if (tipe === "ATASAN") pengajuanByAtasanMsgId[msgId] = data;
+    if (tipe === "GUDANG") orderGudangMsgId[msgId] = data;
+    
+    try {
+        await Antrian.findOneAndUpdate(
+            { msgId: msgId }, 
+            { msgId: msgId, tipe: tipe, data: data }, 
+            { upsert: true }
+        );
+    } catch (e) { console.error("Gagal backup antrian ke DB", e); }
+}
 
-// ==========================================
-// II. SERVER WEB UNTUK KATALOG BARANG 
-// ==========================================
+async function hapusAntrian(msgId, tipe) {
+    if (tipe === "ATASAN") delete pengajuanByAtasanMsgId[msgId];
+    if (tipe === "GUDANG") delete orderGudangMsgId[msgId];
+    
+    try {
+        await Antrian.findOneAndDelete({ msgId: msgId });
+    } catch (e) { console.error("Gagal hapus antrian dari DB", e); }
+}
+
+// ============================================================
+// II. SERVER WEB UNTUK KATALOG BARANG, PEGAWAI, DAN KENDARAAN
+// ============================================================
 const app = express();
 
 app.use(cors());
-
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
-// --- RUTE API: AMBIL SEMUA BARANG (GET) ---
+// ------------------------------------------
+// --- RUTE API PEGAWAI ---
+// ------------------------------------------
+
+// AMBIL SEMUA PEGAWAI
+app.get('/api/pegawai', async (req, res) => {
+    try {
+        const data = await Pegawai.find({});
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: "Gagal memuat data pegawai" });
+    }
+});
+
+// TAMBAH PEGAWAI BARU
+app.post('/api/pegawai', async (req, res) => {
+    try {
+        const baru = new Pegawai(req.body);
+        await baru.save();
+        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal menambah pegawai" });
+    }
+});
+
+// EDIT PEGAWAI
+app.put('/api/pegawai/:id', async (req, res) => {
+    try {
+        const updated = await Pegawai.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!updated) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
+        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        res.json({ message: "Data pegawai diperbarui!", data: updated });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal update data pegawai" });
+    }
+});
+
+// HAPUS PEGAWAI
+app.delete('/api/pegawai/:id', async (req, res) => {
+    try {
+        const deleted = await Pegawai.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
+        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        res.json({ message: "Pegawai berhasil dihapus!" });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal menghapus data" });
+    }
+});
+
+// ------------------------------------------
+// --- RUTE API KENDARAAN ---
+// ------------------------------------------
+
+// AMBIL SEMUA KENDARAAN
+app.get('/api/kendaraan', async (req, res) => {
+    try {
+        const data = await Kendaraan.find({});
+        res.json(data);
+    } catch (err) {
+        res.status(500).json({ error: "Gagal memuat data kendaraan" });
+    }
+});
+
+// TAMBAH KENDARAAN BARU
+app.post('/api/kendaraan', async (req, res) => {
+    try {
+        const mobilBaru = new Kendaraan(req.body);
+        await mobilBaru.save();
+        res.status(201).json({ message: "Kendaraan berhasil didaftarkan!", data: mobilBaru });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal menambah kendaraan" });
+    }
+});
+
+// EDIT KENDARAAN
+app.put('/api/kendaraan/:id', async (req, res) => {
+    try {
+        const updated = await Kendaraan.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!updated) return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
+        res.json({ message: "Data kendaraan diperbarui!", data: updated });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal update data kendaraan" });
+    }
+});
+
+// HAPUS KENDARAAN
+app.delete('/api/kendaraan/:id', async (req, res) => {
+    try {
+        const deleted = await Kendaraan.findByIdAndDelete(req.params.id);
+        if (!deleted) return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
+        res.json({ message: "Kendaraan berhasil dihapus!" });
+    } catch (err) {
+        res.status(500).json({ error: "Gagal menghapus kendaraan" });
+    }
+});
+
+// ------------------------------------------
+// --- RUTE API BARANG (GUDANG) ---
+// ------------------------------------------
+
 app.get('/api/barang', async (req, res) => {
     try {
         const dataDB = await Barang.find({});
-        const dataSiapKirim = dataDB.map(item => ({
+        res.json(dataDB.map(item => ({
             id: item.id_barang,
             nama: item.nama,
             stok: item.stok,
             kategori: item.kategori || "Belum ada kategori",
             satuan: item.satuan || "Pcs",
             img: item.img
-        }));
-        res.json(dataSiapKirim);
+        })));
     } catch (err) {
-        console.error("Gagal membaca database barang:", err);
         res.status(500).json({ error: "Gagal memuat data persediaan" });
     }
 });
 
-// --- RUTE API: TAMBAH BARANG BARU (POST) ---
 app.post('/api/barang', async (req, res) => {
     try {
         const { nama, kategori, stok, img } = req.body;
-
         if (!nama || stok == null || !kategori) {
-            return res.status(400).json({ 
-                error: "Data kurang lengkap! Pastikan Nama, Kategori, dan Stok terisi." 
-            });
+            return res.status(400).json({ error: "Data kurang lengkap!" });
         }
-
+        
         let prefix = kategori === 'ATK' ? 'ATK-' : 'ELK-';
         const barangSejenis = await Barang.find({ kategori: kategori }, 'id_barang');
-        
         let angkaTertinggi = 0;
-        
         barangSejenis.forEach(barang => {
             const bagian = barang.id_barang.split('-');
             if (bagian.length === 2) {
                 const angka = parseInt(bagian[1], 10);
-                if (!isNaN(angka) && angka > angkaTertinggi) {
-                    angkaTertinggi = angka;
-                }
+                if (!isNaN(angka) && angka > angkaTertinggi) angkaTertinggi = angka;
             }
         });
 
-        const angkaBaru = angkaTertinggi + 1;
-        const id_barang_baru = `${prefix}${angkaBaru.toString().padStart(3, '0')}`;
-        const barangBaru = new Barang({
-            id_barang: id_barang_baru,
-            nama: nama,
-            kategori: kategori,
-            stok: Number(stok),
-            img: img || ""
-        });
-
+        const id_barang_baru = `${prefix}${(angkaTertinggi + 1).toString().padStart(3, '0')}`;
+        const barangBaru = new Barang({ ...req.body, id_barang: id_barang_baru });
         await barangBaru.save();
-        console.log(`[DATABASE] Barang baru auto-SKU: ${nama} [${id_barang_baru}]`);
-
-        res.status(201).json({ 
-            message: `Barang berhasil ditambah dengan kode ${id_barang_baru}!`, 
-            data: barangBaru 
-        });
-
+        res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
     } catch (err) {
-        console.error("[ERROR API] Gagal menambah barang:", err);
-        res.status(500).json({ error: "Terjadi kesalahan pada server." });
+        res.status(500).json({ error: "Gagal menambah barang" });
     }
 });
 
-// --- RUTE API: EDIT BARANG (PUT) ---
 app.put('/api/barang/:id_barang', async (req, res) => {
     try {
-        const targetId = req.params.id_barang; 
-        
-        const { nama, kategori, stok, satuan, img } = req.body;
-
-        const dataUpdate = { 
-            nama: nama, 
-            kategori: kategori, 
-            stok: Number(stok),
-            satuan: satuan || "Pcs"
-        };
-
-        if (img && img.trim() !== "") {
-            dataUpdate.img = img;
-        }
-
-        const barangDiupdate = await Barang.findOneAndUpdate(
-            { id_barang: targetId },
-            { $set: dataUpdate },
+        const updated = await Barang.findOneAndUpdate(
+            { id_barang: req.params.id_barang },
+            { $set: req.body },
             { returnDocument: 'after' }
         );
-
-        if (!barangDiupdate) {
-            return res.status(404).json({ error: "Barang tidak ditemukan di database!" });
-        }
-
-        console.log(`[DATABASE] Barang di-edit: ${nama} [${targetId}]`);
-        res.json({ message: "Barang berhasil di-update!", data: barangDiupdate });
-
+        if (!updated) return res.status(404).json({ error: "Barang tidak ditemukan" });
+        res.json({ message: "Barang berhasil diperbarui!", data: updated });
     } catch (err) {
-        console.error("[ERROR API] Gagal edit barang:", err);
-        res.status(500).json({ error: "Terjadi kesalahan server saat update data." });
+        res.status(500).json({ error: "Gagal update data barang" });
     }
 });
 
-// --- RUTE API: HAPUS BARANG (DELETE) ---
 app.delete('/api/barang/:id_barang', async (req, res) => {
     try {
-        const targetId = req.params.id_barang; 
-        
-        const barangDihapus = await Barang.findOneAndDelete({ id_barang: targetId });
-
-        if (!barangDihapus) {
-            return res.status(404).json({ error: "Barang tidak ditemukan di database!" });
-        }
-
-        console.log(`[DATABASE] Barang dihapus: ${targetId}`);
+        const deleted = await Barang.findOneAndDelete({ id_barang: req.params.id_barang });
+        if (!deleted) return res.status(404).json({ error: "Barang tidak ditemukan" });
         res.json({ message: "Barang berhasil dihapus!" });
-
     } catch (err) {
-        console.error("[ERROR API] Gagal hapus barang:", err);
-        res.status(500).json({ error: "Terjadi kesalahan server saat hapus data." });
+        res.status(500).json({ error: "Gagal hapus data barang" });
     }
 });
 
 app.listen(PORT_WEB, '0.0.0.0', () => {
-  console.log(`[WEB SERVER] API & Katalog aktif di port ${PORT_WEB}`);
+    console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
 });
 
-// --- DATABASE KENDARAAN ---
-const KENDARAAN_PATH = path.join(
-  __dirname,
-  "database",
-  "status_kendaraan.json",
-);
+// --- SISTEM FILE LOKAL UNTUK RIWAYAT (Biar tetap jalan) ---
 const RIWAYAT_KENDARAAN_PATH = path.join(
   __dirname,
   "database",
@@ -197,11 +287,12 @@ const RIWAYAT_KENDARAAN_PATH = path.join(
 );
 const RIWAYAT_PATH = path.join(__dirname, "database", "riwayat_lembur.json");
 
+// FUNGSI BARU: Ambil Kendaraan langsung dari MongoDB
 async function getStatusKendaraan() {
   try {
-    const data = await fsPromises.readFile(KENDARAAN_PATH, "utf8");
-    return JSON.parse(data);
+    return await Kendaraan.find({});
   } catch (e) {
+    console.error("Gagal ambil data kendaraan dari MongoDB", e);
     return [];
   }
 }
@@ -241,20 +332,6 @@ async function processWriteQueue() {
   }
 }
 
-async function updateStatusKendaraanAsync(newData) {
-  return new Promise((resolve, reject) => {
-    dbWriteQueue.push({
-      data: null,
-      customWrite: true,
-      content: newData,
-      filePath: KENDARAAN_PATH,
-      resolve,
-      reject,
-    });
-    processWriteQueue();
-  });
-}
-
 async function simpanRiwayatKendaraanAsync(data) {
   return new Promise((resolve, reject) => {
     dbWriteQueue.push({
@@ -277,20 +354,18 @@ function simpanRiwayatLemburAsync(data) {
 // ==================================
 // FORMAT DATA PENANGGUNG JAWAB (DARI CONFIG)
 // ==================================
-const DATA_PAK_ALPHA = {
-  "Nama Pegawai": NAMA_PAK_ALPHA,
-  "No. HP (WA) aktif": NO_PAK_ALPHA ? NO_PAK_ALPHA.split('@')[0] : "",
-  nip: NIP_PAK_ALPHA,
-  Jabatan: JABATAN_PAK_ALPHA
+const DATA_KETUA_SUB_TU = {
+  "Nama Pegawai": NAMA_KETUA_SUB_TU,
+  "No. HP (WA) aktif": NO_KETUA_SUB_TU ? NO_KETUA_SUB_TU.split('@')[0] : "",
+  nip: NIP_KETUA_SUB_TU,
+  Jabatan: JABATAN_KETUA_SUB_TU
 };
 
 // III. STATE MANAGEMENT
-let dbPegawai = [];
 const pengajuanBySender = {};
-const pengajuanByAtasanMsgId = {};
-const orderGudangMsgId = {};
 const helpdeskQueue = {};
 const helpdeskInstruksiMap = {};
+const userLastActive = {};
 
 // IV. UTILITAS & LOGGING
 const LOGS_DIR = path.join(__dirname, "logs");
@@ -363,44 +438,6 @@ function isApprovalNo(text) {
 }
 
 // V. DATABASE & API HELPER
-function loadDatabase() {
-  try {
-    const dbPath = path.join(
-      __dirname,
-      "database",
-      "DatabasePegawaiBiroKeuangan.json",
-    );
-    if (!fs.existsSync(dbPath)) {
-      console.error(
-        "[CRITICAL] File database Pegawai Biro keuangan.json tidak ditemukan.",
-      );
-      return [];
-    }
-    const raw = fs.readFileSync(dbPath, "utf8");
-    const parsed = JSON.parse(raw);
-
-    const InternalList = parsed.Internal || [];
-    const ppnpnList = parsed.PPNPN || [];
-    const magangList = parsed.magang || [];
-
-    return InternalList.concat(ppnpnList, magangList);
-  } catch (err) {
-    console.error("[CRITICAL] Gagal membaca database pegawai:", err.message);
-    return [];
-  }
-}
-
-dbPegawai = loadDatabase();
-console.log(`[INIT] Berhasil memuat ${dbPegawai.length} data pegawai.`);
-
-let dbTimGudang = [];
-try {
-  const rawData = fs.readFileSync(path.join(__dirname, "database", "DatabasePegawaiBiroKeuangan.json"), "utf8");
-  dbTimGudang = JSON.parse(rawData).TimGudang || [];
-} catch (err) {
-  console.log("Tim Persediaan belum di-set di JSON.");
-}
-
 function formatNomorId(hp) {
   let str = String(hp || "")
     .trim()
@@ -537,6 +574,15 @@ client.on("message", async (message) => {
     const digits = hanyaAngka(chatId);
     const pegawai = cariPegawaiByWa(digits);
 
+    const batasWaktu = 12 * 60 * 60 * 1000;
+
+    if (userLastActive[chatId] && (Date.now() - userLastActive[chatId] > batasWaktu)) {
+        delete pengajuanBySender[chatId];
+        delete helpdeskQueue[chatId];
+    }
+
+    userLastActive[chatId] = Date.now();
+
     let bodyLower = (message.body || "").trim().toLowerCase();
     if (bodyLower.startsWith("!")) bodyLower = bodyLower.replace(/^!+/, "");
 
@@ -592,8 +638,8 @@ client.on("message", async (message) => {
 
       const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      if(NO_PAK_ALPHA) {
-        const pjWa = getValidWaId(NO_PAK_ALPHA);
+      if(NO_KETUA_SUB_TU) {
+        const pjWa = getValidWaId(NO_KETUA_SUB_TU);
         if (pjWa) {
           try {
             const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
@@ -611,14 +657,17 @@ client.on("message", async (message) => {
               });
             }
 
-            pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+            const dataBackup = {
               sender: chatId,
               jenis: "Persediaan",
               pegawai: pegawai,
-              atasan: DATA_PAK_ALPHA,
+              atasan: DATA_KETUA_SUB_TU,
               pesanan: pesananClean,
               barangListParsed: listBarangOrder 
             };
+            
+            await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
+
           } catch (e) {
             console.error("Gagal kirim notif order ke PJ:", e);
           }
@@ -891,8 +940,8 @@ client.on("message", async (message) => {
             jenisTransaksi: "Permintaan Persediaan",
             barangList: barangListParsed || [], 
             atasan: {
-              nama: DATA_PAK_ALPHA["Nama Pegawai"],
-              nip: DATA_PAK_ALPHA.nip
+              nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+              nip: DATA_KETUA_SUB_TU.nip
             },
             pemohon: {
               nama: namaPemohon,
@@ -906,9 +955,10 @@ client.on("message", async (message) => {
           console.error("Gagal buat PDF Permintaan ATK:", pdfErr);
         }
 
+        // HAPUS DARI RAM DAN MONGODB
         for (let key in orderGudangMsgId) {
           if (orderGudangMsgId[key].pemohonId === pemohonId) {
-            delete orderGudangMsgId[key];
+            await hapusAntrian(key, "GUDANG");
           }
         }
 
@@ -942,9 +992,10 @@ client.on("message", async (message) => {
           }
         }
 
+        // HAPUS DARI RAM DAN MONGODB
         for (let key in orderGudangMsgId) {
           if (orderGudangMsgId[key].pemohonId === pemohonId) {
-            delete orderGudangMsgId[key];
+            await hapusAntrian(key, "GUDANG");
           }
         }
       }
@@ -969,12 +1020,17 @@ client.on("message", async (message) => {
           const index = allKendaraan.findIndex((m) => m.id === pengajuan.kendaraanId);
 
           if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
-            allKendaraan[index].status = "DIPAKAI";
-            allKendaraan[index].peminjam_saat_ini = p["nip"];
-            allKendaraan[index].waktu_pinjam = new Date().toISOString();
-            allKendaraan[index].tujuan_aktif = pengajuan.alasan;
-
-            await updateStatusKendaraanAsync(allKendaraan);
+            
+            // UPDATE MONGODB
+            await Kendaraan.findOneAndUpdate(
+               { id: pengajuan.kendaraanId },
+               {
+                 status: "DIPAKAI",
+                 peminjam_saat_ini: p["nip"],
+                 waktu_pinjam: new Date().toISOString(),
+                 tujuan_aktif: pengajuan.alasan
+               }
+            );
 
             pesanPegawai = `Pengajuan peminjaman kendaraan *${pengajuan.namaKendaraan}* Anda telah *DISETUJUI* oleh Penanggung Jawab.\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`;
             
@@ -984,9 +1040,9 @@ client.on("message", async (message) => {
             try {
               const dataPDFMobil = {
                 penanggungJawab: {
-                  nama: DATA_PAK_ALPHA["Nama Pegawai"],
-                  nip: DATA_PAK_ALPHA.nip,
-                  jabatan: DATA_PAK_ALPHA.Jabatan,
+                  nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+                  nip: DATA_KETUA_SUB_TU.nip,
+                  jabatan: DATA_KETUA_SUB_TU.Jabatan,
                 },
                 pemakai: {
                   nama: p["Nama Pegawai"] || "Nama Pemakai",
@@ -1040,7 +1096,7 @@ client.on("message", async (message) => {
           if (targetGudangList.length > 0) {
             for (const targetStaf of targetGudangList) {
                 const sentMsg = await client.sendMessage(targetStaf, notifTim);
-                orderGudangMsgId[sentMsg.id._serialized] = dataOrder; 
+                await tambahAntrian(sentMsg.id._serialized, "GUDANG", dataOrder); 
                 await new Promise((r) => setTimeout(r, 1000));
             }
           }
@@ -1076,7 +1132,7 @@ client.on("message", async (message) => {
         delete pengajuanBySender[pemohonId];
       }
 
-      delete pengajuanByAtasanMsgId[qid];
+      await hapusAntrian(qid, "ATASAN");
       return;
     }
 
@@ -1551,7 +1607,7 @@ client.on("message", async (message) => {
         let atasan = cariAtasanPegawai(flow.pegawai);
         
         if (!atasan || !atasan["No. HP (WA) aktif"]) {
-          atasan = DATA_PAK_ALPHA;
+          atasan = DATA_KETUA_SUB_TU;
         }
 
         const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
@@ -1742,7 +1798,7 @@ client.on("message", async (message) => {
       try {
         const sentToAtasan = await client.sendMessage(nomorAtasan, teksPengajuan);
 
-        pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
+        const dataBackup = {
           sender: chatId,
           jenis: flow.jenis,
           pegawai: flow.pegawai,
@@ -1751,6 +1807,8 @@ client.on("message", async (message) => {
           jamMasuk,
           jamKeluar,
         };
+        
+        await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
 
         await kirimDenganTyping(
           client,
@@ -1803,13 +1861,16 @@ client.on("message", async (message) => {
       try {
         const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
 
-        pengajuanByAtasanMsgId[sentToAtasan.id._serialized] = {
+        const dataBackup = {
           sender: chatId,
           jenis: flow.jenis,
           pegawai: flow.pegawai,
           atasan,
           alasan,
         };
+        
+        await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
+
         pengajuanBySender[chatId] = {
           ...flow,
           step: "menunggu-persetujuan",
@@ -1973,7 +2034,7 @@ client.on("message", async (message) => {
 
     if (flow.step === "isi-tujuan") {
       const tujuan = message.body.trim();
-      const pjWa = NO_PAK_ALPHA ? getValidWaId(NO_PAK_ALPHA) : null; 
+      const pjWa = NO_KETUA_SUB_TU ? getValidWaId(NO_KETUA_SUB_TU) : null; 
       const isPimpinan =
         !flow.pegawai["NO HP ATASAN"] ||
         flow.pegawai["NO HP ATASAN"].trim() === "" ||
@@ -1984,12 +2045,17 @@ client.on("message", async (message) => {
         const index = allKendaraan.findIndex((m) => m.id === flow.kendaraanId);
 
         if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
-          allKendaraan[index].status = "DIPAKAI";
-          allKendaraan[index].peminjam_saat_ini = pegawai["nip"];
-          allKendaraan[index].waktu_pinjam = new Date().toISOString();
-          allKendaraan[index].tujuan_aktif = tujuan;
-
-          await updateStatusKendaraanAsync(allKendaraan);
+          
+          // UPDATE MONGODB
+          await Kendaraan.findOneAndUpdate(
+             { id: flow.kendaraanId },
+             {
+               status: "DIPAKAI",
+               peminjam_saat_ini: pegawai["nip"],
+               waktu_pinjam: new Date().toISOString(),
+               tujuan_aktif: tujuan
+             }
+          );
 
           await kirimDenganTyping(
             client,
@@ -2000,9 +2066,9 @@ client.on("message", async (message) => {
           try {
             const dataPDFMobil = {
               penanggungJawab: {
-                nama: DATA_PAK_ALPHA["Nama Pegawai"],
-                nip: DATA_PAK_ALPHA.nip,
-                jabatan: DATA_PAK_ALPHA.Jabatan,
+                nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+                nip: DATA_KETUA_SUB_TU.nip,
+                jabatan: DATA_KETUA_SUB_TU.Jabatan,
               },
               pemakai: {
                 nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
@@ -2042,15 +2108,18 @@ client.on("message", async (message) => {
         try {
           const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
-          pengajuanByAtasanMsgId[sentToPJ.id._serialized] = {
+          const dataBackup = {
             sender: chatId,
             jenis: "Kendaraan",
             pegawai: flow.pegawai,
-            atasan: DATA_PAK_ALPHA,
+            atasan: DATA_KETUA_SUB_TU,
             alasan: tujuan,
             kendaraanId: flow.kendaraanId,
             namaKendaraan: flow.namaKendaraan,
           };
+          
+          await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
+
         } catch (err) {
           console.error("Gagal kirim kendaraan ke PJ", err);
         }
@@ -2061,12 +2130,12 @@ client.on("message", async (message) => {
         step: "menunggu-persetujuan",
         jenis: "Kendaraan",
         alasan: tujuan,
-        atasan: DATA_PAK_ALPHA,
+        atasan: DATA_KETUA_SUB_TU,
       };
       await kirimDenganTyping(
         client,
         chatId,
-        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${DATA_PAK_ALPHA["Nama Pegawai"]}) untuk persetujuan.`,
+        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${DATA_KETUA_SUB_TU["Nama Pegawai"]}) untuk persetujuan.`,
       );
       return;
     }
@@ -2105,12 +2174,16 @@ client.on("message", async (message) => {
         const mobil = allKendaraan[index];
         const tujuanAwal = mobil.tujuan_aktif;
 
-        mobil.status = "TERSEDIA";
-        mobil.peminjam_saat_ini = null;
-        mobil.waktu_pinjam = null;
-        mobil.tujuan_aktif = null;
-
-        await updateStatusKendaraanAsync(allKendaraan);
+        // UPDATE MONGODB
+        await Kendaraan.findOneAndUpdate(
+           { id: kendaraanId },
+           {
+             status: "TERSEDIA",
+             peminjam_saat_ini: null,
+             waktu_pinjam: null,
+             tujuan_aktif: null
+           }
+        );
 
         const logData = {
           tanggal: new Date().toISOString(),
@@ -2135,9 +2208,9 @@ client.on("message", async (message) => {
         try {
           const dataPDFMobil = {
             penanggungJawab: {
-              nama: DATA_PAK_ALPHA["Nama Pegawai"],
-              nip: DATA_PAK_ALPHA.nip,
-              jabatan: DATA_PAK_ALPHA.Jabatan,
+              nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+              nip: DATA_KETUA_SUB_TU.nip,
+              jabatan: DATA_KETUA_SUB_TU.Jabatan,
             },
             pemakai: {
               nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
