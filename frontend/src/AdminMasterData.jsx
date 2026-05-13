@@ -166,6 +166,8 @@ export default function AdminMasterData() {
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100">
+                        {/* TAMBAHAN HEADER NOMOR */}
+                        <th className="p-4 font-bold text-center w-16">No</th>
                         <th className="p-4 font-bold">Nama Pegawai</th>
                         <th className="p-4 font-bold">NIP / Kategori</th>
                         <th className="p-4 font-bold">Jabatan</th>
@@ -174,24 +176,37 @@ export default function AdminMasterData() {
                       </tr>
                     </thead>
                     <tbody className="text-sm">
-                      {filteredPegawai.map((item) => (
+                      {/* TAMBAHKAN 'index' DI DALAM MAP */}
+                      {filteredPegawai.map((item, index) => (
                         <tr
                           key={item._id}
                           className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
                         >
+                          {/* MENAMPILKAN NOMOR URUT (index + 1) */}
+                          <td className="p-4 text-center text-slate-500 font-medium">
+                            {index + 1}
+                          </td>
+
                           <td className="p-4 font-bold text-slate-800">
                             {item["Nama Pegawai"]}
                           </td>
                           <td className="p-4">
                             <div className="text-slate-700">{item.nip}</div>
                             <div className="text-xs text-blue-600 font-semibold bg-blue-50 inline-block px-2 py-0.5 rounded mt-1">
-                              {item.kategori_pegawai}
+                              {item.kategori_pegawai || "Internal"}
                             </div>
                           </td>
                           <td className="p-4 text-slate-600">{item.Jabatan}</td>
+
+                          {/* FIX KOLOM NO WA (Pakai jurus OR / || biar ngebaca semua kemungkinan nama di database) */}
                           <td className="p-4 text-slate-600">
-                            {item["No. HP (WA) aktif"]}
+                            {item["No. HP (WA) aktif"] ||
+                              item["No. HP (WA) Aktif"] ||
+                              item.wa ||
+                              item.no_hp ||
+                              "-"}
                           </td>
+
                           <td className="p-4 flex items-center justify-center gap-2">
                             <button
                               onClick={() => handleOpenModal("edit", item)}
