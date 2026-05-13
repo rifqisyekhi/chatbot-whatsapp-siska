@@ -460,31 +460,105 @@ function getValidWaId(hp) {
   return formatted + "@c.us";
 }
 
-function cariPegawaiByWa(rawId) {
-  if (!Array.isArray(dbPegawai)) return null;
-  const incomingDigits = hanyaAngka(rawId);
+function normalizePhoneForSearch(hp) {
+  const digits = formatNomorId(hp);
+  if (!digits) return null;
+  if (digits.startsWith("62")) {
+    return {
+      normalized: digits,
+      zeroPrefix: "0" + digits.slice(2),
+    };
+  }
+  if (digits.startsWith("0")) {
+    return {
+      normalized: "62" + digits.slice(1),
+      zeroPrefix: digits,
+    };
+  }
+  return { normalized: digits, zeroPrefix: digits };
+}
+
+function getPegawaiPrimaryPhone(p) {
+  return (
+    p["No. HP (WA) aktif"] ||
+    p.no_wa ||
+    p["no_wa"] ||
+    p["No. HP"] ||
+    p["No HP"] ||
+    p.no_hp ||
+    p.noHp ||
+    ""
+  );
+}
+
+function getPegawaiAlternatePhone(p) {
+  return (
+    p["id_wa_alternatif"] ||
+    p.id_wa_alternatif ||
+    p.id_wa ||
+    p["id_wa"] ||
+    ""
+  );
+}
+
+async function cariPegawaiByWa(rawId) {
+  const incoming = normalizePhoneForSearch(rawId);
+  if (!incoming) return null;
+
+  const queryValues = [incoming.normalized];
+  if (incoming.zeroPrefix !== incoming.normalized) {
+    queryValues.push(incoming.zeroPrefix);
+  }
+
+  const pegawai = await Pegawai.findOne({
+    $or: [
+      { no_wa: { $in: queryValues } },
+      { "No. HP (WA) aktif": { $in: queryValues } },
+      { id_wa_alternatif: { $in: queryValues } },
+    ],
+  }).lean();
+
+  if (pegawai) return pegawai;
+
+  const candidates = await Pegawai.find({
+    $or: [
+      { no_wa: { $exists: true } },
+      { "No. HP (WA) aktif": { $exists: true } },
+      { id_wa_alternatif: { $exists: true } },
+    ],
+  }).lean();
 
   return (
-    dbPegawai.find((p) => {
-      if (!p) return false;
-      const noHpUtama = formatNomorId(p["No. HP (WA) aktif"]);
-      const idAlternatif = formatNomorId(p["id_wa_alternatif"]);
-      return noHpUtama === incomingDigits || idAlternatif === incomingDigits;
+    candidates.find((p) => {
+      const primary = normalizePhoneForSearch(getPegawaiPrimaryPhone(p));
+      const alternate = normalizePhoneForSearch(getPegawaiAlternatePhone(p));
+      return (
+        (primary && (primary.normalized === incoming.normalized || primary.zeroPrefix === incoming.normalized)) ||
+        (alternate && (alternate.normalized === incoming.normalized || alternate.zeroPrefix === incoming.normalized))
+      );
     }) || null
   );
 }
 
-function cariAtasanPegawai(pegawai) {
+async function cariAtasanPegawai(pegawai) {
   if (!pegawai) return null;
 
-  return (
-    dbPegawai.find((p) => {
-      if (!p) return false;
-      const nomorDiDb = String(p["No. HP (WA) aktif"] || "").trim();
-      const targetAtasan = String(pegawai["NO HP ATASAN"] || "").trim();
-      return nomorDiDb === targetAtasan;
-    }) || null
-  );
+  const targetAtasan = normalizePhoneForSearch(pegawai["NO HP ATASAN"] || "");
+  if (!targetAtasan) return null;
+
+  const queryValues = [targetAtasan.normalized, targetAtasan.zeroPrefix];
+
+  try {
+    return await Pegawai.findOne({
+      $or: [
+        { no_wa: { $in: queryValues } },
+        { "No. HP (WA) aktif": { $in: queryValues } },
+      ],
+    }).lean();
+  } catch (err) {
+    console.error("Gagal mencari atasan di MongoDB:", err);
+    return null;
+  }
 }
 
 // VI. WHATSAPP CLIENT HELPER
@@ -621,7 +695,7 @@ client.on("message", async (message) => {
   try {
     const isGroup = chatId.endsWith("@g.us");
     const digits = hanyaAngka(chatId);
-    const pegawai = cariPegawaiByWa(digits);
+    const pegawai = await cariPegawaiByWa(digits);
 
     const batasWaktu = 12 * 60 * 60 * 1000;
 
@@ -881,7 +955,7 @@ client.on("message", async (message) => {
           let nipTujuan = "-";
           const noWaTujuan = targetUser.split("@")[0];
 
-          const pegawaiTujuan = cariPegawaiByWa(targetUser);
+          const pegawaiTujuan = await cariPegawaiByWa(targetUser);
           if (pegawaiTujuan) {
             namaTujuan = pegawaiTujuan["Nama Pegawai"] || "User";
             nipTujuan = pegawaiTujuan["nip"] || pegawaiTujuan["NIP"] || "-";
@@ -960,7 +1034,7 @@ client.on("message", async (message) => {
     if (orderGudang) {
       const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; 
 
-      const dataStaf = cariPegawaiByWa(chatId);
+      const dataStaf = await cariPegawaiByWa(chatId);
       const namaStaf = dataStaf ? dataStaf["Nama Pegawai"] : "Petugas Gudang";
 
       if (isApprovalYes(message.body)) {
@@ -1653,7 +1727,7 @@ client.on("message", async (message) => {
           `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian ${flow.jenisLaporan} Anda menjadi PDF...`
         );
 
-        let atasan = cariAtasanPegawai(flow.pegawai);
+        let atasan = await cariAtasanPegawai(flow.pegawai);
         
         if (!atasan || !atasan["No. HP (WA) aktif"]) {
           atasan = DATA_KETUA_SUB_TU;
@@ -1662,16 +1736,18 @@ client.on("message", async (message) => {
         const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
         
         if (jabatanUser.includes("KOOR") && !jabatanUser.includes("KEPALA BIRO")) {
-          const dataKepalaBiro = dbPegawai.find(p => {
-            const jab = (p["Jabatan"] || p["JABATAN"] || "").toUpperCase();
-            return jab.includes("KEPALA BIRO"); 
-          });
+          const dataKepalaBiro = await Pegawai.findOne({
+            $or: [
+              { Jabatan: { $regex: /KEPALA BIRO/i } },
+              { JABATAN: { $regex: /KEPALA BIRO/i } },
+            ],
+          }).lean();
 
           if (dataKepalaBiro) {
             atasan = {
               "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
               nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
-              Jabatan: dataKepalaBiro["Jabatan"] || "Kepala Biro"
+              Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"] || "Kepala Biro"
             };
           } else {
             atasan = {
@@ -1787,7 +1863,7 @@ client.on("message", async (message) => {
       }
 
       pengajuanBySender[chatId].jamKeluar = jamKeluar;
-      let atasan = cariAtasanPegawai(flow.pegawai);
+      let atasan = await cariAtasanPegawai(flow.pegawai);
 
       // --- LOGIKA AUTO-APPROVE PIMPINAN ---
       const isPimpinan =
@@ -1887,7 +1963,7 @@ client.on("message", async (message) => {
         return;
       }
 
-      const atasan = cariAtasanPegawai(flow.pegawai);
+      const atasan = await cariAtasanPegawai(flow.pegawai);
       if (!atasan || !atasan["No. HP (WA) aktif"]) {
         await kirimDenganTyping(
           client,
@@ -1975,18 +2051,22 @@ client.on("message", async (message) => {
 
         text += "\n\n*SEDANG DIPAKAI*\n_(Tidak bisa dipilih)_\n";
         if (dipakai.length > 0) {
-          dipakai.forEach((m) => {
+          for (const m of dipakai) {
             let namaPeminjam = m.peminjam_saat_ini;
-            const peg = dbPegawai.find((p) => {
-              const nipDb = String(p.nip || p.NIP || "").trim();
-              const nipPinjam = String(m.peminjam_saat_ini || "").trim();
-              return nipDb === nipPinjam;
-            });
-            if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
+            const nipPinjam = String(m.peminjam_saat_ini || "").trim();
+            if (nipPinjam) {
+              const peg = await Pegawai.findOne({
+                $or: [
+                  { nip: nipPinjam },
+                  { NIP: nipPinjam },
+                ],
+              }).lean();
+              if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
+            }
 
             text += `\n~- ${m.nama} (${m.plat})~`;
             text += `\n  └ Dipakai: ${namaPeminjam}`;
-          });
+          }
         } else {
           text += `\n_(Tidak ada ${jenisFilter.toLowerCase()} yang sedang keluar)_`;
         }
