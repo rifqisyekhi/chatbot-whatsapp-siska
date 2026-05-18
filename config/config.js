@@ -4,12 +4,12 @@ require('dotenv').config();
 module.exports = {
   HELPDESK_GROUP_ID: process.env.HELPDESK_GROUP_ID,
 
-  NO_PAK_ALPHA: process.env.NO_PAK_ALPHA ? `${process.env.NO_PAK_ALPHA}@c.us` : null,
+  NO_KETUA_SUB_TU: process.env.NO_KETUA_SUB_TU ? `${process.env.NO_KETUA_SUB_TU}@c.us` : null,
   NO_ADMIN_SAKEH: process.env.NO_ADMIN_SAKEH ? `${process.env.NO_ADMIN_SAKEH}@c.us` : null,
   
-  NIP_PAK_ALPHA: "198703232015031002",
-  NAMA_PAK_ALPHA: "ALPHA SANDRO ADITHYASWARA, S.Sos.",
-  JABATAN_PAK_ALPHA: "Kepala Sub Bagian Tata Usaha",
+  NIP_KETUA_SUB_TU: process.env.NIP_KETUA_SUB_TU || "-",
+  NAMA_KETUA_SUB_TU: process.env.NAMA_KETUA_SUB_TU || "Penanggung Jawab",
+  JABATAN_KETUA_SUB_TU: process.env.JABATAN_KETUA_SUB_TU || "Kepala Sub Bagian",
 
   PORT_WEB: process.env.PORT_WEB || 3000,
 
