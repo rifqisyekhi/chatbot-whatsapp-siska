@@ -554,7 +554,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
     doc.moveDown(2);
 
     doc.fontSize(12).text(tanggalTtd, 50, doc.y);
-    doc.moveDown(1);
     const startY = doc.y;
 
     doc.fontSize(12).text("Pejabat Penilai/Atasan Langsung", 50, startY);
@@ -567,15 +566,15 @@ async function buatLaporanWFAAsync(data, chatId, client) {
     const tinggiNamaAtasan = doc.font("TMR-Bold").fontSize(12).heightOfString(`${data.atasan_nama}`, { width: maxLebarKolom });
     const tinggiNamaPegawai = doc.font("TMR-Bold").fontSize(12).heightOfString(`${data.nama}`, { width: maxLebarKolom });
 
-    const maxTinggiNama = Math.max(tinggiNamaAtasan, tinggiNamaPegawai);
-
-    const yNIP = yNama + maxTinggiNama + 2;
-
+    // --- KOLOM KIRI (ATASAN) ---
     doc.font("TMR-Bold").fontSize(12).text(`${data.atasan_nama}`, 50, yNama, { width: maxLebarKolom });
-    doc.font("TMR").fontSize(12).text(`NIP. ${data.atasan_nip}`, 50, yNIP);
+    // NIP ditaruh persis di bawah nama atasan
+    doc.font("TMR").fontSize(12).text(`NIP. ${data.atasan_nip}`, 50, yNama + tinggiNamaAtasan + 2);
 
+    // --- KOLOM KANAN (PEGAWAI) ---
     doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama, { width: maxLebarKolom });
-    doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNIP);
+    // NIP ditaruh persis di bawah nama pegawai
+    doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNama + tinggiNamaPegawai + 2);
 
     doc.end();
 

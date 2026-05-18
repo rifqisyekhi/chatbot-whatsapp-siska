@@ -39,6 +39,8 @@ const Barang = require('./models/Barang');
 const Pegawai = require('./models/Pegawai'); 
 const Kendaraan = require('./models/Kendaraan'); 
 const Antrian = require('./models/Antrian');
+const RiwayatLembur = require('./models/RiwayatLembur');
+const RiwayatKendaraan = require('./models/RiwayatKendaraan');
 
 let dbPegawai = [];
 let dbTimGudang = [];
@@ -303,58 +305,24 @@ async function getStatusKendaraan() {
   }
 }
 
-let isWritingDB = false;
-const dbWriteQueue = [];
-
-async function processWriteQueue() {
-  if (isWritingDB || dbWriteQueue.length === 0) return;
-
-  isWritingDB = true;
-  const { data, filePath, resolve, reject, customWrite, content } =
-    dbWriteQueue.shift();
-
+async function simpanRiwayatKendaraanAsync(data) {
   try {
-    if (customWrite) {
-      await fsPromises.writeFile(filePath, JSON.stringify(content, null, 2));
-    } else {
-      let currentData = [];
-      try {
-        const fileContent = await fsPromises.readFile(filePath, "utf8");
-        currentData = JSON.parse(fileContent);
-      } catch (e) {}
-
-      currentData.push(data);
-      await fsPromises.writeFile(
-        filePath,
-        JSON.stringify(currentData, null, 2),
-      );
-    }
-    resolve(true);
+    const riwayatBaru = new RiwayatKendaraan(data);
+    await riwayatBaru.save();
+    console.log(`[DB] Riwayat kendaraan ${data.nama_pegawai} berhasil disimpan ke MongoDB.`);
   } catch (err) {
-    reject(err);
-  } finally {
-    isWritingDB = false;
-    processWriteQueue();
+    console.error("Gagal simpan riwayat kendaraan ke MongoDB:", err);
   }
 }
 
-async function simpanRiwayatKendaraanAsync(data) {
-  return new Promise((resolve, reject) => {
-    dbWriteQueue.push({
-      data,
-      filePath: RIWAYAT_KENDARAAN_PATH,
-      resolve,
-      reject,
-    });
-    processWriteQueue();
-  });
-}
-
-function simpanRiwayatLemburAsync(data) {
-  return new Promise((resolve, reject) => {
-    dbWriteQueue.push({ data, filePath: RIWAYAT_PATH, resolve, reject });
-    processWriteQueue();
-  });
+async function simpanRiwayatLemburAsync(data) {
+  try {
+    const lemburBaru = new RiwayatLembur(data);
+    await lemburBaru.save();
+    console.log(`[DB] Riwayat lembur ${data.nama} berhasil disimpan ke MongoDB.`);
+  } catch (err) {
+    console.error("Gagal simpan riwayat lembur ke MongoDB:", err);
+  }
 }
 
 // ==================================
@@ -1730,31 +1698,39 @@ client.on("message", async (message) => {
         let atasan = await cariAtasanPegawai(flow.pegawai);
         
         if (!atasan || !atasan["No. HP (WA) aktif"]) {
-          atasan = DATA_KETUA_SUB_TU;
+          atasan = DATA_KETUA_SUB_TU; // Fallback ke Pak Alpha
         }
 
-        const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
+        // AMBIL DATA SUBUNIT DAN JABATAN DARI DATABASE
+        const subunitUser = (flow.pegawai["SUBUNIT"] || "").toUpperCase();
+        const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || "").toUpperCase();
         
-        if (jabatanUser.includes("KOOR") && !jabatanUser.includes("KEPALA BIRO")) {
-          const dataKepalaBiro = await Pegawai.findOne({
-            $or: [
-              { Jabatan: { $regex: /KEPALA BIRO/i } },
-              { JABATAN: { $regex: /KEPALA BIRO/i } },
-            ],
-          }).lean();
+        // JIKA USER ADALAH KOOR (TAPI BUKAN KEPALA BIRO)
+        if (subunitUser === "KOOR" && !jabatanUser.includes("KEPALA BIRO")) {
+          try {
+            // Cari Kepala Biro di MongoDB (Nyari berdasarkan Jabatan, bukan Subunit)
+            const dataKepalaBiro = await Pegawai.findOne({
+              $or: [
+                { Jabatan: { $regex: /KEPALA BIRO/i } },
+                { JABATAN: { $regex: /KEPALA BIRO/i } }
+              ]
+            }).lean();
 
-          if (dataKepalaBiro) {
-            atasan = {
-              "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
-              nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
-              Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"] || "Kepala Biro"
-            };
-          } else {
-            atasan = {
-              "Nama Pegawai": "KEPALA BIRO (Data belum ada di Database)", 
-              nip: "-",
-              Jabatan: "Kepala Biro"
-            };
+            if (dataKepalaBiro) {
+              atasan = {
+                "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
+                nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
+                Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"] || "Kepala Biro"
+              };
+            } else {
+              atasan = {
+                "Nama Pegawai": "KEPALA BIRO (Data belum ada di Database)", 
+                nip: "-",
+                Jabatan: "Kepala Biro Keuangan dan BMN"
+              };
+            }
+          } catch (err) {
+            console.error("Gagal nyari Kepala Biro di MongoDB:", err);
           }
         }
 
