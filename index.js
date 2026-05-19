@@ -28,6 +28,7 @@ const {
   PORT_WEB,
   LINK_WEB_KATALOG
 } = require("./config/config");
+const bcrypt = require('bcrypt');
 
 // Connect Database MongoDB
 const mongoose = require('mongoose');
@@ -119,6 +120,31 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+
+  let storedHash = "";
+  
+  if (username === process.env.ADMIN_PEGAWAI_USER) {
+    storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
+  } else if (username === process.env.ADMIN_BARANG_USER) {
+    storedHash = process.env.ADMIN_BARANG_PASSWORD;
+  } else {
+    return res.status(401).json({ message: "Username tidak terdaftar!" });
+  }
+
+  const isMatch = await bcrypt.compare(password, storedHash);
+
+  if (isMatch) {
+    const token = jwt.sign(
+      { username: username },
+      process.env.JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+    return res.json({ token });
+  }
+});
+
 // ------------------------------------------
 // --- RUTE API PEGAWAI ---
 // ------------------------------------------
@@ -138,7 +164,7 @@ app.post('/api/pegawai', async (req, res) => {
     try {
         const baru = new Pegawai(req.body);
         await baru.save();
-        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        await refreshDataPegawai();
         res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
     } catch (err) {
         res.status(500).json({ error: "Gagal menambah pegawai" });
@@ -150,7 +176,7 @@ app.put('/api/pegawai/:id', async (req, res) => {
     try {
         const updated = await Pegawai.findByIdAndUpdate(req.params.id, req.body, { new: true });
         if (!updated) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
-        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        await refreshDataPegawai();
         res.json({ message: "Data pegawai diperbarui!", data: updated });
     } catch (err) {
         res.status(500).json({ error: "Gagal update data pegawai" });
@@ -162,7 +188,7 @@ app.delete('/api/pegawai/:id', async (req, res) => {
     try {
         const deleted = await Pegawai.findByIdAndDelete(req.params.id);
         if (!deleted) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
-        await refreshDataPegawai(); // Sync ke RAM Bot WA
+        await refreshDataPegawai();
         res.json({ message: "Pegawai berhasil dihapus!" });
     } catch (err) {
         res.status(500).json({ error: "Gagal menghapus data" });
@@ -295,7 +321,6 @@ const RIWAYAT_KENDARAAN_PATH = path.join(
 );
 const RIWAYAT_PATH = path.join(__dirname, "database", "riwayat_lembur.json");
 
-// FUNGSI BARU: Ambil Kendaraan langsung dari MongoDB
 async function getStatusKendaraan() {
   try {
     return await Kendaraan.find({});
