@@ -123,28 +123,46 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 
+// KODE LOGIN YANG SUDAH DIPERBAIKI DENGAN TRY CATCH BIAR GAK STUCK
 app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  let storedHash = "";
-  
-  if (username === process.env.ADMIN_PEGAWAI_USER) {
-    storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
-  } else if (username === process.env.ADMIN_BARANG_USER) {
-    storedHash = process.env.ADMIN_BARANG_PASSWORD;
-  } else {
-    return res.status(401).json({ message: "Username tidak terdaftar!" });
-  }
+    let storedHash = "";
+    
+    if (username === process.env.ADMIN_PEGAWAI_USER) {
+      storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
+    } else if (username === process.env.ADMIN_BARANG_USER) {
+      storedHash = process.env.ADMIN_BARANG_PASSWORD;
+    } else {
+      return res.status(401).json({ message: "Username tidak terdaftar!" });
+    }
 
-  const isMatch = await bcrypt.compare(password, storedHash);
+    if (!storedHash) {
+      console.error(`[LOGIN ERROR] Hash untuk user ${username} tidak ditemukan di .env!`);
+      return res.status(500).json({ message: "Konfigurasi server bermasalah!" });
+    }
 
-  if (isMatch) {
-    const token = jwt.sign(
-      { username: username },
-      process.env.JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-    return res.json({ token });
+    const isMatch = await bcrypt.compare(password, storedHash);
+
+    if (isMatch) {
+      if (!process.env.JWT_SECRET) {
+        console.error("[LOGIN ERROR] JWT_SECRET tidak ditemukan di .env!");
+        return res.status(500).json({ message: "Konfigurasi JWT bermasalah!" });
+      }
+
+      const token = jwt.sign(
+        { username: username },
+        process.env.JWT_SECRET,
+        { expiresIn: '8h' }
+      );
+      return res.json({ token });
+    } else {
+      return res.status(401).json({ message: "Password salah!" });
+    }
+  } catch (error) {
+    console.error("[LOGIN CRASH]", error);
+    return res.status(500).json({ message: "Terjadi kesalahan sistem di backend." });
   }
 });
 
@@ -1730,25 +1748,26 @@ client.on("message", async (message) => {
         }
 
         // AMBIL DATA SUBUNIT DAN JABATAN DARI DATABASE
-        const subunitUser = (flow.pegawai["SUBUNIT"] || "").toUpperCase();
+        const subunitUser = (flow.pegawai["SUB UNIT"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
         const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || "").toUpperCase();
         
-        // JIKA USER ADALAH KOOR (TAPI BUKAN KEPALA BIRO)
+        // JIKA USER ADALAH KOOR (TAPI BUKAN KEPALA BIRO ITU SENDIRI)
         if (subunitUser === "KOOR" && !jabatanUser.includes("KEPALA BIRO")) {
           try {
-            // Cari Kepala Biro di MongoDB (Nyari berdasarkan Jabatan, bukan Subunit)
+            // Pencarian DIPERJELAS & SPESIFIK mencari Kepala Biro sesuai text database
             const dataKepalaBiro = await Pegawai.findOne({
               $or: [
-                { Jabatan: { $regex: /KEPALA BIRO/i } },
-                { JABATAN: { $regex: /KEPALA BIRO/i } }
+                { Jabatan: "Kepala Biro Keuangan dan BMN" },
+                { JABATAN: "Kepala Biro Keuangan dan BMN" }
               ]
             }).lean();
 
             if (dataKepalaBiro) {
               atasan = {
+                // Di sini kita gak ngubah/menormalkan nama, ambil murni apa adanya dari DB
                 "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
                 nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
-                Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"] || "Kepala Biro"
+                Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"]
               };
             } else {
               atasan = {
