@@ -29,6 +29,7 @@ const {
   LINK_WEB_KATALOG
 } = require("./config/config");
 const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
 
 // Connect Database MongoDB
 const mongoose = require('mongoose');
@@ -47,6 +48,9 @@ let dbPegawai = [];
 let dbTimGudang = [];
 const pengajuanByAtasanMsgId = {};
 const orderGudangMsgId = {};
+
+// Inisialisasi Express app lebih awal supaya `startApp` bisa pakai `app.listen` tanpa error
+const app = express();
 
 async function refreshDataPegawai() {
     try {
@@ -111,7 +115,6 @@ async function hapusAntrian(msgId, tipe) {
 // ============================================================
 // II. SERVER WEB UNTUK KATALOG BARANG, PEGAWAI, DAN KENDARAAN
 // ============================================================
-const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
