@@ -1,7 +1,8 @@
 console.log("[INIT] Memulai bot SisKA...");
 
 // I. IMPORTS & KONFIGURASI
-const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
+const { Client, RemoteAuth, MessageMedia } = require("whatsapp-web.js");
+const { MongoStore } = require("wwebjs-mongo");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
@@ -568,28 +569,24 @@ async function kirimDenganTyping(client, chatId, text) {
 }
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
+const store = new MongoStore({ mongoose: mongoose });
+
 const client = new Client({
-  authStrategy: new LocalAuth(),
+  authStrategy: new RemoteAuth({
+    store: store,
+    backupSyncIntervalMs: 300000, // backup ke Mongo setiap 5 menit
+  }),
   puppeteer: {
     headless: true,
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
       "--disable-dev-shm-usage",
-      "--disable-extensions",
-      "--disable-gpu",
-      "--no-zygote",
-      "--disable-application-cache",
-      "--disable-background-timer-throttling",
-      "--disable-breakpad",
-      "--disable-client-side-phishing-detection",
-      "--disable-default-apps",
-      "--disable-hang-monitor",
-      "--disable-popup-blocking",
-      "--disable-prompt-on-repost",
-      "--disable-sync",
-      "--enable-automation",
+      "--disable-accelerated-2d-canvas",
       "--no-first-run",
+      "--no-zygote",
+      "--single-process",
+      "--disable-gpu",
     ],
     timeout: 120000, // 2 menit timeout
   },

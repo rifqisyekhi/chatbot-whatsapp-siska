@@ -418,7 +418,7 @@ export default function AdminMasterData({ onLogout }) {
                         value={formData.no_wa || ""}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
-                        placeholder="Contoh: 0812..."
+                        placeholder="Contoh: 62812..."
                         required
                       />
                     </div>
@@ -448,6 +448,19 @@ export default function AdminMasterData({ onLogout }) {
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm"
                       placeholder="Jabatan..."
                       required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                      NIP Atasan
+                    </label>
+                    <input
+                      type="text"
+                      name="atasan_nip"
+                      value={formData.atasan_nip || ""}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
+                      placeholder="Masukkan NIP Atasan (Opsional)..."
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
