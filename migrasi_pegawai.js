@@ -1,74 +1,72 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const fs = require('fs');
-const path = require('path');
 const Pegawai = require('./models/Pegawai'); 
 
 const uri = process.env.MONGO_URI;
 
-async function migrasiData() {
+async function migrasiLangsung() {
     try {
         console.log("Menghubungkan ke MongoDB Atlas...");
         await mongoose.connect(uri);
         console.log("✅ Terhubung!");
 
-        // 1. Baca file JSON lokal
-        const dbPath = path.join(__dirname, 'database', 'DatabasePegawaiBiroKeuangan.json');
-        if (!fs.existsSync(dbPath)) {
-            console.error("❌ File JSON tidak ditemukan di:", dbPath);
+        // 1. Ambil SEMUA data dari database saat ini
+        console.log("Membaca data dari database...");
+        const dataLama = await Pegawai.find({}).lean();
+        
+        if (dataLama.length === 0) {
+            console.log("❌ Data kosong, tidak ada yang bisa dimigrasi.");
             return;
         }
-        const rawData = fs.readFileSync(dbPath, 'utf8');
-        const parsedData = JSON.parse(rawData);
 
-        const semuaPegawaiRaw = [];
+        // Helper untuk normalisasi nomor HP
+        const normalizePhone = (phone) => {
+            if (!phone) return "";
+            let clean = String(phone).replace(/[^0-9]/g, '');
+            if (clean.startsWith('08')) clean = '62' + clean.slice(1);
+            if (clean.startsWith('8')) clean = '62' + clean;
+            return clean;
+        };
 
-        // 2. Kumpulin data mentah dan kasih tag kategori
-        if (parsedData.Internal) {
-            parsedData.Internal.forEach(p => semuaPegawaiRaw.push({ ...p, kategori_pegawai: 'Internal' }));
-        }
-        if (parsedData.PPNPN) {
-            parsedData.PPNPN.forEach(p => semuaPegawaiRaw.push({ ...p, kategori_pegawai: 'PPNPN' }));
-        }
-        if (parsedData.magang) {
-            parsedData.magang.forEach(p => semuaPegawaiRaw.push({ ...p, kategori_pegawai: 'Magang' }));
-        }
-        if (parsedData.TimGudang) {
-            parsedData.TimGudang.forEach(p => semuaPegawaiRaw.push({ ...p, kategori_pegawai: 'TimGudang' }));
-        }
+        // 2. Bikin Map NIP berdasarkan NO WA (Untuk pencarian atasan)
+        const phoneToNipMap = {};
+        dataLama.forEach(p => {
+            // Sesuaikan dengan nama field di DB lama lu
+            const wa = p["No. HP (WA) aktif"] || p.no_wa; 
+            if (wa) phoneToNipMap[normalizePhone(wa)] = p.nip || p.NIP || "";
+        });
 
-        console.log(`Membaca ${semuaPegawaiRaw.length} data pegawai mentah dari JSON...`);
-
-        // 3. PROSES PEMBERSIHAN (Hapus variabel "," dan mapping ke field yang benar)
-        const dataBersih = semuaPegawaiRaw.map(p => {
+        // 3. Transformasi ke struktur baru
+        const dataBaru = dataLama.map(p => {
+            const waAtasanRaw = p["NO HP ATASAN"] || ""; 
+            const noWaAtasan = normalizePhone(waAtasanRaw);
+            
             return {
-                "nip": p["nip"] || p["NIP"] || "",
-                "Nama Pegawai": p["Nama Pegawai"] || "",
-                "SUBUNIT": p["SUBUNIT"] || p["Unit Kerja"] || "",
-                "Jabatan": p["Jabatan"] || "",
-                "No. HP (WA) aktif": p["No. HP (WA) aktif"] || "",
-                "E-mail aktif": p["E-mail aktif"] || "",
-                "ATASAN": p["ATASAN"] || "",
-                "NO HP ATASAN": p["NO HP ATASAN"] || "",
-                "EMAIL ATASAN": p["EMAIL ATASAN"] || "",
-                "kategori_pegawai": p["kategori_pegawai"]
+                nama: (p["Nama Pegawai"] || p.nama || "").trim(),
+                nip: (p["nip"] || p["NIP"] || "").trim(),
+                no_wa: normalizePhone(p["No. HP (WA) aktif"] || p.no_wa || ""),
+                jabatan: (p["Jabatan"] || p.jabatan || "").trim(),
+                sub_unit: (p["SUBUNIT"] || p["Unit Kerja"] || p.sub_unit || "").trim(),
+                email: (p["E-mail aktif"] || p.email || "").trim(),
+                atasan_nip: phoneToNipMap[noWaAtasan] || null,
+                kategori_pegawai: p.kategori_pegawai || "Internal"
             };
         });
 
-        // 4. Bersihin database lama (biar gak duplikat)
+        // 4. Hapus data lama (Hati-hati!)
         await Pegawai.deleteMany({});
-        console.log("Membersihkan collection pegawai lama...");
+        console.log("🧹 Collection dibersihkan.");
 
-        // 5. Suntikkin data massal ke MongoDB
-        await Pegawai.insertMany(dataBersih);
-        console.log("🚀 MIGRASI SUKSES! Data sudah bersih dari variabel sampah dan masuk ke Atlas!");
+        // 5. Masukkan data baru
+        await Pegawai.insertMany(dataBaru);
+        console.log(`🚀 MIGRASI SUKSES! ${dataBaru.length} data pegawai sudah rapi.`);
 
     } catch (error) {
-        console.error("❌ Waduh, ada error brad:", error);
+        console.error("❌ Waduh, error:", error);
     } finally {
-        mongoose.connection.close();
-        console.log("Koneksi database ditutup.");
+        await mongoose.disconnect();
+        console.log("Koneksi ditutup.");
     }
 }
 
-migrasiData();
+migrasiLangsung();

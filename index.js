@@ -6,8 +6,8 @@ const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
-const express = require('express');
-const cors = require('cors');
+const express = require("express");
+const cors = require("cors");
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
   buatLaporanLemburDenganFotoAsync,
@@ -17,32 +17,32 @@ const {
   buatSuratPermintaanBarangAsync,
   calculateDuration,
 } = require("./features/pdf_generator");
-const { 
-  HELPDESK_GROUP_ID, 
-  FORM_CUTI_URL, 
-  NO_KETUA_SUB_TU, 
+const {
+  HELPDESK_GROUP_ID,
+  FORM_CUTI_URL,
+  NO_KETUA_SUB_TU,
   NO_ADMIN_SAKEH,
   NIP_KETUA_SUB_TU,
   NAMA_KETUA_SUB_TU,
   JABATAN_KETUA_SUB_TU,
   PORT_WEB,
-  LINK_WEB_KATALOG
+  LINK_WEB_KATALOG,
 } = require("./config/config");
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
 
 // Connect Database MongoDB
-const mongoose = require('mongoose');
-require('dotenv').config();
+const mongoose = require("mongoose");
+require("dotenv").config();
 
 const uri = process.env.MONGO_URI;
 
-const Barang = require('./models/Barang'); 
-const Pegawai = require('./models/Pegawai'); 
-const Kendaraan = require('./models/Kendaraan'); 
-const Antrian = require('./models/Antrian');
-const RiwayatLembur = require('./models/RiwayatLembur');
-const RiwayatKendaraan = require('./models/RiwayatKendaraan');
+const Barang = require("./models/Barang");
+const Pegawai = require("./models/Pegawai");
+const Kendaraan = require("./models/Kendaraan");
+const Antrian = require("./models/Antrian");
+const RiwayatLembur = require("./models/RiwayatLembur");
+const RiwayatKendaraan = require("./models/RiwayatKendaraan");
 
 let dbPegawai = [];
 let dbTimGudang = [];
@@ -53,19 +53,21 @@ const orderGudangMsgId = {};
 const app = express();
 
 async function refreshDataPegawai() {
-    try {
-        dbPegawai = await Pegawai.find({});
-        dbTimGudang = dbPegawai.filter(p => p.kategori_pegawai === 'TimGudang');
-        console.log(`[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari MongoDB Atlas.`);
-    } catch (err) {
-        console.error("[CRITICAL] Gagal memuat data pegawai dari MongoDB:", err);
-    }
+  try {
+    dbPegawai = await Pegawai.find({});
+    dbTimGudang = dbPegawai.filter((p) => p.kategori_pegawai === "TimGudang");
+    console.log(
+      `[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari MongoDB Atlas.`,
+    );
+  } catch (err) {
+    console.error("[CRITICAL] Gagal memuat data pegawai dari MongoDB:", err);
+  }
 }
 
 async function startApp() {
   try {
     await mongoose.connect(uri);
-    console.log('Sip! Bot SisKA udah nyambung ke MongoDB Atlas');
+    console.log("Sip! Bot SisKA udah nyambung ke MongoDB Atlas");
     await refreshDataPegawai();
 
     try {
@@ -74,42 +76,48 @@ async function startApp() {
         if (doc.tipe === "ATASAN") pengajuanByAtasanMsgId[doc.msgId] = doc.data;
         if (doc.tipe === "GUDANG") orderGudangMsgId[doc.msgId] = doc.data;
       });
-      console.log(`[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`);
+      console.log(
+        `[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`,
+      );
     } catch (e) {
       console.error("Gagal memulihkan memori antrian:", e);
     }
 
-    app.listen(PORT_WEB, '0.0.0.0', () => {
+    app.listen(PORT_WEB, "0.0.0.0", () => {
       console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
     });
 
     client.initialize();
   } catch (err) {
-    console.error('Waduh, koneksi gagal:', err);
+    console.error("Waduh, koneksi gagal:", err);
     process.exit(1);
   }
 }
 
 async function tambahAntrian(msgId, tipe, data) {
-    if (tipe === "ATASAN") pengajuanByAtasanMsgId[msgId] = data;
-    if (tipe === "GUDANG") orderGudangMsgId[msgId] = data;
-    
-    try {
-        await Antrian.findOneAndUpdate(
-            { msgId: msgId }, 
-            { msgId: msgId, tipe: tipe, data: data }, 
-            { upsert: true }
-        );
-    } catch (e) { console.error("Gagal backup antrian ke DB", e); }
+  if (tipe === "ATASAN") pengajuanByAtasanMsgId[msgId] = data;
+  if (tipe === "GUDANG") orderGudangMsgId[msgId] = data;
+
+  try {
+    await Antrian.findOneAndUpdate(
+      { msgId: msgId },
+      { msgId: msgId, tipe: tipe, data: data },
+      { upsert: true },
+    );
+  } catch (e) {
+    console.error("Gagal backup antrian ke DB", e);
+  }
 }
 
 async function hapusAntrian(msgId, tipe) {
-    if (tipe === "ATASAN") delete pengajuanByAtasanMsgId[msgId];
-    if (tipe === "GUDANG") delete orderGudangMsgId[msgId];
-    
-    try {
-        await Antrian.findOneAndDelete({ msgId: msgId });
-    } catch (e) { console.error("Gagal hapus antrian dari DB", e); }
+  if (tipe === "ATASAN") delete pengajuanByAtasanMsgId[msgId];
+  if (tipe === "GUDANG") delete orderGudangMsgId[msgId];
+
+  try {
+    await Antrian.findOneAndDelete({ msgId: msgId });
+  } catch (e) {
+    console.error("Gagal hapus antrian dari DB", e);
+  }
 }
 
 // ============================================================
@@ -117,19 +125,19 @@ async function hapusAntrian(msgId, tipe) {
 // ============================================================
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-app.use(express.static(path.join(__dirname, 'public')));
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/assets", express.static(path.join(__dirname, "assets")));
 
 // KODE LOGIN YANG SUDAH DIPERBAIKI DENGAN TRY CATCH BIAR GAK STUCK
-app.post('/api/login', async (req, res) => {
+app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body;
 
     let storedHash = "";
-    
+
     if (username === process.env.ADMIN_PEGAWAI_USER) {
       storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
     } else if (username === process.env.ADMIN_BARANG_USER) {
@@ -139,8 +147,12 @@ app.post('/api/login', async (req, res) => {
     }
 
     if (!storedHash) {
-      console.error(`[LOGIN ERROR] Hash untuk user ${username} tidak ditemukan di .env!`);
-      return res.status(500).json({ message: "Konfigurasi server bermasalah!" });
+      console.error(
+        `[LOGIN ERROR] Hash untuk user ${username} tidak ditemukan di .env!`,
+      );
+      return res
+        .status(500)
+        .json({ message: "Konfigurasi server bermasalah!" });
     }
 
     const isMatch = await bcrypt.compare(password, storedHash);
@@ -151,18 +163,18 @@ app.post('/api/login', async (req, res) => {
         return res.status(500).json({ message: "Konfigurasi JWT bermasalah!" });
       }
 
-      const token = jwt.sign(
-        { username: username },
-        process.env.JWT_SECRET,
-        { expiresIn: '8h' }
-      );
+      const token = jwt.sign({ username: username }, process.env.JWT_SECRET, {
+        expiresIn: "8h",
+      });
       return res.json({ token });
     } else {
       return res.status(401).json({ message: "Password salah!" });
     }
   } catch (error) {
     console.error("[LOGIN CRASH]", error);
-    return res.status(500).json({ message: "Terjadi kesalahan sistem di backend." });
+    return res
+      .status(500)
+      .json({ message: "Terjadi kesalahan sistem di backend." });
   }
 });
 
@@ -171,49 +183,53 @@ app.post('/api/login', async (req, res) => {
 // ------------------------------------------
 
 // AMBIL SEMUA PEGAWAI
-app.get('/api/pegawai', async (req, res) => {
-    try {
-        const data = await Pegawai.find({});
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: "Gagal memuat data pegawai" });
-    }
+app.get("/api/pegawai", async (req, res) => {
+  try {
+    const data = await Pegawai.find({});
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Gagal memuat data pegawai" });
+  }
 });
 
 // TAMBAH PEGAWAI BARU
-app.post('/api/pegawai', async (req, res) => {
-    try {
-        const baru = new Pegawai(req.body);
-        await baru.save();
-        await refreshDataPegawai();
-        res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal menambah pegawai" });
-    }
+app.post("/api/pegawai", async (req, res) => {
+  try {
+    const baru = new Pegawai(req.body);
+    await baru.save();
+    await refreshDataPegawai();
+    res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menambah pegawai" });
+  }
 });
 
 // EDIT PEGAWAI
-app.put('/api/pegawai/:id', async (req, res) => {
-    try {
-        const updated = await Pegawai.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!updated) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
-        await refreshDataPegawai();
-        res.json({ message: "Data pegawai diperbarui!", data: updated });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal update data pegawai" });
-    }
+app.put("/api/pegawai/:id", async (req, res) => {
+  try {
+    const updated = await Pegawai.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    if (!updated)
+      return res.status(404).json({ error: "Pegawai tidak ditemukan" });
+    await refreshDataPegawai();
+    res.json({ message: "Data pegawai diperbarui!", data: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal update data pegawai" });
+  }
 });
 
 // HAPUS PEGAWAI
-app.delete('/api/pegawai/:id', async (req, res) => {
-    try {
-        const deleted = await Pegawai.findByIdAndDelete(req.params.id);
-        if (!deleted) return res.status(404).json({ error: "Pegawai tidak ditemukan" });
-        await refreshDataPegawai();
-        res.json({ message: "Pegawai berhasil dihapus!" });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal menghapus data" });
-    }
+app.delete("/api/pegawai/:id", async (req, res) => {
+  try {
+    const deleted = await Pegawai.findByIdAndDelete(req.params.id);
+    if (!deleted)
+      return res.status(404).json({ error: "Pegawai tidak ditemukan" });
+    await refreshDataPegawai();
+    res.json({ message: "Pegawai berhasil dihapus!" });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menghapus data" });
+  }
 });
 
 // ------------------------------------------
@@ -221,117 +237,132 @@ app.delete('/api/pegawai/:id', async (req, res) => {
 // ------------------------------------------
 
 // AMBIL SEMUA KENDARAAN
-app.get('/api/kendaraan', async (req, res) => {
-    try {
-        const data = await Kendaraan.find({});
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: "Gagal memuat data kendaraan" });
-    }
+app.get("/api/kendaraan", async (req, res) => {
+  try {
+    const data = await Kendaraan.find({});
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Gagal memuat data kendaraan" });
+  }
 });
 
 // TAMBAH KENDARAAN BARU
-app.post('/api/kendaraan', async (req, res) => {
-    try {
-        const mobilBaru = new Kendaraan(req.body);
-        await mobilBaru.save();
-        res.status(201).json({ message: "Kendaraan berhasil didaftarkan!", data: mobilBaru });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal menambah kendaraan" });
-    }
+app.post("/api/kendaraan", async (req, res) => {
+  try {
+    const mobilBaru = new Kendaraan(req.body);
+    await mobilBaru.save();
+    res
+      .status(201)
+      .json({ message: "Kendaraan berhasil didaftarkan!", data: mobilBaru });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menambah kendaraan" });
+  }
 });
 
 // EDIT KENDARAAN
-app.put('/api/kendaraan/:id', async (req, res) => {
-    try {
-        const updated = await Kendaraan.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!updated) return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
-        res.json({ message: "Data kendaraan diperbarui!", data: updated });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal update data kendaraan" });
-    }
+app.put("/api/kendaraan/:id", async (req, res) => {
+  try {
+    const updated = await Kendaraan.findByIdAndUpdate(req.params.id, req.body, {
+      new: true,
+    });
+    if (!updated)
+      return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
+    res.json({ message: "Data kendaraan diperbarui!", data: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal update data kendaraan" });
+  }
 });
 
 // HAPUS KENDARAAN
-app.delete('/api/kendaraan/:id', async (req, res) => {
-    try {
-        const deleted = await Kendaraan.findByIdAndDelete(req.params.id);
-        if (!deleted) return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
-        res.json({ message: "Kendaraan berhasil dihapus!" });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal menghapus kendaraan" });
-    }
+app.delete("/api/kendaraan/:id", async (req, res) => {
+  try {
+    const deleted = await Kendaraan.findByIdAndDelete(req.params.id);
+    if (!deleted)
+      return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
+    res.json({ message: "Kendaraan berhasil dihapus!" });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menghapus kendaraan" });
+  }
 });
 
 // ------------------------------------------
 // --- RUTE API BARANG (GUDANG) ---
 // ------------------------------------------
 
-app.get('/api/barang', async (req, res) => {
-    try {
-        const dataDB = await Barang.find({});
-        res.json(dataDB.map(item => ({
-            id: item.id_barang,
-            nama: item.nama,
-            stok: item.stok,
-            kategori: item.kategori || "Belum ada kategori",
-            satuan: item.satuan || "Pcs",
-            img: item.img
-        })));
-    } catch (err) {
-        res.status(500).json({ error: "Gagal memuat data persediaan" });
-    }
+app.get("/api/barang", async (req, res) => {
+  try {
+    const dataDB = await Barang.find({});
+    res.json(
+      dataDB.map((item) => ({
+        id: item.id_barang,
+        nama: item.nama,
+        stok: item.stok,
+        kategori: item.kategori || "Belum ada kategori",
+        satuan: item.satuan || "Pcs",
+        img: item.img,
+      })),
+    );
+  } catch (err) {
+    res.status(500).json({ error: "Gagal memuat data persediaan" });
+  }
 });
 
-app.post('/api/barang', async (req, res) => {
-    try {
-        const { nama, kategori, stok, img } = req.body;
-        if (!nama || stok == null || !kategori) {
-            return res.status(400).json({ error: "Data kurang lengkap!" });
-        }
-        
-        let prefix = kategori === 'ATK' ? 'ATK-' : 'ELK-';
-        const barangSejenis = await Barang.find({ kategori: kategori }, 'id_barang');
-        let angkaTertinggi = 0;
-        barangSejenis.forEach(barang => {
-            const bagian = barang.id_barang.split('-');
-            if (bagian.length === 2) {
-                const angka = parseInt(bagian[1], 10);
-                if (!isNaN(angka) && angka > angkaTertinggi) angkaTertinggi = angka;
-            }
-        });
-
-        const id_barang_baru = `${prefix}${(angkaTertinggi + 1).toString().padStart(3, '0')}`;
-        const barangBaru = new Barang({ ...req.body, id_barang: id_barang_baru });
-        await barangBaru.save();
-        res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal menambah barang" });
+app.post("/api/barang", async (req, res) => {
+  try {
+    const { nama, kategori, stok, img } = req.body;
+    if (!nama || stok == null || !kategori) {
+      return res.status(400).json({ error: "Data kurang lengkap!" });
     }
+
+    let prefix = kategori === "ATK" ? "ATK-" : "ELK-";
+    const barangSejenis = await Barang.find(
+      { kategori: kategori },
+      "id_barang",
+    );
+    let angkaTertinggi = 0;
+    barangSejenis.forEach((barang) => {
+      const bagian = barang.id_barang.split("-");
+      if (bagian.length === 2) {
+        const angka = parseInt(bagian[1], 10);
+        if (!isNaN(angka) && angka > angkaTertinggi) angkaTertinggi = angka;
+      }
+    });
+
+    const id_barang_baru = `${prefix}${(angkaTertinggi + 1).toString().padStart(3, "0")}`;
+    const barangBaru = new Barang({ ...req.body, id_barang: id_barang_baru });
+    await barangBaru.save();
+    res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal menambah barang" });
+  }
 });
 
-app.put('/api/barang/:id_barang', async (req, res) => {
-    try {
-        const updated = await Barang.findOneAndUpdate(
-            { id_barang: req.params.id_barang },
-            { $set: req.body },
-            { returnDocument: 'after' }
-        );
-        if (!updated) return res.status(404).json({ error: "Barang tidak ditemukan" });
-        res.json({ message: "Barang berhasil diperbarui!", data: updated });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal update data barang" });
-    }
+app.put("/api/barang/:id_barang", async (req, res) => {
+  try {
+    const updated = await Barang.findOneAndUpdate(
+      { id_barang: req.params.id_barang },
+      { $set: req.body },
+      { returnDocument: "after" },
+    );
+    if (!updated)
+      return res.status(404).json({ error: "Barang tidak ditemukan" });
+    res.json({ message: "Barang berhasil diperbarui!", data: updated });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal update data barang" });
+  }
 });
 
-app.delete('/api/barang/:id_barang', async (req, res) => {
-    try {
-        const deleted = await Barang.findOneAndDelete({ id_barang: req.params.id_barang });
-        if (!deleted) return res.status(404).json({ error: "Barang tidak ditemukan" });
-        res.json({ message: "Barang berhasil dihapus!" });
-    } catch (err) {
-        res.status(500).json({ error: "Gagal hapus data barang" });
-    }
+app.delete("/api/barang/:id_barang", async (req, res) => {
+  try {
+    const deleted = await Barang.findOneAndDelete({
+      id_barang: req.params.id_barang,
+    });
+    if (!deleted)
+      return res.status(404).json({ error: "Barang tidak ditemukan" });
+    res.json({ message: "Barang berhasil dihapus!" });
+  } catch (err) {
+    res.status(500).json({ error: "Gagal hapus data barang" });
+  }
 });
 
 // --- SISTEM FILE LOKAL UNTUK RIWAYAT (Biar tetap jalan) ---
@@ -355,7 +386,9 @@ async function simpanRiwayatKendaraanAsync(data) {
   try {
     const riwayatBaru = new RiwayatKendaraan(data);
     await riwayatBaru.save();
-    console.log(`[DB] Riwayat kendaraan ${data.nama_pegawai} berhasil disimpan ke MongoDB.`);
+    console.log(
+      `[DB] Riwayat kendaraan ${data.nama_pegawai} berhasil disimpan ke MongoDB.`,
+    );
   } catch (err) {
     console.error("Gagal simpan riwayat kendaraan ke MongoDB:", err);
   }
@@ -365,7 +398,9 @@ async function simpanRiwayatLemburAsync(data) {
   try {
     const lemburBaru = new RiwayatLembur(data);
     await lemburBaru.save();
-    console.log(`[DB] Riwayat lembur ${data.nama} berhasil disimpan ke MongoDB.`);
+    console.log(
+      `[DB] Riwayat lembur ${data.nama} berhasil disimpan ke MongoDB.`,
+    );
   } catch (err) {
     console.error("Gagal simpan riwayat lembur ke MongoDB:", err);
   }
@@ -375,10 +410,10 @@ async function simpanRiwayatLemburAsync(data) {
 // FORMAT DATA PENANGGUNG JAWAB (DARI CONFIG)
 // ==================================
 const DATA_KETUA_SUB_TU = {
-  "Nama Pegawai": NAMA_KETUA_SUB_TU,
-  "No. HP (WA) aktif": NO_KETUA_SUB_TU ? NO_KETUA_SUB_TU.split('@')[0] : "",
+  nama: NAMA_KETUA_SUB_TU,
+  no_wa: NO_KETUA_SUB_TU ? NO_KETUA_SUB_TU.split("@")[0] : "",
   nip: NIP_KETUA_SUB_TU,
-  Jabatan: JABATAN_KETUA_SUB_TU
+  jabatan: JABATAN_KETUA_SUB_TU,
 };
 
 // III. STATE MANAGEMENT
@@ -462,9 +497,7 @@ function formatNomorId(hp) {
   let str = String(hp || "")
     .trim()
     .replace(/[^0-9]/g, "");
-  if (str.startsWith("08")) {
-    str = "62" + str.slice(1);
-  }
+  if (str.startsWith("08")) str = "62" + str.slice(1);
   return str;
 }
 
@@ -474,103 +507,41 @@ function getValidWaId(hp) {
   return formatted + "@c.us";
 }
 
-function normalizePhoneForSearch(hp) {
-  const digits = formatNomorId(hp);
-  if (!digits) return null;
-  if (digits.startsWith("62")) {
-    return {
-      normalized: digits,
-      zeroPrefix: "0" + digits.slice(2),
-    };
-  }
-  if (digits.startsWith("0")) {
-    return {
-      normalized: "62" + digits.slice(1),
-      zeroPrefix: digits,
-    };
-  }
-  return { normalized: digits, zeroPrefix: digits };
+function getPegawaiName(p) {
+  return p?.nama || "";
 }
-
-function getPegawaiPrimaryPhone(p) {
-  return (
-    p["No. HP (WA) aktif"] ||
-    p.no_wa ||
-    p["no_wa"] ||
-    p["No. HP"] ||
-    p["No HP"] ||
-    p.no_hp ||
-    p.noHp ||
-    ""
-  );
+function getPegawaiJabatan(p) {
+  return p?.jabatan || "";
 }
-
-function getPegawaiAlternatePhone(p) {
-  return (
-    p["id_wa_alternatif"] ||
-    p.id_wa_alternatif ||
-    p.id_wa ||
-    p["id_wa"] ||
-    ""
-  );
+function getPegawaiSubUnit(p) {
+  return p?.sub_unit || "TU";
+}
+function getPegawaiNoWa(p) {
+  return p?.no_wa || "";
+}
+function getPegawaiNip(p) {
+  return p?.nip || "";
+}
+function getPegawaiAtasanNip(p) {
+  return p?.atasan_nip || "";
 }
 
 async function cariPegawaiByWa(rawId) {
-  const incoming = normalizePhoneForSearch(rawId);
-  if (!incoming) return null;
+  const digits = formatNomorId(rawId);
+  if (!digits) return null;
 
-  const queryValues = [incoming.normalized];
-  if (incoming.zeroPrefix !== incoming.normalized) {
-    queryValues.push(incoming.zeroPrefix);
-  }
-
-  const pegawai = await Pegawai.findOne({
-    $or: [
-      { no_wa: { $in: queryValues } },
-      { "No. HP (WA) aktif": { $in: queryValues } },
-      { id_wa_alternatif: { $in: queryValues } },
-    ],
+  // Cek database pakai format 62...
+  return await Pegawai.findOne({
+    $or: [{ no_wa: digits }, { no_wa: "0" + digits.slice(2) }],
   }).lean();
-
-  if (pegawai) return pegawai;
-
-  const candidates = await Pegawai.find({
-    $or: [
-      { no_wa: { $exists: true } },
-      { "No. HP (WA) aktif": { $exists: true } },
-      { id_wa_alternatif: { $exists: true } },
-    ],
-  }).lean();
-
-  return (
-    candidates.find((p) => {
-      const primary = normalizePhoneForSearch(getPegawaiPrimaryPhone(p));
-      const alternate = normalizePhoneForSearch(getPegawaiAlternatePhone(p));
-      return (
-        (primary && (primary.normalized === incoming.normalized || primary.zeroPrefix === incoming.normalized)) ||
-        (alternate && (alternate.normalized === incoming.normalized || alternate.zeroPrefix === incoming.normalized))
-      );
-    }) || null
-  );
 }
 
 async function cariAtasanPegawai(pegawai) {
-  if (!pegawai) return null;
-
-  const targetAtasan = normalizePhoneForSearch(pegawai["NO HP ATASAN"] || "");
-  if (!targetAtasan) return null;
-
-  const queryValues = [targetAtasan.normalized, targetAtasan.zeroPrefix];
-
+  if (!pegawai || !pegawai.atasan_nip) return null;
   try {
-    return await Pegawai.findOne({
-      $or: [
-        { no_wa: { $in: queryValues } },
-        { "No. HP (WA) aktif": { $in: queryValues } },
-      ],
-    }).lean();
+    return await Pegawai.findOne({ nip: pegawai.atasan_nip }).lean();
   } catch (err) {
-    console.error("Gagal mencari atasan di MongoDB:", err);
+    console.error("Gagal cari atasan:", err);
     return null;
   }
 }
@@ -607,7 +578,7 @@ const client = new Client({
       "--disable-dev-shm-usage",
       "--disable-extensions",
       "--disable-gpu",
-      "--no-zygote",   
+      "--no-zygote",
       "--disable-application-cache",
       "--disable-background-timer-throttling",
       "--disable-breakpad",
@@ -659,18 +630,23 @@ client.on("disconnected", (reason) => {
 setInterval(() => {
   if (!botReady) {
     const elapsed = (Date.now() - authStartTime) / 1000;
-    if (elapsed > 300 && authStartTime > 0) { // Lebih dari 5 menit
-      console.error(`[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`);
-      client.destroy().then(() => {
-        setTimeout(() => client.initialize(), 2000);
-      }).catch(e => console.error("Error destroying client:", e));
+    if (elapsed > 300 && authStartTime > 0) {
+      // Lebih dari 5 menit
+      console.error(
+        `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`,
+      );
+      client
+        .destroy()
+        .then(() => {
+          setTimeout(() => client.initialize(), 2000);
+        })
+        .catch((e) => console.error("Error destroying client:", e));
     }
   }
 }, 30000); // Check setiap 30 detik
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
-
   // 1. Buang update status WA dulu biar enteng
   if (message.from === "status@broadcast") return;
 
@@ -680,7 +656,7 @@ client.on("message", async (message) => {
     console.log(`[ABAIKAN] Pesan lama tertahan dari ${message.from}`);
     return;
   }
-  
+
   // 3. FILTER TIPE PESAN DILONGGARKAN (Biar Quote Reply gak ditelan bot)
   if (
     message.type === "e2e_notification" ||
@@ -713,9 +689,12 @@ client.on("message", async (message) => {
 
     const batasWaktu = 12 * 60 * 60 * 1000;
 
-    if (userLastActive[chatId] && (Date.now() - userLastActive[chatId] > batasWaktu)) {
-        delete pengajuanBySender[chatId];
-        delete helpdeskQueue[chatId];
+    if (
+      userLastActive[chatId] &&
+      Date.now() - userLastActive[chatId] > batasWaktu
+    ) {
+      delete pengajuanBySender[chatId];
+      delete helpdeskQueue[chatId];
     }
 
     userLastActive[chatId] = Date.now();
@@ -734,9 +713,13 @@ client.on("message", async (message) => {
       const teksTengah = message.body.replace("!JAPRI", "").trim();
 
       const spasiPertama = teksTengah.indexOf(" ");
-      
+
       if (spasiPertama === -1) {
-        await kirimDenganTyping(client, chatId, "❌ Format salah bos!\nContoh ketik: *!JAPRI 08123456789 Isi pesannya disini*");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "❌ Format salah bos!\nContoh ketik: *!JAPRI 08123456789 Isi pesannya disini*",
+        );
         return;
       }
 
@@ -745,17 +728,29 @@ client.on("message", async (message) => {
 
       const targetId = getValidWaId(nomorMentah);
       if (!targetId) {
-        await kirimDenganTyping(client, chatId, `❌ *GAGAL*\nFormat nomor tidak valid.`);
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ *GAGAL*\nFormat nomor tidak valid.`,
+        );
         return;
       }
 
       try {
         await client.sendMessage(targetId, isiPesan);
-        await kirimDenganTyping(client, chatId, `✅ *JAPRI SUKSES*\n\nPesan rahasia berhasil dikirim ke: ${nomorMentah}\n*Isi:* ${isiPesan}`);
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `✅ *JAPRI SUKSES*\n\nPesan rahasia berhasil dikirim ke: ${nomorMentah}\n*Isi:* ${isiPesan}`,
+        );
       } catch (err) {
-        await kirimDenganTyping(client, chatId, `❌ *GAGAL*\nNomor ${nomorMentah} tidak terdaftar di WhatsApp atau bot sedang error.`);
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ *GAGAL*\nNomor ${nomorMentah} tidak terdaftar di WhatsApp atau bot sedang error.`,
+        );
       }
-      
+
       delete pengajuanBySender[chatId];
       return;
     }
@@ -765,24 +760,24 @@ client.on("message", async (message) => {
     // ==========================================
     if (message.body.startsWith("!ORDER_BARANG")) {
       const pesananClean = message.body.replace("!ORDER_BARANG", "").trim();
-      const namaPemesan = pegawai ? pegawai["Nama Pegawai"] : "Pegawai (Tidak ada di DB)";
-      
+      const namaPemesan = pegawai ? pegawai.nama : "Pegawai (Tidak ada di DB)";
+
       await kirimDenganTyping(
-        client, 
-        chatId, 
-        "✅ *Pesanan Diterima!*\n\nPermintaan persediaan Anda telah kami catat dan sedang dikirim ke Penanggung Jawab untuk proses persetujuan."
+        client,
+        chatId,
+        "✅ *Pesanan Diterima!*\n\nPermintaan persediaan Anda telah kami catat dan sedang dikirim ke Penanggung Jawab untuk proses persetujuan.",
       );
 
       const teksPengajuan = `*Pengajuan Persediaan Barang* dari ${namaPemesan}\n\n*Detail Pesanan:*\n${pesananClean}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      if(NO_KETUA_SUB_TU) {
+      if (NO_KETUA_SUB_TU) {
         const pjWa = getValidWaId(NO_KETUA_SUB_TU);
         if (pjWa) {
           try {
             const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
             const listBarangOrder = [];
-            const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g; 
+            const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g;
             let hasilParse;
             while ((hasilParse = regexParser.exec(pesananClean)) !== null) {
               listBarangOrder.push({
@@ -790,7 +785,9 @@ client.on("message", async (message) => {
                 nama: hasilParse[2],
                 jumlah: parseInt(hasilParse[3], 10),
                 satuan: hasilParse[4],
-                kelompok: hasilParse[1].startsWith("ATK") ? "ATK" : "Elektronik / Lainnya"
+                kelompok: hasilParse[1].startsWith("ATK")
+                  ? "ATK"
+                  : "Elektronik / Lainnya",
               });
             }
 
@@ -800,11 +797,10 @@ client.on("message", async (message) => {
               pegawai: pegawai,
               atasan: DATA_KETUA_SUB_TU,
               pesanan: pesananClean,
-              barangListParsed: listBarangOrder 
+              barangListParsed: listBarangOrder,
             };
-            
-            await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
 
+            await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
           } catch (e) {
             console.error("Gagal kirim notif order ke PJ:", e);
           }
@@ -857,29 +853,29 @@ client.on("message", async (message) => {
 
           const atasanObj = flow.atasan || {};
           let targetAtasan = null;
-          if (atasanObj["No. HP (WA) aktif"]) {
-            targetAtasan = getValidWaId(atasanObj["No. HP (WA) aktif"]);
+          if (atasanObj.no_wa) {
+            targetAtasan = getValidWaId(atasanObj.no_wa);
           }
 
           const unitKerjaAtauSubstansi =
             flow.pegawai["Unit Kerja"] ||
-            flow.pegawai["SUBUNIT"] ||
+            flow.pegawai.sub_unit ||
             flow.pegawai["Subbagian"] ||
             flow.pegawai["Unit"] ||
             "TU";
 
           const dataLembur = {
-            nama: flow.pegawai["Nama Pegawai"],
+            nama: flow.pegawai.nama,
             nip: flow.pegawai["nip"],
-            jabatan: flow.pegawai["Jabatan"],
+            jabatan: flow.pegawai.jabatan,
             tanggal: new Date().toISOString().split("T")[0],
             kegiatan: flow.alasan || "",
             jamMasuk: flow.jamMasuk,
             jamKeluar: flow.jamKeluar,
             substansi: unitKerjaAtauSubstansi,
-            atasan_nama: atasanObj["Nama Pegawai"] || "Nama Atasan",
+            atasan_nama: atasanObj.nama || "Nama Atasan",
             atasan_nip: atasanObj["nip"] || "-",
-            atasan_jabatan: atasanObj["Jabatan"] || "Jabatan Atasan",
+            atasan_jabatan: atasanObj.jabatan || "Jabatan Atasan",
           };
 
           try {
@@ -950,7 +946,9 @@ client.on("message", async (message) => {
 
           if (message.hasMedia) {
             const media = await message.downloadMedia();
-            await client.sendMessage(targetUser, media, { caption: message.body || "" });
+            await client.sendMessage(targetUser, media, {
+              caption: message.body || "",
+            });
           } else {
             const balasan = `Halo, berikut jawaban dari Helpdesk Biro Keuangan:\n\n*${message.body}*`;
             await kirimDenganTyping(client, targetUser, balasan);
@@ -971,7 +969,7 @@ client.on("message", async (message) => {
 
           const pegawaiTujuan = await cariPegawaiByWa(targetUser);
           if (pegawaiTujuan) {
-            namaTujuan = pegawaiTujuan["Nama Pegawai"] || "User";
+            namaTujuan = pegawaiTujuan.nama || "User";
             nipTujuan = pegawaiTujuan["nip"] || pegawaiTujuan["NIP"] || "-";
           }
 
@@ -1002,43 +1000,56 @@ client.on("message", async (message) => {
     }
 
     // FALLBACK SAKTI: Kalau Quote Reply ID-nya gak cocok ATAU bales polosan
-    if (!pengajuan && !orderGudang && (isApprovalYes(message.body) || isApprovalNo(message.body))) {
-      
+    if (
+      !pengajuan &&
+      !orderGudang &&
+      (isApprovalYes(message.body) || isApprovalNo(message.body))
+    ) {
       // 1. Cek Antrian Atasan
-      const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(([id, data]) => {
-        let atasanWa = data.atasan["No. HP (WA) aktif"];
-        return atasanWa ? getValidWaId(atasanWa) === chatId : false;
-      });
+      const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(
+        ([id, data]) => {
+          let atasanWa = data.atasan.no_wa;
+          return atasanWa ? getValidWaId(atasanWa) === chatId : false;
+        },
+      );
 
       if (pendingPengajuan.length === 1) {
         qid = pendingPengajuan[0][0];
         pengajuan = pendingPengajuan[0][1];
       } else if (pendingPengajuan.length > 1) {
-        await kirimDenganTyping(client, chatId, "⚠️ *Perhatian:* Bapak/Ibu memiliki lebih dari 1 pengajuan yang menunggu persetujuan.\n\nMohon *balas (Quote Reply/Geser Pesan)* tepat pada pesan pengajuan yang ingin disetujui/ditolak.");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "⚠️ *Perhatian:* Bapak/Ibu memiliki lebih dari 1 pengajuan yang menunggu persetujuan.\n\nMohon *balas (Quote Reply/Geser Pesan)* tepat pada pesan pengajuan yang ingin disetujui/ditolak.",
+        );
         return;
       }
 
       // 2. Cek Antrian Tim Gudang
-      const isTimGudang = dbTimGudang.find(staf => {
-          let waf = staf["No. HP (WA) aktif"];
-          return waf ? getValidWaId(waf) === chatId : false;
+      const isTimGudang = dbTimGudang.find((staf) => {
+        let waf = staf.no_wa;
+        return waf ? getValidWaId(waf) === chatId : false;
       });
 
       if (isTimGudang && !pengajuan) {
-           const pendingOrder = Object.entries(orderGudangMsgId);
-           const uniqueOrders = new Map();
-           pendingOrder.forEach(([id, data]) => {
-               uniqueOrders.set(data.pemohonId, { id, data });
-           });
+        const pendingOrder = Object.entries(orderGudangMsgId);
+        const uniqueOrders = new Map();
+        pendingOrder.forEach(([id, data]) => {
+          uniqueOrders.set(data.pemohonId, { id, data });
+        });
 
-           if (uniqueOrders.size === 1) {
-               const firstOrder = Array.from(uniqueOrders.values())[0];
-               qid = firstOrder.id;
-               orderGudang = firstOrder.data;
-           } else if (uniqueOrders.size > 1) {
-               await kirimDenganTyping(client, chatId, "⚠️ Tim Persediaan memiliki pesanan masuk dari pemohon yang berbeda. Mohon *Quote Reply* pesan yang spesifik.");
-               return;
-           }
+        if (uniqueOrders.size === 1) {
+          const firstOrder = Array.from(uniqueOrders.values())[0];
+          qid = firstOrder.id;
+          orderGudang = firstOrder.data;
+        } else if (uniqueOrders.size > 1) {
+          await kirimDenganTyping(
+            client,
+            chatId,
+            "⚠️ Tim Persediaan memiliki pesanan masuk dari pemohon yang berbeda. Mohon *Quote Reply* pesan yang spesifik.",
+          );
+          return;
+        }
       }
     }
 
@@ -1046,48 +1057,83 @@ client.on("message", async (message) => {
     // --- EKSEKUSI PERSETUJUAN TIM GUDANG / PERSEDIAAN
     // ===============================================
     if (orderGudang) {
-      const { pemohonId, namaPemohon, pesanan, barangListParsed, pData, semuaTargetGudang } = orderGudang; 
+      const {
+        pemohonId,
+        namaPemohon,
+        pesanan,
+        barangListParsed,
+        pData,
+        semuaTargetGudang,
+      } = orderGudang;
 
       const dataStaf = await cariPegawaiByWa(chatId);
-      const namaStaf = dataStaf ? dataStaf["Nama Pegawai"] : "Petugas Gudang";
+      const namaStaf = dataStaf ? dataStaf.nama : "Petugas Gudang";
 
       if (isApprovalYes(message.body)) {
-        await kirimDenganTyping(client, pemohonId, `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nSedang mengenerate PDF Serah Terima... Mohon ditunggu.`);
-        await kirimDenganTyping(client, chatId, `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`);
+        await kirimDenganTyping(
+          client,
+          pemohonId,
+          `🔔 *BARANG SIAP DIAMBIL*\n\nHalo ${namaPemohon}, pesanan persediaan Anda sudah disiapkan oleh Tim Persediaan.\n\nSedang mengenerate PDF Serah Terima... Mohon ditunggu.`,
+        );
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `✅ Notifikasi pengambilan telah dikirim ke ${namaPemohon}.`,
+        );
 
         if (semuaTargetGudang && semuaTargetGudang.length > 0) {
-            for (const target of semuaTargetGudang) {
-                if (target !== chatId) { 
-                    await kirimDenganTyping(client, target, `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* sudah diproses/diambil alih oleh *${namaStaf}*.`);
-                }
+          for (const target of semuaTargetGudang) {
+            if (target !== chatId) {
+              await kirimDenganTyping(
+                client,
+                target,
+                `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* sudah diproses/diambil alih oleh *${namaStaf}*.`,
+              );
             }
+          }
         }
 
         try {
-          const unitKerjaAtauSubstansi = pData ? (pData["Unit Kerja"] || pData["SUBUNIT"] || pData["Subbagian"] || pData["Unit"] || "Biro Keuangan dan BMN") : "Biro Keuangan dan BMN";
-          const jabatanPemohon = pData ? (pData["Jabatan"] || pData["JABATAN"] || "PUM AKLAP") : "PUM AKLAP";
-          const nipPemohon = pData ? (pData["nip"] || pData["NIP"] || "-") : "-";
-          
+          const unitKerjaAtauSubstansi = pData
+            ? pData["Unit Kerja"] ||
+              pData.sub_unit ||
+              pData["Subbagian"] ||
+              pData["Unit"] ||
+              "Biro Keuangan dan BMN"
+            : "Biro Keuangan dan BMN";
+          const jabatanPemohon = pData
+            ? pData.jabatan || pData.jabatan || "PUM AKLAP"
+            : "PUM AKLAP";
+          const nipPemohon = pData ? pData["nip"] || pData["NIP"] || "-" : "-";
+
           const dataPDFBarang = {
-            nomor: `AKLAP-${Math.floor(Math.random() * 1000)}`, 
-            tanggal: new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" }),
+            nomor: `AKLAP-${Math.floor(Math.random() * 1000)}`,
+            tanggal: new Date().toLocaleDateString("id-ID", {
+              day: "numeric",
+              month: "long",
+              year: "numeric",
+            }),
             uakpb: "Sekretariat Jenderal Kemnaker",
             unitKerja: "Biro Keuangan dan BMN",
             bidang: unitKerjaAtauSubstansi,
             jenisTransaksi: "Permintaan Persediaan",
-            barangList: barangListParsed || [], 
+            barangList: barangListParsed || [],
             atasan: {
-              nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
-              nip: DATA_KETUA_SUB_TU.nip
+              nama: DATA_KETUA_SUB_TU.nama,
+              nip: DATA_KETUA_SUB_TU.nip,
             },
             pemohon: {
               nama: namaPemohon,
               nip: nipPemohon,
-              jabatan: jabatanPemohon
-            }
+              jabatan: jabatanPemohon,
+            },
           };
 
-          await buatSuratPermintaanBarangAsync(dataPDFBarang, pemohonId, client);
+          await buatSuratPermintaanBarangAsync(
+            dataPDFBarang,
+            pemohonId,
+            client,
+          );
         } catch (pdfErr) {
           console.error("Gagal buat PDF Permintaan ATK:", pdfErr);
         }
@@ -1098,17 +1144,28 @@ client.on("message", async (message) => {
             await hapusAntrian(key, "GUDANG");
           }
         }
-
       } else if (isApprovalNo(message.body)) {
-        await kirimDenganTyping(client, pemohonId, `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`);
-        await kirimDenganTyping(client, chatId, `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`);
+        await kirimDenganTyping(
+          client,
+          pemohonId,
+          `❌ *BARANG KENDALA / KOSONG*\n\nMohon maaf ${namaPemohon}, meskipun sudah disetujui, ternyata fisik barang saat ini sedang kosong atau ada kendala di gudang.\n\nSilakan hubungi Tim Persediaan untuk informasi lebih lanjut.`,
+        );
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `❌ Notifikasi barang kosong telah dikirim ke ${namaPemohon}. Stok di sistem sedang di-rollback (dikembalikan).`,
+        );
 
         if (semuaTargetGudang && semuaTargetGudang.length > 0) {
-            for (const target of semuaTargetGudang) {
-                if (target !== chatId) { 
-                    await kirimDenganTyping(client, target, `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* telah dibatalkan / ditandai kosong oleh *${namaStaf}*.`);
-                }
+          for (const target of semuaTargetGudang) {
+            if (target !== chatId) {
+              await kirimDenganTyping(
+                client,
+                target,
+                `ℹ️ *INFO ORDER*\nOrder persediaan atas nama *${namaPemohon}* telah dibatalkan / ditandai kosong oleh *${namaStaf}*.`,
+              );
             }
+          }
         }
 
         const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
@@ -1120,9 +1177,11 @@ client.on("message", async (message) => {
             try {
               await Barang.findOneAndUpdate(
                 { id_barang: idBarangTarget },
-                { $inc: { stok: +jumlahDiambil } }
+                { $inc: { stok: +jumlahDiambil } },
               );
-              console.log(`[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`);
+              console.log(
+                `[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`,
+              );
             } catch (dbErr) {
               console.error(`[STOK ERROR] Gagal rollback stok`, dbErr);
             }
@@ -1138,53 +1197,75 @@ client.on("message", async (message) => {
       }
       return;
     }
-    
+
     // --- EKSEKUSI PERSETUJUAN ATASAN ---
     if (pengajuan) {
-      const { sender: pemohonId, jenis, pegawai: p, alasan, jamMasuk, jamKeluar, barangListParsed, pesanan } = pengajuan; 
+      const {
+        sender: pemohonId,
+        jenis,
+        pegawai: p,
+        alasan,
+        jamMasuk,
+        jamKeluar,
+        barangListParsed,
+        pesanan,
+      } = pengajuan;
 
       if (isApprovalYes(message.body)) {
         let pesanPegawai = "";
-        
+
         if (jenis === "Lembur") {
           pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;
-          pengajuanBySender[pemohonId] = { step: "upload-foto", pegawai: p, atasan: pengajuan.atasan, alasan, jamMasuk, jamKeluar, fotoList: [] };
+          pengajuanBySender[pemohonId] = {
+            step: "upload-foto",
+            pegawai: p,
+            atasan: pengajuan.atasan,
+            alasan,
+            jamMasuk,
+            jamKeluar,
+            fotoList: [],
+          };
         } else if (jenis === "Cuti") {
           pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
           delete pengajuanBySender[pemohonId];
         } else if (jenis === "Kendaraan") {
           const allKendaraan = await getStatusKendaraan();
-          const index = allKendaraan.findIndex((m) => m.id === pengajuan.kendaraanId);
+          const index = allKendaraan.findIndex(
+            (m) => m.id === pengajuan.kendaraanId,
+          );
 
           if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
-            
             // UPDATE MONGODB
             await Kendaraan.findOneAndUpdate(
-               { id: pengajuan.kendaraanId },
-               {
-                 status: "DIPAKAI",
-                 peminjam_saat_ini: p["nip"],
-                 waktu_pinjam: new Date().toISOString(),
-                 tujuan_aktif: pengajuan.alasan
-               }
+              { id: pengajuan.kendaraanId },
+              {
+                status: "DIPAKAI",
+                peminjam_saat_ini: p["nip"],
+                waktu_pinjam: new Date().toISOString(),
+                tujuan_aktif: pengajuan.alasan,
+              },
             );
 
             pesanPegawai = `Pengajuan peminjaman kendaraan *${pengajuan.namaKendaraan}* Anda telah *DISETUJUI* oleh Penanggung Jawab.\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`;
-            
+
             await kirimDenganTyping(client, pemohonId, pesanPegawai);
-            await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p["Nama Pegawai"]}`);
+            await kirimDenganTyping(
+              client,
+              chatId,
+              `[APPROVAL] Disetujui untuk ${p.nama}`,
+            );
 
             try {
               const dataPDFMobil = {
                 penanggungJawab: {
-                  nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+                  nama: DATA_KETUA_SUB_TU.nama,
                   nip: DATA_KETUA_SUB_TU.nip,
                   jabatan: DATA_KETUA_SUB_TU.Jabatan,
                 },
                 pemakai: {
-                  nama: p["Nama Pegawai"] || "Nama Pemakai",
+                  nama: p.nama || "Nama Pemakai",
                   nip: p["nip"] || p["NIP"] || "-",
-                  jabatan: p["Jabatan"] || "-",
+                  jabatan: p.jabatan || "-",
                 },
                 kendaraan: {
                   merek: allKendaraan[index].nama || "-",
@@ -1197,7 +1278,11 @@ client.on("message", async (message) => {
                   kondisi: "-",
                 },
               };
-              await buatSuratIzinMobilAwalAsync(dataPDFMobil, pemohonId, client);
+              await buatSuratIzinMobilAwalAsync(
+                dataPDFMobil,
+                pemohonId,
+                client,
+              );
             } catch (pdfErr) {
               console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
             }
@@ -1208,13 +1293,13 @@ client.on("message", async (message) => {
           delete pengajuanBySender[pemohonId];
         } else if (jenis === "Persediaan") {
           pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
-          
-          const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p["Nama Pegawai"] : "User"}\n*Unit:* ${p ? (p["Unit Kerja"] || p["SUBUNIT"] || "-") : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
-          
+
+          const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p.nama : "User"}\n*Unit:* ${p ? p["Unit Kerja"] || p.sub_unit || "-" : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
+
           const targetGudangList = [];
           if (dbTimGudang && dbTimGudang.length > 0) {
             for (const staf of dbTimGudang) {
-              const noWaStaf = staf["No. HP (WA) aktif"];
+              const noWaStaf = staf.no_wa;
               if (noWaStaf) {
                 targetGudangList.push(formatNomorId(noWaStaf) + "@c.us");
               }
@@ -1223,34 +1308,37 @@ client.on("message", async (message) => {
 
           const dataOrder = {
             pemohonId: pemohonId,
-            namaPemohon: p ? p["Nama Pegawai"] : "User",
+            namaPemohon: p ? p.nama : "User",
             pesanan: pesanan,
-            barangListParsed: barangListParsed, 
+            barangListParsed: barangListParsed,
             pData: p,
-            semuaTargetGudang: targetGudangList
+            semuaTargetGudang: targetGudangList,
           };
 
           if (targetGudangList.length > 0) {
             for (const targetStaf of targetGudangList) {
-                const sentMsg = await client.sendMessage(targetStaf, notifTim);
-                await tambahAntrian(sentMsg.id._serialized, "GUDANG", dataOrder); 
-                await new Promise((r) => setTimeout(r, 1000));
+              const sentMsg = await client.sendMessage(targetStaf, notifTim);
+              await tambahAntrian(sentMsg.id._serialized, "GUDANG", dataOrder);
+              await new Promise((r) => setTimeout(r, 1000));
             }
           }
 
           const regexKasir = /\[(.*?)\](?:.*?)?\((\d+)/g;
           let hasilBedah;
           while ((hasilBedah = regexKasir.exec(pesanan)) !== null) {
-            const idBarangTarget = hasilBedah[1]; 
-            const jumlahDiambil = parseInt(hasilBedah[2], 10); 
+            const idBarangTarget = hasilBedah[1];
+            const jumlahDiambil = parseInt(hasilBedah[2], 10);
             if (idBarangTarget && !isNaN(jumlahDiambil)) {
               try {
                 await Barang.findOneAndUpdate(
                   { id_barang: idBarangTarget },
-                  { $inc: { stok: -jumlahDiambil } } 
+                  { $inc: { stok: -jumlahDiambil } },
                 );
               } catch (dbErr) {
-                console.error(`[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`, dbErr);
+                console.error(
+                  `[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`,
+                  dbErr,
+                );
               }
             }
           }
@@ -1260,12 +1348,23 @@ client.on("message", async (message) => {
 
         if (pesanPegawai) {
           await kirimDenganTyping(client, pemohonId, pesanPegawai);
-          await kirimDenganTyping(client, chatId, `[APPROVAL] Disetujui untuk ${p ? p["Nama Pegawai"] : "User"}`);
+          await kirimDenganTyping(
+            client,
+            chatId,
+            `[APPROVAL] Disetujui untuk ${p ? p.nama : "User"}`,
+          );
         }
-        
       } else if (isApprovalNo(message.body)) {
-        await kirimDenganTyping(client, pemohonId, `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`);
-        await kirimDenganTyping(client, chatId, `[APPROVAL] Ditolak untuk ${p ? p["Nama Pegawai"] : "User"}`);
+        await kirimDenganTyping(
+          client,
+          pemohonId,
+          `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`,
+        );
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `[APPROVAL] Ditolak untuk ${p ? p.nama : "User"}`,
+        );
         delete pengajuanBySender[pemohonId];
       }
 
@@ -1281,7 +1380,7 @@ client.on("message", async (message) => {
         if (bodyLower === "menu") {
           delete helpdeskQueue[chatId];
           if (pegawai) {
-            const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
+            const menu = `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
             await kirimDenganTyping(client, chatId, menu);
             pengajuanBySender[chatId] = { step: "menu", pegawai };
           } else {
@@ -1340,12 +1439,12 @@ client.on("message", async (message) => {
           const noWaDisplay = chatId.split("@")[0];
 
           if (pegawai) {
-            namaDisplay = pegawai["Nama Pegawai"];
+            namaDisplay = pegawai.nama;
             nipDisplay = pegawai["nip"] || pegawai["NIP"] || "-";
           }
 
           const notif = `[PERMINTAAN KONSULTASI HELPDESK]\n\nNama  : ${namaDisplay}\nNIP   : ${nipDisplay}\nNo WA : ${noWaDisplay}\nJadwal : *${message.body.trim()}*\n\nMohon tim Helpdesk bersiap menindaklanjuti.`;
-          if(HELPDESK_GROUP_ID) {
+          if (HELPDESK_GROUP_ID) {
             await kirimDenganTyping(client, HELPDESK_GROUP_ID, notif);
           }
           delete helpdeskQueue[chatId];
@@ -1378,13 +1477,13 @@ client.on("message", async (message) => {
             let namaDisplay = identitasUser;
             let nipDisplay = "-";
             if (pegawai) {
-              namaDisplay = pegawai["Nama Pegawai"];
+              namaDisplay = pegawai.nama;
               nipDisplay = pegawai["NIP"] || pegawai["NIP"] || "-";
             }
 
             const pesanEskalasi = `[HELPDESK - PERTANYAAN BELUM TERJAWAB]\n\nIdentitas : ${namaDisplay}\nNIP       : ${nipDisplay}\nPertanyaan: ${pertanyaanUser}\n\n_AI tidak dapat menjawab pertanyaan ini._\n\n*Balas Pesan ini (QUOTE REPLY) Untuk Menjawab*`;
-            
-            if(HELPDESK_GROUP_ID) {
+
+            if (HELPDESK_GROUP_ID) {
               const sentMsg = await client.sendMessage(
                 HELPDESK_GROUP_ID,
                 pesanEskalasi,
@@ -1421,7 +1520,7 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      const menu = `Halo *${pegawai["Nama Pegawai"]}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
+      const menu = `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -1466,7 +1565,7 @@ client.on("message", async (message) => {
         );
         helpdeskQueue[chatId] = {
           step: "pertanyaan",
-          identitas: `${pegawai["Nama Pegawai"]} (Internal, NIP: ${pegawai["nip"] || pegawai["NIP"]})`,
+          identitas: `${pegawai.nama} (Internal, NIP: ${pegawai["nip"] || pegawai["NIP"]})`,
         };
         delete pengajuanBySender[chatId];
         return;
@@ -1504,7 +1603,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "*Laporan Kerja Remote*\n\nSilakan pilih jenis laporan Anda hari ini:\n1. WFH (Work From Home)\n2. WFA (Work From Anywhere)"
+          "*Laporan Kerja Remote*\n\nSilakan pilih jenis laporan Anda hari ini:\n1. WFH (Work From Home)\n2. WFA (Work From Anywhere)",
         );
         pengajuanBySender[chatId] = {
           step: "pilih-jenis-wfa",
@@ -1527,24 +1626,29 @@ client.on("message", async (message) => {
     // ==========================================
 
     // --- ALUR WFH / WFA (SISTEM FIXED LOOP) ---
-    
+
     // TANGKEP PILIHAN WFH / WFA
     if (flow.step === "pilih-jenis-wfa") {
       let jenisPelaksanaan = "";
       if (bodyLower === "1" || bodyLower === "wfh") jenisPelaksanaan = "WFH";
-      else if (bodyLower === "2" || bodyLower === "wfa") jenisPelaksanaan = "WFA";
+      else if (bodyLower === "2" || bodyLower === "wfa")
+        jenisPelaksanaan = "WFA";
       else {
-          await kirimDenganTyping(client, chatId, "Pilihan tidak valid. Silakan ketik angka *1* untuk WFH atau *2* untuk WFA.");
-          return;
-      }
-
-      pengajuanBySender[chatId].jenisLaporan = jenisPelaksanaan; 
-      pengajuanBySender[chatId].step = "wfa-tanggal";
-      
-      await kirimDenganTyping(
+        await kirimDenganTyping(
           client,
           chatId,
-          `Baik, laporan *${jenisPelaksanaan}*.\n\nSilakan ketik *Hari dan Tanggal* pelaksanaannya.\n\nContoh: *Jumat, 3 April 2026*`
+          "Pilihan tidak valid. Silakan ketik angka *1* untuk WFH atau *2* untuk WFA.",
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId].jenisLaporan = jenisPelaksanaan;
+      pengajuanBySender[chatId].step = "wfa-tanggal";
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Baik, laporan *${jenisPelaksanaan}*.\n\nSilakan ketik *Hari dan Tanggal* pelaksanaannya.\n\nContoh: *Jumat, 3 April 2026*`,
       );
       return;
     }
@@ -1555,7 +1659,7 @@ client.on("message", async (message) => {
       await kirimDenganTyping(
         client,
         chatId,
-        `Tanggal ${flow.jenisLaporan}: *${message.body.trim()}*.\n\nAda *berapa banyak kegiatan* yang ingin Anda laporkan hari ini? (Ketik angka saja, contoh: 2)`
+        `Tanggal ${flow.jenisLaporan}: *${message.body.trim()}*.\n\nAda *berapa banyak kegiatan* yang ingin Anda laporkan hari ini? (Ketik angka saja, contoh: 2)`,
       );
       return;
     }
@@ -1563,7 +1667,11 @@ client.on("message", async (message) => {
     if (flow.step === "wfa-jumlah") {
       const jumlah = parseInt(message.body.trim(), 10);
       if (isNaN(jumlah) || jumlah <= 0) {
-        await kirimDenganTyping(client, chatId, "❌ Harap masukkan angka yang valid (contoh: 1, 2, atau 3).");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "❌ Harap masukkan angka yang valid (contoh: 1, 2, atau 3).",
+        );
         return;
       }
       pengajuanBySender[chatId].totalKegiatan = jumlah;
@@ -1571,7 +1679,7 @@ client.on("message", async (message) => {
       await kirimDenganTyping(
         client,
         chatId,
-        `Baik, sistem mencatat target *${jumlah} Kegiatan*.\n\nSilakan tuliskan *Kegiatan ke-1* yang Anda lakukan hari ini.`
+        `Baik, sistem mencatat target *${jumlah} Kegiatan*.\n\nSilakan tuliskan *Kegiatan ke-1* yang Anda lakukan hari ini.`,
       );
       return;
     }
@@ -1579,33 +1687,37 @@ client.on("message", async (message) => {
     if (flow.step === "wfa-kegiatan") {
       const teks = message.body.trim();
       const maxKata = 50;
-      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+      const jumlahKata = teks.split(/\s+/).filter((w) => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Kegiatan* Anda.`
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Kegiatan* Anda.`,
         );
         return;
       }
 
       pengajuanBySender[chatId].kegiatan = teks;
       pengajuanBySender[chatId].step = "wfa-output";
-      await kirimDenganTyping(client, chatId, "Tuliskan *Output* dari kegiatan tersebut.");
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Tuliskan *Output* dari kegiatan tersebut.",
+      );
       return;
     }
 
     if (flow.step === "wfa-output") {
       const teks = message.body.trim();
       const maxKata = 50;
-      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+      const jumlahKata = teks.split(/\s+/).filter((w) => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Output* Anda.`
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Output* Anda.`,
         );
         return;
       }
@@ -1619,33 +1731,37 @@ client.on("message", async (message) => {
     if (flow.step === "wfa-capaian") {
       const teks = message.body.trim();
       const maxKata = 50;
-      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+      const jumlahKata = teks.split(/\s+/).filter((w) => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel tidak rusak. Silakan ringkas dan kirimkan kembali *Capaian Kinerja* Anda.`
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel tidak rusak. Silakan ringkas dan kirimkan kembali *Capaian Kinerja* Anda.`,
         );
         return;
       }
 
       pengajuanBySender[chatId].capaian = teks;
       pengajuanBySender[chatId].step = "wfa-satuan";
-      await kirimDenganTyping(client, chatId, "Tuliskan *Satuan* (misal: Dokumen, Kegiatan, Laporan).");
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Tuliskan *Satuan* (misal: Dokumen, Kegiatan, Laporan).",
+      );
       return;
     }
 
     if (flow.step === "wfa-satuan") {
       const teks = message.body.trim();
       const maxKata = 50;
-      const jumlahKata = teks.split(/\s+/).filter(w => w.length > 0).length;
+      const jumlahKata = teks.split(/\s+/).filter((w) => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Satuan* Anda.`
+          `❌ Teks terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata*. Silakan ringkas dan kirimkan kembali *Satuan* Anda.`,
         );
         return;
       }
@@ -1655,7 +1771,7 @@ client.on("message", async (message) => {
       await kirimDenganTyping(
         client,
         chatId,
-        "Silakan tuliskan *Keterangan / Tautan (Link)* bukti dukung Anda (misal: Link Google Drive).\n\nJika *TIDAK ADA*, cukup ketik tanda strip *-*"
+        "Silakan tuliskan *Keterangan / Tautan (Link)* bukti dukung Anda (misal: Link Google Drive).\n\nJika *TIDAK ADA*, cukup ketik tanda strip *-*",
       );
       return;
     }
@@ -1665,13 +1781,13 @@ client.on("message", async (message) => {
       if (ket === "-" || ket.toLowerCase() === "tidak ada") ket = "";
       pengajuanBySender[chatId].keterangan = ket;
       pengajuanBySender[chatId].step = "wfa-foto-1";
-      
+
       const urutan = flow.wfaList.length + 1;
 
       await kirimDenganTyping(
         client,
         chatId,
-        `Silakan kirimkan *Foto Bukti (Wajib)* untuk kegiatan ke-${urutan}.`
+        `Silakan kirimkan *Foto Bukti (Wajib)* untuk kegiatan ke-${urutan}.`,
       );
       return;
     }
@@ -1680,8 +1796,14 @@ client.on("message", async (message) => {
       if (message.hasMedia) {
         const media = await message.downloadMedia();
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype.split("/").pop().replace("jpeg", "jpg");
-        const fotoPath = path.join(UPLOADS_DIR, `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`);
+        const extension = media.mimetype
+          .split("/")
+          .pop()
+          .replace("jpeg", "jpg");
+        const fotoPath = path.join(
+          UPLOADS_DIR,
+          `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
+        );
         await fsPromises.writeFile(fotoPath, media.data, "base64");
 
         pengajuanBySender[chatId].fotoPath1 = fotoPath;
@@ -1689,13 +1811,13 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "✅ Foto bukti pertama diterima!\n\nJika ada *Foto Tambahan (Opsional)*, silakan kirimkan sekarang.\nJika *TIDAK ADA*, cukup ketik kata *lanjut* atau *skip*."
+          "✅ Foto bukti pertama diterima!\n\nJika ada *Foto Tambahan (Opsional)*, silakan kirimkan sekarang.\nJika *TIDAK ADA*, cukup ketik kata *lanjut* atau *skip*.",
         );
       } else {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Laporan ${flow.jenisLaporan} wajib menyertakan bukti! Mohon kirimkan *foto/gambar*, bukan pesan teks biasa.`
+          `❌ Laporan ${flow.jenisLaporan} wajib menyertakan bukti! Mohon kirimkan *foto/gambar*, bukan pesan teks biasa.`,
         );
       }
       return;
@@ -1708,8 +1830,14 @@ client.on("message", async (message) => {
       if (message.hasMedia) {
         const media = await message.downloadMedia();
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype.split("/").pop().replace("jpeg", "jpg");
-        fotoPath2 = path.join(UPLOADS_DIR, `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`);
+        const extension = media.mimetype
+          .split("/")
+          .pop()
+          .replace("jpeg", "jpg");
+        fotoPath2 = path.join(
+          UPLOADS_DIR,
+          `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
+        );
         await fsPromises.writeFile(fotoPath2, media.data, "base64");
       }
 
@@ -1731,49 +1859,55 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `✅ Kegiatan ke-${urutanSelesai} berhasil disimpan!\n\nMari lanjutkan, silakan tuliskan *Kegiatan ke-${urutanSelesai + 1}* Anda.`
+          `✅ Kegiatan ke-${urutanSelesai} berhasil disimpan!\n\nMari lanjutkan, silakan tuliskan *Kegiatan ke-${urutanSelesai + 1}* Anda.`,
         );
         return;
       } else {
         await kirimDenganTyping(
           client,
           chatId,
-          `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian ${flow.jenisLaporan} Anda menjadi PDF...`
+          `✅ Semua ${target} kegiatan berhasil direkap!\n\nSedang menyusun dan merapikan Laporan Kinerja Harian ${flow.jenisLaporan} Anda menjadi PDF...`,
         );
 
         let atasan = await cariAtasanPegawai(flow.pegawai);
-        
-        if (!atasan || !atasan["No. HP (WA) aktif"]) {
+
+        if (!atasan || !atasan.no_wa) {
           atasan = DATA_KETUA_SUB_TU; // Fallback ke Pak Alpha
         }
 
         // AMBIL DATA SUBUNIT DAN JABATAN DARI DATABASE
-        const subunitUser = (flow.pegawai["SUB UNIT"] || flow.pegawai["SUBUNIT"] || "").toUpperCase();
-        const jabatanUser = (flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"] || "").toUpperCase();
-        
+        const subunitUser = (
+          flow.pegawai["SUB UNIT"] ||
+          flow.pegawai.sub_unit ||
+          ""
+        ).toUpperCase();
+        const jabatanUser = (
+          flow.pegawai.jabatan ||
+          flow.pegawai.jabatan ||
+          ""
+        ).toUpperCase();
+
         // JIKA USER ADALAH KOOR (TAPI BUKAN KEPALA BIRO ITU SENDIRI)
         if (subunitUser === "KOOR" && !jabatanUser.includes("KEPALA BIRO")) {
           try {
             // Pencarian DIPERJELAS & SPESIFIK mencari Kepala Biro sesuai text database
             const dataKepalaBiro = await Pegawai.findOne({
-              $or: [
-                { Jabatan: "Kepala Biro Keuangan dan BMN" },
-                { JABATAN: "Kepala Biro Keuangan dan BMN" }
-              ]
+              jabatan: "Kepala Biro Keuangan dan BMN",
             }).lean();
 
             if (dataKepalaBiro) {
               atasan = {
-                // Di sini kita gak ngubah/menormalkan nama, ambil murni apa adanya dari DB
-                "Nama Pegawai": dataKepalaBiro["Nama Pegawai"],
-                nip: dataKepalaBiro["nip"] || dataKepalaBiro["NIP"] || "-",
-                Jabatan: dataKepalaBiro["Jabatan"] || dataKepalaBiro["JABATAN"]
+                nama: dataKepalaBiro.nama,
+                nip: dataKepalaBiro.nip || "-",
+                jabatan: dataKepalaBiro.jabatan,
+                no_wa: dataKepalaBiro.no_wa || "",
               };
             } else {
               atasan = {
-                "Nama Pegawai": "KEPALA BIRO (Data belum ada di Database)", 
+                nama: "KEPALA BIRO (Data belum ada di Database)",
                 nip: "-",
-                Jabatan: "Kepala Biro Keuangan dan BMN"
+                jabatan: "Kepala Biro Keuangan dan BMN",
+                no_wa: "",
               };
             }
           } catch (err) {
@@ -1783,24 +1917,24 @@ client.on("message", async (message) => {
 
         const unitKerjaAtauSubstansi =
           flow.pegawai["Unit Kerja"] ||
-          flow.pegawai["SUBUNIT"] ||
+          flow.pegawai.sub_unit ||
           flow.pegawai["Subbagian"] ||
           flow.pegawai["Unit"] ||
           "TU";
 
         const dataWFA = {
-          nama: flow.pegawai["Nama Pegawai"],
+          nama: flow.pegawai.nama,
           nip: flow.pegawai["nip"],
-          jabatan: flow.pegawai["Jabatan"] || flow.pegawai["JABATAN"],
+          jabatan: flow.pegawai.jabatan || flow.pegawai.jabatan,
           unitKerja: "Sekretariat Jenderal",
           unitOrganisasi: unitKerjaAtauSubstansi,
           tanggalWFA: flow.tanggalWFA,
           substansi: unitKerjaAtauSubstansi,
-          atasan_nama: atasan["Nama Pegawai"] || "Nama Atasan",
+          atasan_nama: atasan.nama || "Nama Atasan",
           atasan_nip: atasan["nip"] || "-",
-          atasan_jabatan: atasan["Jabatan"] || "Jabatan Atasan",
+          atasan_jabatan: atasan.jabatan || "Jabatan Atasan",
           wfaList: flow.wfaList,
-          jenisLaporan: flow.jenisLaporan 
+          jenisLaporan: flow.jenisLaporan,
         };
 
         try {
@@ -1833,13 +1967,15 @@ client.on("message", async (message) => {
       }
 
       const maxKata = 40;
-      const jumlahKata = teksAlasan.split(/\s+/).filter(w => w.length > 0).length;
+      const jumlahKata = teksAlasan
+        .split(/\s+/)
+        .filter((w) => w.length > 0).length;
 
       if (jumlahKata > maxKata) {
         await kirimDenganTyping(
           client,
           chatId,
-          `❌ Uraian kegiatan terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel laporan PDF tidak rusak. Silakan ringkas dan ketik kembali uraian kegiatan lembur Anda.`
+          `❌ Uraian kegiatan terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel laporan PDF tidak rusak. Silakan ringkas dan ketik kembali uraian kegiatan lembur Anda.`,
         );
         return;
       }
@@ -1890,16 +2026,15 @@ client.on("message", async (message) => {
 
       // --- LOGIKA AUTO-APPROVE PIMPINAN ---
       const isPimpinan =
-        !flow.pegawai["NO HP ATASAN"] ||
-        flow.pegawai["NO HP ATASAN"].trim() === "";
+        !flow.pegawai.atasan_nip || flow.pegawai.atasan_nip.trim() === "";
 
       if (isPimpinan) {
         let pesanPegawai = `*Pengajuan Lembur OTOMATIS DISETUJUI* karena Anda terdeteksi sebagai Pimpinan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;
 
         const selfAsAtasan = {
-          "Nama Pegawai": flow.pegawai["Nama Pegawai"],
+          "Nama Pegawai": flow.pegawai.nama,
           nip: flow.pegawai["nip"] || "-",
-          Jabatan: flow.pegawai["Jabatan"] || "Pimpinan",
+          Jabatan: flow.pegawai.jabatan || "Pimpinan",
         };
 
         pengajuanBySender[chatId] = {
@@ -1916,7 +2051,7 @@ client.on("message", async (message) => {
         return;
       }
 
-      if (!atasan || !atasan["No. HP (WA) aktif"]) {
+      if (!atasan || !atasan.no_wa) {
         await kirimDenganTyping(
           client,
           chatId,
@@ -1934,17 +2069,24 @@ client.on("message", async (message) => {
         jamKeluar,
       };
 
-      const nomorAtasan = getValidWaId(atasan["No. HP (WA) aktif"]);
+      const nomorAtasan = getValidWaId(atasan.no_wa);
       if (!nomorAtasan) {
-        await kirimDenganTyping(client, chatId, "Nomor atasan tidak valid di database.");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Nomor atasan tidak valid di database.",
+        );
         delete pengajuanBySender[chatId];
         return;
       }
 
-      const teksPengajuan = `*Pengajuan Lembur* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\nJam: ${jamMasuk} - ${jamKeluar} (${calculateDuration(jamMasuk, jamKeluar)})\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
+      const teksPengajuan = `*Pengajuan Lembur* dari ${flow.pegawai.nama}\nAlasan: ${alasan}\nJam: ${jamMasuk} - ${jamKeluar} (${calculateDuration(jamMasuk, jamKeluar)})\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
       try {
-        const sentToAtasan = await client.sendMessage(nomorAtasan, teksPengajuan);
+        const sentToAtasan = await client.sendMessage(
+          nomorAtasan,
+          teksPengajuan,
+        );
 
         const dataBackup = {
           sender: chatId,
@@ -1955,16 +2097,20 @@ client.on("message", async (message) => {
           jamMasuk,
           jamKeluar,
         };
-        
+
         await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
 
         await kirimDenganTyping(
           client,
           chatId,
-          `Pengajuan Lembur Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
+          `Pengajuan Lembur Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan.`,
         );
       } catch (err) {
-        await kirimDenganTyping(client, chatId, "Gagal mengirim pesan ke atasan.");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Gagal mengirim pesan ke atasan.",
+        );
         delete pengajuanBySender[chatId];
       }
 
@@ -1976,8 +2122,7 @@ client.on("message", async (message) => {
       const alasan = message.body.trim();
 
       const isPimpinan =
-        !flow.pegawai["NO HP ATASAN"] ||
-        flow.pegawai["NO HP ATASAN"].trim() === "";
+        !flow.pegawai.atasan_nip || flow.pegawai.atasan_nip.trim() === "";
 
       if (isPimpinan) {
         let pesanPegawai = `*Pengajuan Cuti OTOMATIS DISETUJU* karena Anda terdeteksi sebagai Pimpinan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
@@ -1987,7 +2132,7 @@ client.on("message", async (message) => {
       }
 
       const atasan = await cariAtasanPegawai(flow.pegawai);
-      if (!atasan || !atasan["No. HP (WA) aktif"]) {
+      if (!atasan || !atasan.no_wa) {
         await kirimDenganTyping(
           client,
           chatId,
@@ -1996,16 +2141,20 @@ client.on("message", async (message) => {
         delete pengajuanBySender[chatId];
         return;
       }
-      
-      const nomorAtasan = getValidWaId(atasan["No. HP (WA) aktif"]);
+
+      const nomorAtasan = getValidWaId(atasan.no_wa);
       if (!nomorAtasan) {
-        await kirimDenganTyping(client, chatId, "Nomor atasan tidak valid di database.");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Nomor atasan tidak valid di database.",
+        );
         delete pengajuanBySender[chatId];
         return;
       }
 
-      const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai["Nama Pegawai"]}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
-      
+      const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai.nama}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
+
       try {
         const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
 
@@ -2016,7 +2165,7 @@ client.on("message", async (message) => {
           atasan,
           alasan,
         };
-        
+
         await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
 
         pengajuanBySender[chatId] = {
@@ -2028,10 +2177,14 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan["Nama Pegawai"]}) untuk persetujuan.`,
+          `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan.`,
         );
       } catch (err) {
-        await kirimDenganTyping(client, chatId, "Gagal mengirim pesan ke atasan.");
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Gagal mengirim pesan ke atasan.",
+        );
         delete pengajuanBySender[chatId];
       }
       return;
@@ -2079,12 +2232,9 @@ client.on("message", async (message) => {
             const nipPinjam = String(m.peminjam_saat_ini || "").trim();
             if (nipPinjam) {
               const peg = await Pegawai.findOne({
-                $or: [
-                  { nip: nipPinjam },
-                  { NIP: nipPinjam },
-                ],
+                $or: [{ nip: nipPinjam }, { NIP: nipPinjam }],
               }).lean();
-              if (peg && peg["Nama Pegawai"]) namaPeminjam = peg["Nama Pegawai"];
+              if (peg && peg.nama) namaPeminjam = peg.nama;
             }
 
             text += `\n~- ${m.nama} (${m.plat})~`;
@@ -2156,10 +2306,10 @@ client.on("message", async (message) => {
         return;
       }
 
-      const pilihanId = kendaraanDipilih.id; 
+      const pilihanId = kendaraanDipilih.id;
       const allKendaraan = await getStatusKendaraan();
       const currentCheck = allKendaraan.find((m) => m.id === pilihanId);
-      
+
       if (currentCheck.status !== "TERSEDIA") {
         await kirimDenganTyping(
           client,
@@ -2186,27 +2336,26 @@ client.on("message", async (message) => {
 
     if (flow.step === "isi-tujuan") {
       const tujuan = message.body.trim();
-      const pjWa = NO_KETUA_SUB_TU ? getValidWaId(NO_KETUA_SUB_TU) : null; 
+      const pjWa = NO_KETUA_SUB_TU ? getValidWaId(NO_KETUA_SUB_TU) : null;
       const isPimpinan =
-        !flow.pegawai["NO HP ATASAN"] ||
-        flow.pegawai["NO HP ATASAN"].trim() === "" ||
-        chatId === pjWa; 
+        !flow.pegawai.atasan_nip ||
+        flow.pegawai.atasan_nip.trim() === "" ||
+        chatId === pjWa;
 
       if (isPimpinan) {
         const allKendaraan = await getStatusKendaraan();
         const index = allKendaraan.findIndex((m) => m.id === flow.kendaraanId);
 
         if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
-          
           // UPDATE MONGODB
           await Kendaraan.findOneAndUpdate(
-             { id: flow.kendaraanId },
-             {
-               status: "DIPAKAI",
-               peminjam_saat_ini: pegawai["nip"],
-               waktu_pinjam: new Date().toISOString(),
-               tujuan_aktif: tujuan
-             }
+            { id: flow.kendaraanId },
+            {
+              status: "DIPAKAI",
+              peminjam_saat_ini: pegawai.nip,
+              waktu_pinjam: new Date().toISOString(),
+              tujuan_aktif: tujuan,
+            },
           );
 
           await kirimDenganTyping(
@@ -2218,14 +2367,14 @@ client.on("message", async (message) => {
           try {
             const dataPDFMobil = {
               penanggungJawab: {
-                nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+                nama: DATA_KETUA_SUB_TU.nama,
                 nip: DATA_KETUA_SUB_TU.nip,
                 jabatan: DATA_KETUA_SUB_TU.Jabatan,
               },
               pemakai: {
-                nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
+                nama: pegawai.nama || "Nama Pemakai",
                 nip: pegawai["nip"] || pegawai["NIP"] || "-",
-                jabatan: pegawai["Jabatan"] || "-",
+                jabatan: pegawai.jabatan || "-",
               },
               kendaraan: {
                 merek: allKendaraan[index].nama || "-",
@@ -2239,7 +2388,11 @@ client.on("message", async (message) => {
               },
             };
             await buatSuratIzinMobilAwalAsync(dataPDFMobil, chatId, client);
-            await kirimDenganTyping(client, chatId, "Selamat jalan, hati-hati! Jangan lupa ketik/pilih *MENU* -> 'Kembalikan Kendaraan' setelah selesai.");
+            await kirimDenganTyping(
+              client,
+              chatId,
+              "Selamat jalan, hati-hati! Jangan lupa ketik/pilih *MENU* -> 'Kembalikan Kendaraan' setelah selesai.",
+            );
           } catch (pdfErr) {
             console.error("Gagal buat PDF Surat Izin Mobil:", pdfErr);
           }
@@ -2254,9 +2407,9 @@ client.on("message", async (message) => {
         return;
       }
 
-      const teksPengajuan = `*Pengajuan Peminjaman Kendaraan* dari ${flow.pegawai["Nama Pegawai"]}\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
+      const teksPengajuan = `*Pengajuan Peminjaman Kendaraan* dari ${flow.pegawai.nama}\nUnit: ${flow.namaKendaraan}\nTujuan: ${tujuan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
 
-      if(pjWa) {
+      if (pjWa) {
         try {
           const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
 
@@ -2269,9 +2422,8 @@ client.on("message", async (message) => {
             kendaraanId: flow.kendaraanId,
             namaKendaraan: flow.namaKendaraan,
           };
-          
-          await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
 
+          await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
         } catch (err) {
           console.error("Gagal kirim kendaraan ke PJ", err);
         }
@@ -2287,7 +2439,7 @@ client.on("message", async (message) => {
       await kirimDenganTyping(
         client,
         chatId,
-        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${DATA_KETUA_SUB_TU["Nama Pegawai"]}) untuk persetujuan.`,
+        `Pengajuan Peminjaman Kendaraan Anda sudah diteruskan ke Penanggung Jawab (${DATA_KETUA_SUB_TU.nama}) untuk persetujuan.`,
       );
       return;
     }
@@ -2328,18 +2480,18 @@ client.on("message", async (message) => {
 
         // UPDATE MONGODB
         await Kendaraan.findOneAndUpdate(
-           { id: kendaraanId },
-           {
-             status: "TERSEDIA",
-             peminjam_saat_ini: null,
-             waktu_pinjam: null,
-             tujuan_aktif: null
-           }
+          { id: kendaraanId },
+          {
+            status: "TERSEDIA",
+            peminjam_saat_ini: null,
+            waktu_pinjam: null,
+            tujuan_aktif: null,
+          },
         );
 
         const logData = {
           tanggal: new Date().toISOString(),
-          nama_pegawai: pegawai["Nama Pegawai"],
+          nama_pegawai: pegawai.nama,
           nip: pegawai["nip"],
           kendaraan: mobil.nama,
           tujuan: tujuanAwal || "-",
@@ -2360,14 +2512,14 @@ client.on("message", async (message) => {
         try {
           const dataPDFMobil = {
             penanggungJawab: {
-              nama: DATA_KETUA_SUB_TU["Nama Pegawai"],
+              nama: DATA_KETUA_SUB_TU.nama,
               nip: DATA_KETUA_SUB_TU.nip,
               jabatan: DATA_KETUA_SUB_TU.Jabatan,
             },
             pemakai: {
-              nama: pegawai["Nama Pegawai"] || "Nama Pemakai",
+              nama: pegawai.nama || "Nama Pemakai",
               nip: pegawai["nip"] || pegawai["NIP"] || "-",
-              jabatan: pegawai["Jabatan"] || "-",
+              jabatan: pegawai.jabatan || "-",
             },
             kendaraan: {
               merek: mobil.nama || "-",
@@ -2442,16 +2594,16 @@ process.on("uncaughtException", (err) => {
   logToFile("error", "UNCAUGHT", err.stack || String(err));
 });
 
-process.on('SIGINT', async () => {
-  console.log('[(SIGINT)] Mematikan bot SisKA dengan aman...');
+process.on("SIGINT", async () => {
+  console.log("[(SIGINT)] Mematikan bot SisKA dengan aman...");
   try {
     await client.destroy();
   } catch (e) {}
   process.exit(0);
 });
 
-process.on('SIGTERM', async () => {
-  console.log('[(SIGTERM)] Mematikan bot SisKA dengan aman (PM2 Restart)...');
+process.on("SIGTERM", async () => {
+  console.log("[(SIGTERM)] Mematikan bot SisKA dengan aman (PM2 Restart)...");
   try {
     await client.destroy();
   } catch (e) {}

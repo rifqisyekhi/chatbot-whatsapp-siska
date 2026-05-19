@@ -1,19 +1,17 @@
 const mongoose = require('mongoose');
 
 const PegawaiSchema = new mongoose.Schema({
-    "Nama Pegawai": String,
-    "No. HP (WA) aktif": String,
-    "id_wa_alternatif": String,
-    nip: String,
-    NIP: String,
-    Jabatan: String,
-    JABATAN: String,
-    "Unit Kerja": String,
-    SUBUNIT: String,
-    Subbagian: String,
-    Unit: String,
-    "NO HP ATASAN": String,
+    nama: { type: String, required: true },
+    nip: { type: String, required: true, unique: true },
+    no_wa: String,
+    jabatan: String,
+    sub_unit: String,
+    email: String,
+    atasan_nip: String,
     kategori_pegawai: String
-}, { strict: false });
+}, { 
+    versionKey: false,
+    strict: true
+});
 
 module.exports = mongoose.model('Pegawai', PegawaiSchema, 'pegawai');
