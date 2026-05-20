@@ -136,27 +136,41 @@ app.post("/api/login", async (req, res) => {
   try {
     const { username, password, role } = req.body;
 
+    console.log("--- DEBUG LOGIN ---");
+    console.log("Diterima dari Frontend:", { username, role, hasPassword: !!password });
+
     let storedHash = "";
     
+    console.log("ENV Admin Pegawai:", process.env.ADMIN_PEGAWAI_USER ? "ADA" : "KOSONG");
+    console.log("ENV Admin Barang:", process.env.ADMIN_BARANG_USER ? "ADA" : "KOSONG");
+
     if (role === "pegawai" && username === process.env.ADMIN_PEGAWAI_USER) {
       storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
+      console.log("Match Role: Pegawai");
     } else if (role === "barang" && username === process.env.ADMIN_BARANG_USER) {
       storedHash = process.env.ADMIN_BARANG_PASSWORD;
+      console.log("Match Role: Barang");
     } else {
+      console.log("Gagal: Username atau Role tidak match!");
       return res.status(401).json({ message: "Username tidak terdaftar untuk role ini!" });
     }
 
+    if (!storedHash) {
+        console.log("Gagal: Hash di env kosong!");
+        return res.status(500).json({ message: "Hash kosong!" });
+    }
+
     const isMatch = await bcrypt.compare(password, storedHash);
+    console.log("Apakah Password Cocok?:", isMatch);
 
     if (isMatch) {
-      const token = jwt.sign({ username: username, role: role }, process.env.JWT_SECRET, {
-        expiresIn: "8h",
-      });
+      const token = jwt.sign({ username: username, role: role }, process.env.JWT_SECRET, { expiresIn: "8h" });
       return res.json({ token });
     } else {
       return res.status(401).json({ message: "Password salah!" });
     }
   } catch (error) {
+    console.error("CRASH:", error);
     return res.status(500).json({ message: "Server crash." });
   }
 });
