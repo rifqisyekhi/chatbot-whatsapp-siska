@@ -132,39 +132,24 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/assets", express.static(path.join(__dirname, "assets")));
 
-// KODE LOGIN YANG SUDAH DIPERBAIKI DENGAN TRY CATCH BIAR GAK STUCK
 app.post("/api/login", async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { username, password, role } = req.body;
 
     let storedHash = "";
-
-    if (username === process.env.ADMIN_PEGAWAI_USER) {
+    
+    if (role === "pegawai" && username === process.env.ADMIN_PEGAWAI_USER) {
       storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
-    } else if (username === process.env.ADMIN_BARANG_USER) {
+    } else if (role === "barang" && username === process.env.ADMIN_BARANG_USER) {
       storedHash = process.env.ADMIN_BARANG_PASSWORD;
     } else {
-      return res.status(401).json({ message: "Username tidak terdaftar!" });
-    }
-
-    if (!storedHash) {
-      console.error(
-        `[LOGIN ERROR] Hash untuk user ${username} tidak ditemukan di .env!`,
-      );
-      return res
-        .status(500)
-        .json({ message: "Konfigurasi server bermasalah!" });
+      return res.status(401).json({ message: "Username tidak terdaftar untuk role ini!" });
     }
 
     const isMatch = await bcrypt.compare(password, storedHash);
 
     if (isMatch) {
-      if (!process.env.JWT_SECRET) {
-        console.error("[LOGIN ERROR] JWT_SECRET tidak ditemukan di .env!");
-        return res.status(500).json({ message: "Konfigurasi JWT bermasalah!" });
-      }
-
-      const token = jwt.sign({ username: username }, process.env.JWT_SECRET, {
+      const token = jwt.sign({ username: username, role: role }, process.env.JWT_SECRET, {
         expiresIn: "8h",
       });
       return res.json({ token });
@@ -172,10 +157,7 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ message: "Password salah!" });
     }
   } catch (error) {
-    console.error("[LOGIN CRASH]", error);
-    return res
-      .status(500)
-      .json({ message: "Terjadi kesalahan sistem di backend." });
+    return res.status(500).json({ message: "Server crash." });
   }
 });
 
