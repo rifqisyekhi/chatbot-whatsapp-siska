@@ -1507,7 +1507,7 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      const menu = `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA`;
+      const menu = `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA\n8. Pengumpulan Laporan WFA/WFO`;
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -1599,6 +1599,25 @@ client.on("message", async (message) => {
         };
         return;
       }
+
+      if (bodyLower === "8") {
+        const linkDriveWFA = "https://drive.google.com/drive/folders/1Z0sf56K2Kbd76NwJUPCUn9qur9Vg_Snk";
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `*Pengumpulan Laporan WFA/WFO*\n\nSilakan unggah (upload) file laporan Anda ke dalam folder Google Drive berikut:\n${linkDriveWFA}\n\nPastikan nama file sudah sesuai format yang ditentukan ya.`
+        );
+        delete pengajuanBySender[chatId];
+        return;
+      }
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Pilihan tidak valid. Ketik angka 1 - 8. Atau ketik *menu* untuk kembali.",
+      );
+      return;
+    }
 
       await kirimDenganTyping(
         client,

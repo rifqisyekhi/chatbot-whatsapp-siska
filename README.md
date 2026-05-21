@@ -33,7 +33,14 @@ cd SisKA
 * VPS: pm2 start index.js --name "bot-siska" (pm2 ada di deskripsi dependencies)
 
 * Melihat Log (Untuk Scan QR Code atau Cek Error): pm2 logs bot-siska --lines 200
+```
+
+## Help
+Jika bingung dan ingin ditanyakan bisa hubungi kontak author
 
 ## Authors
 - Rifqi Syekhi - MagangHUB Batch 2
 - Rizqi Akbar
+
+## License
+This project is licensed under the Biro Keuangan dan BMN License
