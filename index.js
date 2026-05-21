@@ -1,8 +1,7 @@
 console.log("[INIT] Memulai bot SisKA...");
 
 // I. IMPORTS & KONFIGURASI
-const { Client, RemoteAuth, MessageMedia } = require("whatsapp-web.js");
-const { MongoStore } = require("wwebjs-mongo");
+const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
@@ -565,13 +564,8 @@ async function kirimDenganTyping(client, chatId, text) {
 }
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
-const store = new MongoStore({ mongoose: mongoose });
-
 const client = new Client({
-  authStrategy: new RemoteAuth({
-    store: store,
-    backupSyncIntervalMs: 300000, // backup ke Mongo setiap 5 menit
-  }),
+  authStrategy: new LocalAuth({ clientId: "siska" }),
   puppeteer: {
     headless: true,
     args: [
