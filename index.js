@@ -1599,7 +1599,6 @@ client.on("message", async (message) => {
         };
         return;
       }
-
       if (bodyLower === "8") {
         const linkDriveWFA = "https://drive.google.com/drive/folders/1Z0sf56K2Kbd76NwJUPCUn9qur9Vg_Snk";
         await kirimDenganTyping(
@@ -1615,14 +1614,6 @@ client.on("message", async (message) => {
         client,
         chatId,
         "Pilihan tidak valid. Ketik angka 1 - 8. Atau ketik *menu* untuk kembali.",
-      );
-      return;
-    }
-
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "Pilihan tidak valid. Ketik angka 1 - 7. Atau ketik *menu* untuk kembali.",
       );
       return;
     }
