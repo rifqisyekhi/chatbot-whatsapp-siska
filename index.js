@@ -695,14 +695,6 @@ setInterval(() => {
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
-  console.log("\n========== PESAN MASUK ==========");
-  console.log("Type      :", message.type);
-  console.log("HasMedia  :", message.hasMedia);
-  console.log("Body      :", JSON.stringify(message.body));
-  console.log("Mimetype  :", message._data?.mimetype);
-  console.log("ID        :", message.id._serialized);
-  console.log("=================================\n");
-  
   // 1. Buang update status WA dulu biar enteng
   if (message.from === "status@broadcast") return;
 
