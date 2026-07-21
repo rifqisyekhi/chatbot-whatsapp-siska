@@ -566,6 +566,12 @@ async function kirimDenganTyping(client, chatId, text) {
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
+  webVersion: "2.3000.1043266448",
+  webVersionCache: {
+    type: "local",
+    path: "./.wwebjs_cache/",
+    strict: true,
+  },
   puppeteer: {
     headless: true,
     args: [
