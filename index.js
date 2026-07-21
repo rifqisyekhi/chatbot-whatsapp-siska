@@ -563,6 +563,27 @@ async function kirimDenganTyping(client, chatId, text) {
   }
 }
 
+// VI-B. RETRY WRAPPER UNTUK DOWNLOAD MEDIA (fix error "r: r" / evaluate gagal)
+async function downloadMediaWithRetry(message, maxRetries = 3, delayMs = 2000) {
+  let lastErr = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const media = await message.downloadMedia();
+      if (media && media.data) return media;
+      throw new Error("Media kosong / null dari WhatsApp Web");
+    } catch (err) {
+      lastErr = err;
+      console.error(
+        `[downloadMedia] Percobaan ${attempt}/${maxRetries} gagal: ${err.message || err}`,
+      );
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  throw lastErr;
+}
+
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
@@ -585,6 +606,7 @@ const client = new Client({
       "--disable-gpu",
     ],
     timeout: 120000,
+    protocolTimeout: 180000,
   },
 });
 
@@ -809,7 +831,7 @@ client.on("message", async (message) => {
     // ==========================================
     if (flow?.step === "upload-foto") {
       if (message.hasMedia) {
-        const media = await message.downloadMedia();
+        const media = await downloadMediaWithRetry(message);
         await ensureDirAsync(UPLOADS_DIR);
 
         const extension = media.mimetype
@@ -938,7 +960,7 @@ client.on("message", async (message) => {
           } catch (errLearn) {}
 
           if (message.hasMedia) {
-            const media = await message.downloadMedia();
+            const media = await downloadMediaWithRetry(message);
             await client.sendMessage(targetUser, media, {
               caption: message.body || "",
             });
@@ -1797,7 +1819,7 @@ client.on("message", async (message) => {
 
     if (flow.step === "wfa-foto-1") {
       if (message.hasMedia) {
-        const media = await message.downloadMedia();
+        const media = await downloadMediaWithRetry(message);
         await ensureDirAsync(UPLOADS_DIR);
         const extension = media.mimetype
           .split("/")
@@ -1831,7 +1853,7 @@ client.on("message", async (message) => {
       let fotoPath2 = null;
 
       if (message.hasMedia) {
-        const media = await message.downloadMedia();
+        const media = await downloadMediaWithRetry(message);
         await ensureDirAsync(UPLOADS_DIR);
         const extension = media.mimetype
           .split("/")
