@@ -2,6 +2,7 @@ console.log("[INIT] Memulai bot SisKA...");
 
 // I. IMPORTS & KONFIGURASI
 const { Client, LocalAuth, MessageMedia } = require("whatsapp-web.js");
+const util = require("util");
 const qrcode = require("qrcode-terminal");
 const fs = require("fs");
 const fsPromises = require("fs").promises;
@@ -136,34 +137,53 @@ app.post("/api/login", async (req, res) => {
     const { username, password, role } = req.body;
 
     console.log("--- DEBUG LOGIN ---");
-    console.log("Diterima dari Frontend:", { username, role, hasPassword: !!password });
+    console.log("Diterima dari Frontend:", {
+      username,
+      role,
+      hasPassword: !!password,
+    });
 
     let storedHash = "";
-    
-    console.log("ENV Admin Pegawai:", process.env.ADMIN_PEGAWAI_USER ? "ADA" : "KOSONG");
-    console.log("ENV Admin Barang:", process.env.ADMIN_BARANG_USER ? "ADA" : "KOSONG");
+
+    console.log(
+      "ENV Admin Pegawai:",
+      process.env.ADMIN_PEGAWAI_USER ? "ADA" : "KOSONG",
+    );
+    console.log(
+      "ENV Admin Barang:",
+      process.env.ADMIN_BARANG_USER ? "ADA" : "KOSONG",
+    );
 
     if (role === "pegawai" && username === process.env.ADMIN_PEGAWAI_USER) {
       storedHash = process.env.ADMIN_PEGAWAI_PASSWORD;
       console.log("Match Role: Pegawai");
-    } else if (role === "barang" && username === process.env.ADMIN_BARANG_USER) {
+    } else if (
+      role === "barang" &&
+      username === process.env.ADMIN_BARANG_USER
+    ) {
       storedHash = process.env.ADMIN_BARANG_PASSWORD;
       console.log("Match Role: Barang");
     } else {
       console.log("Gagal: Username atau Role tidak match!");
-      return res.status(401).json({ message: "Username tidak terdaftar untuk role ini!" });
+      return res
+        .status(401)
+        .json({ message: "Username tidak terdaftar untuk role ini!" });
     }
 
     if (!storedHash) {
-        console.log("Gagal: Hash di env kosong!");
-        return res.status(500).json({ message: "Hash kosong!" });
+      console.log("Gagal: Hash di env kosong!");
+      return res.status(500).json({ message: "Hash kosong!" });
     }
 
     const isMatch = await bcrypt.compare(password, storedHash);
     console.log("Apakah Password Cocok?:", isMatch);
 
     if (isMatch) {
-      const token = jwt.sign({ username: username, role: role }, process.env.JWT_SECRET, { expiresIn: "8h" });
+      const token = jwt.sign(
+        { username: username, role: role },
+        process.env.JWT_SECRET,
+        { expiresIn: "8h" },
+      );
       return res.json({ token });
     } else {
       return res.status(401).json({ message: "Password salah!" });
@@ -563,24 +583,39 @@ async function kirimDenganTyping(client, chatId, text) {
   }
 }
 
-// VI-B. RETRY WRAPPER UNTUK DOWNLOAD MEDIA (fix error "r: r" / evaluate gagal)
+// VI-B. RETRY WRAPPER UNTUK DOWNLOAD MEDIA
 async function downloadMediaWithRetry(message, maxRetries = 3, delayMs = 2000) {
   let lastErr = null;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const media = await message.downloadMedia();
-      if (media && media.data) return media;
+
+      if (media && media.data) {
+        return media;
+      }
+
       throw new Error("Media kosong / null dari WhatsApp Web");
     } catch (err) {
       lastErr = err;
+
       console.error(
-        `[downloadMedia] Percobaan ${attempt}/${maxRetries} gagal: ${err.message || err}`,
+        `\n=== DOWNLOAD MEDIA GAGAL (${attempt}/${maxRetries}) ===`,
       );
+      console.error("Message :", err.message);
+      console.error("Name    :", err.name);
+      console.error("Stack   :");
+      console.error(err.stack);
+      console.error("Detail  :");
+      console.error(util.inspect(err, { depth: null }));
+      console.error("====================================\n");
+
       if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, delayMs));
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
     }
   }
+
   throw lastErr;
 }
 
@@ -596,7 +631,6 @@ const client = new Client({
       "--disable-accelerated-2d-canvas",
       "--no-first-run",
       "--no-zygote",
-      "--single-process",
       "--disable-gpu",
     ],
     timeout: 120000,
@@ -1622,11 +1656,12 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "8") {
-        const linkDriveWFA = "https://drive.google.com/drive/folders/1Z0sf56K2Kbd76NwJUPCUn9qur9Vg_Snk";
+        const linkDriveWFA =
+          "https://drive.google.com/drive/folders/1Z0sf56K2Kbd76NwJUPCUn9qur9Vg_Snk";
         await kirimDenganTyping(
           client,
           chatId,
-          `*Pengumpulan Laporan WFA/WFO*\n\nSilakan unggah (upload) file laporan Anda ke dalam folder Google Drive berikut:\n${linkDriveWFA}\n\nPastikan nama file sudah sesuai format yang ditentukan ya.`
+          `*Pengumpulan Laporan WFA/WFO*\n\nSilakan unggah (upload) file laporan Anda ke dalam folder Google Drive berikut:\n${linkDriveWFA}\n\nPastikan nama file sudah sesuai format yang ditentukan ya.`,
         );
         delete pengajuanBySender[chatId];
         return;
@@ -1813,6 +1848,13 @@ client.on("message", async (message) => {
 
     if (flow.step === "wfa-foto-1") {
       if (message.hasMedia) {
+        console.log("Type      :", message.type);
+        console.log("HasMedia  :", message.hasMedia);
+        console.log("Mimetype  :", message._data?.mimetype);
+
+        // Tunggu sebentar agar media benar-benar siap
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         const media = await downloadMediaWithRetry(message);
         await ensureDirAsync(UPLOADS_DIR);
         const extension = media.mimetype
