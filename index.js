@@ -653,10 +653,15 @@ client.on("authenticated", () => {
   console.log(`[WA] Authenticated! (${elapsed}s) - Tunggu proses loading...`);
 });
 
-client.on("ready", () => {
-  const elapsed = ((Date.now() - authStartTime) / 1000).toFixed(2);
-  console.log(`[READY] Bot SisKA siap! (${elapsed}s)`);
-  botReady = true;
+client.on("ready", async () => {
+  console.log("[READY] Bot SisKA siap!");
+
+  try {
+    const version = await client.getWWebVersion();
+    console.log("[WA WEB VERSION]", version);
+  } catch (e) {
+    console.error(e);
+  }
 });
 
 client.on("auth_failure", (msg) => {
