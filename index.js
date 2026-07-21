@@ -695,6 +695,14 @@ setInterval(() => {
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
+  console.log("\n========== PESAN MASUK ==========");
+  console.log("Type      :", message.type);
+  console.log("HasMedia  :", message.hasMedia);
+  console.log("Body      :", JSON.stringify(message.body));
+  console.log("Mimetype  :", message._data?.mimetype);
+  console.log("ID        :", message.id._serialized);
+  console.log("=================================\n");
+  
   // 1. Buang update status WA dulu biar enteng
   if (message.from === "status@broadcast") return;
 
@@ -1858,7 +1866,7 @@ client.on("message", async (message) => {
         console.log("Mimetype  :", message._data?.mimetype);
 
         // Tunggu sebentar agar media benar-benar siap
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
 
         const media = await downloadMediaWithRetry(message);
         await ensureDirAsync(UPLOADS_DIR);
