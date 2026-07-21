@@ -578,7 +578,7 @@ const client = new Client({
       "--single-process",
       "--disable-gpu",
     ],
-    timeout: 120000, // 2 menit timeout
+    timeout: 120000,
   },
 });
 
