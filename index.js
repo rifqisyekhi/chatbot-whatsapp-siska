@@ -543,40 +543,211 @@ async function kirimDenganTyping(client, chatId, text) {
   }
 }
 
-// VI-B. RETRY WRAPPER UNTUK DOWNLOAD MEDIA
+// VI-B. FALLBACK DOWNLOAD MEDIA LANGSUNG DARI STORE WHATSAPP WEB
+// message.downloadMedia() bawaan whatsapp-web.js sering melempar error minified
+// ("r: r") dari downloadAndMaybeDecrypt. Fungsi ini mencoba jalur lain:
+// 1) ambil blob yang sudah didekripsi di memori browser,
+// 2) paksa resolve media (re-request ke HP) lalu cek blob lagi,
+// 3) dekripsi manual memakai field dari msg maupun msg.mediaData.
+async function downloadMediaViaStore(waClient, msgId) {
+  return waClient.pupPage.evaluate(async (id) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    const blobToBase64 = (blob) =>
+      new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(",")[1]);
+        reader.onerror = () => reject(new Error("FileReader gagal baca blob"));
+        reader.readAsDataURL(blob);
+      });
+
+    const ambilBlob = async (msg) => {
+      const opaque = msg.mediaData && msg.mediaData.mediaBlob;
+      if (!opaque) return null;
+      let blob = opaque._blob || null;
+      if (!blob && typeof opaque.forceToBlob === "function") {
+        blob = await opaque.forceToBlob();
+      }
+      return blob && blob.size > 0 ? blob : null;
+    };
+
+    const msg =
+      window.Store.Msg.get(id) ||
+      (await window.Store.Msg.getMessagesById([id]))?.messages?.[0];
+    if (!msg) return { err: "Pesan tidak ditemukan di Store" };
+
+    // --- Jalur 1: blob yang sudah ada di memori ---
+    try {
+      const blob = await ambilBlob(msg);
+      if (blob) {
+        return {
+          via: "blob",
+          data: await blobToBase64(blob),
+          mimetype: msg.mimetype || blob.type,
+          filename: msg.filename,
+          filesize: blob.size,
+        };
+      }
+    } catch (e) {}
+
+    // --- Jalur 2: paksa resolve media, lalu cek blob lagi ---
+    try {
+      const stage = msg.mediaData && msg.mediaData.mediaStage;
+      if (stage !== "RESOLVED") {
+        // stage ERROR membuat WA Web menolak download ulang; reset dulu
+        if (typeof stage === "string" && stage.includes("ERROR")) {
+          try {
+            msg.mediaData.mediaStage = "INIT";
+          } catch (e) {}
+        }
+        await msg.downloadMedia({
+          downloadEvenIfExpensive: true,
+          rmrReason: 1,
+        });
+        for (let i = 0; i < 20; i++) {
+          if (msg.mediaData && msg.mediaData.mediaStage === "RESOLVED") break;
+          await sleep(500);
+        }
+      }
+
+      const blob = await ambilBlob(msg);
+      if (blob) {
+        return {
+          via: "blob-after-resolve",
+          data: await blobToBase64(blob),
+          mimetype: msg.mimetype || blob.type,
+          filename: msg.filename,
+          filesize: blob.size,
+        };
+      }
+    } catch (e) {}
+
+    // --- Jalur 3: dekripsi manual ---
+    const mockQpl = {
+      addAnnotations() {
+        return this;
+      },
+      addPoint() {
+        return this;
+      },
+    };
+    const sumber = [msg, msg.mediaData || {}];
+    let lastErr = null;
+
+    for (const src of sumber) {
+      if (!src.directPath || !src.mediaKey) continue;
+      try {
+        const decrypted =
+          await window.Store.DownloadManager.downloadAndMaybeDecrypt({
+            directPath: src.directPath,
+            encFilehash: src.encFilehash || msg.encFilehash,
+            filehash: src.filehash || msg.filehash,
+            mediaKey: src.mediaKey,
+            mediaKeyTimestamp: src.mediaKeyTimestamp || msg.mediaKeyTimestamp,
+            type: src.type || msg.type,
+            signal: new AbortController().signal,
+            downloadQpl: mockQpl,
+          });
+
+        let data;
+        if (window.WWebJS && window.WWebJS.arrayBufferToBase64Async) {
+          data = await window.WWebJS.arrayBufferToBase64Async(decrypted);
+        } else {
+          data = await blobToBase64(new Blob([decrypted]));
+        }
+
+        return {
+          via: "decrypt",
+          data,
+          mimetype: msg.mimetype,
+          filename: msg.filename,
+          filesize: msg.size,
+        };
+      } catch (e) {
+        lastErr = (e && (e.message || e.name)) || String(e);
+      }
+    }
+
+    return {
+      err: `Semua jalur download gagal (stage=${msg.mediaData && msg.mediaData.mediaStage}, lastErr=${lastErr})`,
+    };
+  }, msgId);
+}
+
+// VI-C. RETRY WRAPPER UNTUK DOWNLOAD MEDIA
 async function downloadMediaWithRetry(message, maxRetries = 3, delayMs = 2000) {
+  const waClient = message.client || client;
+  const msgId = message.id?._serialized;
   let lastErr = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    // Jalur bawaan whatsapp-web.js
     try {
       const media = await message.downloadMedia();
-
-      if (media && media.data) {
-        return media;
-      }
-
-      throw new Error("Media kosong / null dari WhatsApp Web");
+      if (media && media.data) return media;
+      lastErr = new Error("Media kosong / null dari WhatsApp Web");
     } catch (err) {
       lastErr = err;
+    }
 
-      console.error(
-        `\n=== DOWNLOAD MEDIA GAGAL (${attempt}/${maxRetries}) ===`,
-      );
-      console.error("Message :", err.message);
-      console.error("Name    :", err.name);
-      console.error("Stack   :");
-      console.error(err.stack);
-      console.error("Detail  :");
-      console.error(util.inspect(err, { depth: null }));
-      console.error("====================================\n");
-
-      if (attempt < maxRetries) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs));
+    // Jalur fallback langsung ke Store
+    if (msgId) {
+      try {
+        const hasil = await downloadMediaViaStore(waClient, msgId);
+        if (hasil && hasil.data) {
+          console.log(
+            `[MEDIA] Berhasil via fallback "${hasil.via}" (percobaan ${attempt})`,
+          );
+          return new MessageMedia(
+            hasil.mimetype || "image/jpeg",
+            hasil.data,
+            hasil.filename,
+            hasil.filesize,
+          );
+        }
+        if (hasil && hasil.err) lastErr = new Error(hasil.err);
+      } catch (err) {
+        lastErr = err;
       }
+    }
+
+    console.error(`\n=== DOWNLOAD MEDIA GAGAL (${attempt}/${maxRetries}) ===`);
+    console.error("Message :", lastErr?.message);
+    console.error("Name    :", lastErr?.name);
+    console.error("Stack   :");
+    console.error(lastErr?.stack);
+    console.error("Detail  :");
+    console.error(util.inspect(lastErr, { depth: null }));
+    console.error("====================================\n");
+
+    if (attempt < maxRetries) {
+      // backoff bertambah: media kadang butuh waktu sinkron dari HP
+      await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
     }
   }
 
   throw lastErr;
+}
+
+// VI-D. AMBIL MEDIA TANPA MERUSAK ALUR
+// Mengembalikan null (bukan throw) supaya state pengajuan user tidak terhapus
+// oleh catch global, sehingga user cukup mengirim ulang fotonya.
+async function ambilMediaAman(message, chatId, pesanGagal) {
+  try {
+    return await downloadMediaWithRetry(message);
+  } catch (err) {
+    console.error(
+      "[MEDIA] Gagal total mengunduh media:",
+      err?.message || String(err),
+    );
+    await kirimDenganTyping(
+      client,
+      chatId,
+      pesanGagal ||
+        "⚠️ Maaf, foto gagal diunduh dari WhatsApp (koneksi/sinkronisasi bermasalah).\n\nData Anda *tidak hilang*. Silakan *kirim ulang foto tersebut*.",
+    );
+    return null;
+  }
 }
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
@@ -824,7 +995,8 @@ client.on("message", async (message) => {
     // ==========================================
     if (flow?.step === "upload-foto") {
       if (message.hasMedia) {
-        const media = await downloadMediaWithRetry(message);
+        const media = await ambilMediaAman(message, chatId);
+        if (!media) return;
         await ensureDirAsync(UPLOADS_DIR);
 
         const extension = media.mimetype
@@ -953,10 +1125,33 @@ client.on("message", async (message) => {
           } catch (errLearn) {}
 
           if (message.hasMedia) {
-            const media = await downloadMediaWithRetry(message);
-            await client.sendMessage(targetUser, media, {
-              caption: message.body || "",
-            });
+            let media = null;
+            try {
+              media = await downloadMediaWithRetry(message);
+            } catch (errMedia) {
+              console.error(
+                "[MEDIA] Gagal unduh lampiran helpdesk:",
+                errMedia?.message || String(errMedia),
+              );
+            }
+
+            if (media) {
+              await client.sendMessage(targetUser, media, {
+                caption: message.body || "",
+              });
+            } else {
+              // Lampiran gagal diunduh: teruskan teksnya saja & beri tahu admin
+              await kirimDenganTyping(
+                client,
+                targetUser,
+                `Halo, berikut jawaban dari Helpdesk Biro Keuangan:\n\n*${message.body || "(lampiran menyusul)"}*`,
+              );
+              await kirimDenganTyping(
+                client,
+                chatId,
+                "⚠️ Lampiran gagal diunduh dari WhatsApp, jadi hanya teks yang diteruskan ke user. Silakan kirim ulang lampirannya jika diperlukan.",
+              );
+            }
           } else {
             const balasan = `Halo, berikut jawaban dari Helpdesk Biro Keuangan:\n\n*${message.body}*`;
             await kirimDenganTyping(client, targetUser, balasan);
@@ -1820,7 +2015,12 @@ client.on("message", async (message) => {
         // Tunggu sebentar agar media benar-benar siap
         await new Promise((resolve) => setTimeout(resolve, 2000));
 
-        const media = await downloadMediaWithRetry(message);
+        const media = await ambilMediaAman(
+          message,
+          chatId,
+          `⚠️ Maaf, foto gagal diunduh dari WhatsApp (koneksi/sinkronisasi bermasalah).\n\nData laporan Anda *tidak hilang*. Silakan *kirim ulang Foto Bukti* untuk kegiatan ke-${flow.wfaList.length + 1}.`,
+        );
+        if (!media) return;
         await ensureDirAsync(UPLOADS_DIR);
         const extension = media.mimetype
           .split("/")
@@ -1854,7 +2054,12 @@ client.on("message", async (message) => {
       let fotoPath2 = null;
 
       if (message.hasMedia) {
-        const media = await downloadMediaWithRetry(message);
+        const media = await ambilMediaAman(
+          message,
+          chatId,
+          "⚠️ Maaf, foto tambahan gagal diunduh dari WhatsApp.\n\nSilakan *kirim ulang foto tersebut*, atau ketik *lanjut* untuk melewatinya.",
+        );
+        if (!media) return;
         await ensureDirAsync(UPLOADS_DIR);
         const extension = media.mimetype
           .split("/")
