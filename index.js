@@ -755,6 +755,7 @@ const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
   puppeteer: {
     headless: true,
+    executablePath: '/usr/bin/chromium-browser', // TINGGAL TAMBAHIN BARIS INI AJA
     args: [
       "--no-sandbox",
       "--disable-setuid-sandbox",
