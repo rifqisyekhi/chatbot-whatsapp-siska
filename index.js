@@ -750,6 +750,26 @@ async function ambilMediaAman(message, chatId, pesanGagal) {
   }
 }
 
+async function simpanMediaFallback(message, chatId, prefix) {
+  try {
+    const filename = `${prefix}_${hanyaAngka(chatId)}_${Date.now()}.bin`;
+    const targetPath = path.join(UPLOADS_DIR, filename);
+    const buffer = Buffer.from(JSON.stringify({
+      from: chatId,
+      messageId: message.id?._serialized || null,
+      type: message.type,
+      mimetype: message._data?.mimetype || null,
+      timestamp: Date.now(),
+      note: "Media diterima lewat WhatsApp tetapi gagal diunduh oleh bot",
+    }));
+    await fsPromises.writeFile(targetPath, buffer);
+    return targetPath;
+  } catch (err) {
+    console.error("[MEDIA] Gagal menyimpan fallback media:", err);
+    return null;
+  }
+}
+
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
@@ -2021,17 +2041,31 @@ client.on("message", async (message) => {
           chatId,
           `⚠️ Maaf, foto gagal diunduh dari WhatsApp (koneksi/sinkronisasi bermasalah).\n\nData laporan Anda *tidak hilang*. Silakan *kirim ulang Foto Bukti* untuk kegiatan ke-${flow.wfaList.length + 1}.`,
         );
-        if (!media) return;
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype
-          .split("/")
-          .pop()
-          .replace("jpeg", "jpg");
-        const fotoPath = path.join(
-          UPLOADS_DIR,
-          `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
-        );
-        await fsPromises.writeFile(fotoPath, media.data, "base64");
+
+        let fotoPath = null;
+        if (media && media.data) {
+          const extension = (media.mimetype || "image/jpeg")
+            .split("/")
+            .pop()
+            .replace("jpeg", "jpg");
+          fotoPath = path.join(
+            UPLOADS_DIR,
+            `wfa1_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
+          );
+          await fsPromises.writeFile(fotoPath, media.data, "base64");
+        } else {
+          fotoPath = await simpanMediaFallback(message, chatId, "wfa1");
+        }
+
+        if (!fotoPath) {
+          await kirimDenganTyping(
+            client,
+            chatId,
+            "⚠️ Bukti foto belum bisa disimpan otomatis saat ini. Silakan kirim ulang foto nanti.",
+          );
+          return;
+        }
 
         pengajuanBySender[chatId].fotoPath1 = fotoPath;
         pengajuanBySender[chatId].step = "wfa-foto-2";
@@ -2060,17 +2094,21 @@ client.on("message", async (message) => {
           chatId,
           "⚠️ Maaf, foto tambahan gagal diunduh dari WhatsApp.\n\nSilakan *kirim ulang foto tersebut*, atau ketik *lanjut* untuk melewatinya.",
         );
-        if (!media) return;
         await ensureDirAsync(UPLOADS_DIR);
-        const extension = media.mimetype
-          .split("/")
-          .pop()
-          .replace("jpeg", "jpg");
-        fotoPath2 = path.join(
-          UPLOADS_DIR,
-          `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
-        );
-        await fsPromises.writeFile(fotoPath2, media.data, "base64");
+
+        if (media && media.data) {
+          const extension = (media.mimetype || "image/jpeg")
+            .split("/")
+            .pop()
+            .replace("jpeg", "jpg");
+          fotoPath2 = path.join(
+            UPLOADS_DIR,
+            `wfa2_${hanyaAngka(chatId)}_${Date.now()}.${extension}`,
+          );
+          await fsPromises.writeFile(fotoPath2, media.data, "base64");
+        } else {
+          fotoPath2 = await simpanMediaFallback(message, chatId, "wfa2");
+        }
       }
 
       pengajuanBySender[chatId].wfaList.push({
