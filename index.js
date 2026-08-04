@@ -111,7 +111,7 @@ async function startApp() {
       console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
     });
 
-    client.initialize();
+    await startClient("startup");
   } catch (err) {
     console.error("[INIT] Startup gagal:", err);
     console.warn("[INIT] Mencoba melanjutkan startup walau ada error.");
@@ -119,7 +119,7 @@ async function startApp() {
       app.listen(PORT_WEB, "0.0.0.0", () => {
         console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
       });
-      client.initialize();
+      await startClient("startup retry");
     } catch (retryErr) {
       console.error("[INIT] Startup ulang juga gagal:", retryErr);
     }
@@ -837,6 +837,59 @@ const client = new Client({
 
 let botReady = false;
 let authStartTime = 0;
+let restarting = false;
+let gagalRestartBeruntun = 0;
+
+const STUCK_TIMEOUT_MS = 300000; // 5 menit tanpa READY dianggap stuck
+const MAX_RESTART_BERUNTUN = 3; // Lewat ini, serahkan ke PM2 (proses baru, browser bersih)
+
+// Satu-satunya pintu masuk buat menyalakan client, sekaligus reset timer stuck.
+// Tanpa ini, `authStartTime` cuma di-set saat QR muncul, jadi begitu sesi
+// LocalAuth tersimpan (tidak ada QR lagi) nilainya basi dan watchdog nembak terus.
+async function startClient(alasan = "startup") {
+  authStartTime = Date.now();
+  botReady = false;
+  console.log(`[WA] Menyalakan client (${alasan})...`);
+  try {
+    await client.initialize();
+  } catch (e) {
+    console.error("[WA] initialize() gagal:", e?.message || e);
+  }
+}
+
+async function restartClient(alasan) {
+  if (restarting) {
+    console.warn(`[WA] Restart (${alasan}) dilewati, masih ada restart berjalan.`);
+    return;
+  }
+  restarting = true;
+  // Reset timer DULUAN supaya watchdog berikutnya menghitung dari sekarang,
+  // bukan langsung nembak lagi 30 detik kemudian.
+  authStartTime = Date.now();
+  botReady = false;
+
+  gagalRestartBeruntun += 1;
+  if (gagalRestartBeruntun > MAX_RESTART_BERUNTUN) {
+    console.error(
+      `[CRITICAL] Restart gagal ${gagalRestartBeruntun}x beruntun. Keluar, biar PM2 yang start ulang bersih.`,
+    );
+    logToFile("error", "WATCHDOG", `Exit setelah ${gagalRestartBeruntun}x restart gagal`);
+    try {
+      await client.destroy();
+    } catch {}
+    process.exit(1);
+  }
+
+  try {
+    await client.destroy();
+  } catch (e) {
+    console.error("[WA] Error saat destroy client:", e?.message || e);
+  }
+
+  await new Promise((r) => setTimeout(r, 5000));
+  await startClient(alasan);
+  restarting = false;
+}
 
 client.on("qr", (qr) => {
   qrcode.generate(qr, { small: true });
@@ -851,6 +904,10 @@ client.on("authenticated", () => {
 });
 
 client.on("ready", async () => {
+  botReady = true;
+  authStartTime = 0;
+  restarting = false;
+  gagalRestartBeruntun = 0;
   console.log("[READY] Bot SisKA siap!");
 
   try {
@@ -864,29 +921,26 @@ client.on("ready", async () => {
 client.on("auth_failure", (msg) => {
   console.error("[WA] Auth failure:", msg);
   botReady = false;
+  authStartTime = Date.now();
 });
 
 client.on("disconnected", (reason) => {
   console.log(`[WA] Bot disconnect: ${reason}`);
   botReady = false;
+  authStartTime = Date.now();
+  restartClient(`disconnected: ${reason}`);
 });
 
 // Health check untuk deteksi stuck
 setInterval(() => {
-  if (!botReady) {
-    const elapsed = (Date.now() - authStartTime) / 1000;
-    if (elapsed > 300 && authStartTime > 0) {
-      // Lebih dari 5 menit
-      console.error(
-        `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`,
-      );
-      client
-        .destroy()
-        .then(() => {
-          setTimeout(() => client.initialize(), 2000);
-        })
-        .catch((e) => console.error("Error destroying client:", e));
-    }
+  if (botReady || restarting || authStartTime === 0) return;
+
+  const elapsed = (Date.now() - authStartTime) / 1000;
+  if (elapsed * 1000 > STUCK_TIMEOUT_MS) {
+    console.error(
+      `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`,
+    );
+    restartClient("watchdog stuck");
   }
 }, 30000); // Check setiap 30 detik
 
@@ -2908,6 +2962,14 @@ client.on("message", async (message) => {
 
 // IX. GLOBAL ERROR HANDLERS & START
 process.on("unhandledRejection", (reason, p) => {
+  const pesan = String(reason?.message || reason);
+  // Wajar terjadi saat client sengaja di-destroy di tengah injeksi puppeteer.
+  // Jangan spam stack trace penuh, cukup satu baris.
+  if (/Target closed|Session closed|Protocol error|detached Frame/i.test(pesan)) {
+    console.warn("[WA] Puppeteer terputus saat restart:", pesan.split("\n")[0]);
+    logToFile("error", "UNHANDLED", pesan.split("\n")[0]);
+    return;
+  }
   console.error("[UNHANDLED REJECTION]", reason);
   logToFile("error", "UNHANDLED", String(reason));
 });
