@@ -37,6 +37,7 @@ const mongoose = require("mongoose");
 require("dotenv").config();
 
 const uri = process.env.MONGO_URI;
+let mongoReady = false;
 
 const Barang = require("./models/Barang");
 const Pegawai = require("./models/Pegawai");
@@ -65,9 +66,18 @@ async function refreshDataPegawai() {
   }
 }
 
-async function startApp() {
+async function connectToDatabase() {
+  if (!uri) {
+    console.warn("[DB] MONGO_URI tidak ditemukan. Menjalankan bot tanpa database.");
+    return false;
+  }
+
   try {
-    await mongoose.connect(uri);
+    await mongoose.connect(uri, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 20000,
+    });
+    mongoReady = true;
     console.log("Sip! Bot SisKA udah nyambung ke MongoDB Atlas");
     await refreshDataPegawai();
 
@@ -84,14 +94,35 @@ async function startApp() {
       console.error("Gagal memulihkan memori antrian:", e);
     }
 
+    return true;
+  } catch (err) {
+    mongoReady = false;
+    console.error("[DB] Gagal terhubung ke MongoDB:", err?.message || err);
+    console.warn("[DB] Bot akan tetap berjalan dalam mode terdegradasi tanpa database.");
+    return false;
+  }
+}
+
+async function startApp() {
+  try {
+    await connectToDatabase();
+
     app.listen(PORT_WEB, "0.0.0.0", () => {
       console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
     });
 
     client.initialize();
   } catch (err) {
-    console.error("Waduh, koneksi gagal:", err);
-    process.exit(1);
+    console.error("[INIT] Startup gagal:", err);
+    console.warn("[INIT] Mencoba melanjutkan startup walau ada error.");
+    try {
+      app.listen(PORT_WEB, "0.0.0.0", () => {
+        console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
+      });
+      client.initialize();
+    } catch (retryErr) {
+      console.error("[INIT] Startup ulang juga gagal:", retryErr);
+    }
   }
 }
 
@@ -674,55 +705,45 @@ async function downloadMediaViaStore(waClient, msgId) {
   }, msgId);
 }
 
-// VI-C. RETRY WRAPPER UNTUK DOWNLOAD MEDIA
-async function downloadMediaWithRetry(message, maxRetries = 3, delayMs = 2000) {
+// VI-C. DOWNLOAD MEDIA (percobaan tunggal — tanpa retry 3x)
+// Menyederhanakan perilaku: coba unduh via whatsapp-web.js sekali,
+// jika gagal coba fallback ke Store sekali, lalu lempar error ke pemanggil.
+async function downloadMediaWithRetry(message, maxRetries = 1, delayMs = 2000) {
   const waClient = message.client || client;
   const msgId = message.id?._serialized;
   let lastErr = null;
 
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    // Jalur bawaan whatsapp-web.js
+  // Jalur bawaan whatsapp-web.js (satu kali percobaan)
+  try {
+    // 1. TAMBAHKAN PENAMBAL INI SEBELUM DOWNLOAD
+    if (message.id && !message.id._serialized && message.id.$1) {
+      message.id._serialized = message.id.$1;
+    }
+
+    // 2. BARU LAKUKAN DOWNLOAD
+    const media = await message.downloadMedia();
+    if (media && media.data) return media;
+    lastErr = new Error("Media kosong / null dari WhatsApp Web");
+  } catch (err) {
+    lastErr = err;
+  }
+
+  // Jalur fallback langsung ke Store (satu kali percobaan)
+  if (msgId) {
     try {
-      const media = await message.downloadMedia();
-      if (media && media.data) return media;
-      lastErr = new Error("Media kosong / null dari WhatsApp Web");
+      const hasil = await downloadMediaViaStore(waClient, msgId);
+      if (hasil && hasil.data) {
+        console.log(`[MEDIA] Berhasil via fallback "${hasil.via}"`);
+        return new MessageMedia(
+          hasil.mimetype || "image/jpeg",
+          hasil.data,
+          hasil.filename,
+          hasil.filesize,
+        );
+      }
+      if (hasil && hasil.err) lastErr = new Error(hasil.err);
     } catch (err) {
       lastErr = err;
-    }
-
-    // Jalur fallback langsung ke Store
-    if (msgId) {
-      try {
-        const hasil = await downloadMediaViaStore(waClient, msgId);
-        if (hasil && hasil.data) {
-          console.log(
-            `[MEDIA] Berhasil via fallback "${hasil.via}" (percobaan ${attempt})`,
-          );
-          return new MessageMedia(
-            hasil.mimetype || "image/jpeg",
-            hasil.data,
-            hasil.filename,
-            hasil.filesize,
-          );
-        }
-        if (hasil && hasil.err) lastErr = new Error(hasil.err);
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-
-    console.error(`\n=== DOWNLOAD MEDIA GAGAL (${attempt}/${maxRetries}) ===`);
-    console.error("Message :", lastErr?.message);
-    console.error("Name    :", lastErr?.name);
-    console.error("Stack   :");
-    console.error(lastErr?.stack);
-    console.error("Detail  :");
-    console.error(util.inspect(lastErr, { depth: null }));
-    console.error("====================================\n");
-
-    if (attempt < maxRetries) {
-      // backoff bertambah: media kadang butuh waktu sinkron dari HP
-      await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
     }
   }
 
@@ -730,16 +751,12 @@ async function downloadMediaWithRetry(message, maxRetries = 3, delayMs = 2000) {
 }
 
 // VI-D. AMBIL MEDIA TANPA MERUSAK ALUR
-// Mengembalikan null (bukan throw) supaya state pengajuan user tidak terhapus
-// oleh catch global, sehingga user cukup mengirim ulang fotonya.
 async function ambilMediaAman(message, chatId, pesanGagal) {
   try {
     return await downloadMediaWithRetry(message);
   } catch (err) {
-    console.error(
-      "[MEDIA] Gagal total mengunduh media:",
-      err?.message || String(err),
-    );
+    console.error("[MEDIA] Gagal total mengunduh media:", err?.message || err, err);
+    if (err?.stack) console.error(err.stack);
     await kirimDenganTyping(
       client,
       chatId,
@@ -763,6 +780,7 @@ async function simpanMediaFallback(message, chatId, prefix) {
       note: "Media diterima lewat WhatsApp tetapi gagal diunduh oleh bot",
     }));
     await fsPromises.writeFile(targetPath, buffer);
+    console.log("[MEDIA] Fallback media disimpan untuk debugging:", targetPath, "type=", message.type, "mimetype=", message._data?.mimetype);
     return targetPath;
   } catch (err) {
     console.error("[MEDIA] Gagal menyimpan fallback media:", err);
@@ -771,23 +789,50 @@ async function simpanMediaFallback(message, chatId, prefix) {
 }
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
+function getPuppeteerExecutablePath() {
+  const candidates = [];
+
+  if (process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH) {
+    candidates.push(process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH);
+  }
+
+  if (process.platform === "win32") {
+    candidates.push(
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+      "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    );
+  } else {
+    candidates.push("/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome");
+  }
+
+  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
+}
+
+const puppeteerConfig = {
+  headless: true,
+  args: [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-accelerated-2d-canvas",
+    "--no-first-run",
+    "--no-zygote",
+    "--disable-gpu",
+  ],
+  timeout: 120000,
+  protocolTimeout: 180000,
+};
+
+const browserExecutablePath = getPuppeteerExecutablePath();
+if (browserExecutablePath) {
+  puppeteerConfig.executablePath = browserExecutablePath;
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
-  puppeteer: {
-    headless: true,
-    executablePath: '/usr/bin/chromium-browser', // TINGGAL TAMBAHIN BARIS INI AJA
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--disable-gpu",
-    ],
-    timeout: 120000,
-    protocolTimeout: 180000,
-  },
+  puppeteer: puppeteerConfig,
 });
 
 let botReady = false;
@@ -2029,9 +2074,15 @@ client.on("message", async (message) => {
 
     if (flow.step === "wfa-foto-1") {
       if (message.hasMedia) {
-        console.log("Type      :", message.type);
-        console.log("HasMedia  :", message.hasMedia);
-        console.log("Mimetype  :", message._data?.mimetype);
+        console.log("[MEDIA] Diterima media WFA:", {
+          type: message.type,
+          hasMedia: message.hasMedia,
+          mimetype: message._data?.mimetype,
+          id: message.id?._serialized,
+          mediaStage: message._data?.mediaStage,
+          directPath: !!message._data?.directPath,
+          filehash: !!message._data?.filehash,
+        });
 
         // Tunggu sebentar agar media benar-benar siap
         await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -2055,7 +2106,8 @@ client.on("message", async (message) => {
           );
           await fsPromises.writeFile(fotoPath, media.data, "base64");
         } else {
-          fotoPath = await simpanMediaFallback(message, chatId, "wfa1");
+          await simpanMediaFallback(message, chatId, "wfa1");
+          return; // Gagal unduh foto utama, minta ulang dan jangan lanjutkan ke langkah berikutnya
         }
 
         if (!fotoPath) {
@@ -2107,7 +2159,8 @@ client.on("message", async (message) => {
           );
           await fsPromises.writeFile(fotoPath2, media.data, "base64");
         } else {
-          fotoPath2 = await simpanMediaFallback(message, chatId, "wfa2");
+          await simpanMediaFallback(message, chatId, "wfa2");
+          return; // Gagal unduh foto tambahan, minta ulang atau ketik lanjut/skip
         }
       }
 

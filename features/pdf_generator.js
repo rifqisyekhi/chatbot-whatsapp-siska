@@ -418,7 +418,15 @@ async function buatLaporanWFAAsync(data, chatId, client) {
             dim1 = imageSize(buf1);
             validImg1 = true;
           } catch (e) {
-            console.error("Gagal memuat foto 1 WFA:", e.message);
+            console.error(
+              "Gagal memuat foto 1 WFA:",
+              e.message,
+              "path=",
+              item.fotoPath1,
+              "bytes=",
+              buf1?.length,
+              e,
+            );
           }
         }
 
@@ -428,7 +436,15 @@ async function buatLaporanWFAAsync(data, chatId, client) {
             dim2 = imageSize(buf2);
             validImg2 = true;
           } catch (e) {
-            console.error("Gagal memuat foto 2 WFA:", e.message);
+            console.error(
+              "Gagal memuat foto 2 WFA:",
+              e.message,
+              "path=",
+              item.fotoPath2,
+              "bytes=",
+              buf2?.length,
+              e,
+            );
           }
         }
 
@@ -460,8 +476,11 @@ async function buatLaporanWFAAsync(data, chatId, client) {
         if (validImg1) col5ImagesHeight += img1Height + 10;
         if (validImg2) col5ImagesHeight += img2Height + 10;
 
+        const hasAnyImage = validImg1 || validImg2;
+        const placeholderHeight = hasAnyImage ? 0 : 20;
+
         let textHeight5 = doc.heightOfString(item.keterangan || "-", { width: colWidths[5] - 8, align: "left" });
-        let col5TotalHeight = textHeight5 + (col5ImagesHeight > 0 ? col5ImagesHeight + 10 : 0);
+        let col5TotalHeight = textHeight5 + (col5ImagesHeight > 0 ? col5ImagesHeight + 10 : 0) + placeholderHeight;
 
         let textHeight = [
           doc.heightOfString(`${i + 1}.`, { width: colWidths[0] - 4, align: "center" }),
@@ -526,7 +545,7 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           doc.image(buf1, startXCenter, currentImgY, { width: img1Width, height: img1Height });
           currentImgY += img1Height + 10; 
         } else if (item.fotoPath1) {
-          doc.text("(Gambar 1 rusak)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
+          doc.text("(Gambar 1 tidak tersedia)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
           currentImgY += 20;
         }
 
@@ -534,7 +553,9 @@ async function buatLaporanWFAAsync(data, chatId, client) {
           let startXCenter = x + (colWidths[5] - img2Width) / 2;
           doc.image(buf2, startXCenter, currentImgY, { width: img2Width, height: img2Height });
         } else if (item.fotoPath2 && !validImg2) {
-          doc.text("(Gambar 2 rusak)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
+          doc.text("(Gambar 2 tidak tersedia)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
+        } else if (!hasAnyImage) {
+          doc.text("(Tidak ada gambar bukti)", x + 2, currentImgY, { width: colWidths[5] - 4, align: "center" });
         }
 
         currentY += rowHeight;
