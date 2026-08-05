@@ -22,3 +22,6 @@ credentials.json
 
 # Cache NPM lokal
 npm/
+
+frontend/dist/
+frontend/.env
