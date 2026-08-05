@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import InventoryTaking from './InventoryTaking'
 import AdminMasterDataTU from './MasterDataTU'
-import './App.css'
 
 function App() {
   const [page, setPage] = useState('inventory')
