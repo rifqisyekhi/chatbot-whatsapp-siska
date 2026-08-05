@@ -165,23 +165,39 @@ app.use("/assets", express.static(path.join(__dirname, "assets")));
 
 app.post("/api/login", async (req, res) => {
   try {
-    const { username, role } = req.body;
+    const { username, password } = req.body;
+    
+    console.log(`[LOGIN] Ada yang mencoba login dengan usn: ${username} & pw: ${password}`);
 
-    console.log("--- BYPASS LOGIN AKTIF ---");
-    console.log("Diterima dari Frontend (Dibaikan):", req.body);
+    // 1. JALUR ADMIN (Ketik username: admin, password: admin)
+    if (username === "admin" && password === "admin") {
+      const token = jwt.sign(
+        { username: "Admin Master", role: "admin" },
+        process.env.JWT_SECRET || "rahasia",
+        { expiresIn: "8h" }
+      );
+      console.log("[LOGIN] Admin berhasil masuk!");
+      return res.json({ token });
+    }
 
-    const token = jwt.sign(
-      { username: username || "admin_bypass", role: role || "pegawai" },
-      process.env.JWT_SECRET || "rahasia",
-      { expiresIn: "8h" }
-    );
+    // 2. JALUR PEGAWAI / USER BIASA (Ketik username: user, password: user)
+    if (username === "user" && password === "user") {
+      const token = jwt.sign(
+        { username: "Pegawai SisKA", role: "pegawai", nip: "-" },
+        process.env.JWT_SECRET || "rahasia",
+        { expiresIn: "8h" }
+      );
+      console.log("[LOGIN] User/Pegawai berhasil masuk!");
+      return res.json({ token });
+    }
 
-    console.log("Berhasil bypass! Token palsu dikirim ke frontend.");
-    return res.json({ token });
+    // 3. JIKA SALAH KETIK
+    console.log("[LOGIN] Gagal! Username atau password salah.");
+    return res.status(401).json({ message: "Username atau Password salah!" });
 
   } catch (error) {
-    console.error("CRASH:", error);
-    return res.status(500).json({ message: "Server crash." });
+    console.error("[CRASH LOGIN]:", error);
+    return res.status(500).json({ message: "Server crash saat mencoba login." });
   }
 });
 
