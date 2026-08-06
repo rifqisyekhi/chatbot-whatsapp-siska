@@ -997,6 +997,14 @@ client.on("authenticated", () => {
 // datang dari onOfflineProgressUpdateEvent di whatsapp-web.js (Client.js:386).
 client.on("loading_screen", (percent) => {
   console.log(`[WA] Memuat data WhatsApp Web... ${percent}%`);
+
+  // Selama persentasenya masih bergerak, bot sedang bekerja — bukan macet.
+  // Geser titik mulai supaya watchdog 5 menit tidak membunuh sinkronisasi yang
+  // memang lama. Ini nyata terjadi saat mailbox besar atau ketika profil
+  // browser baru harus menarik ulang seluruh riwayat chat: proses sah yang
+  // butuh lebih dari 5 menit akan dibunuh terus-menerus dan tidak pernah
+  // selesai, sehingga bot tidak akan pernah mencapai READY.
+  if (authStartTime > 0) authStartTime = Date.now();
 });
 
 client.on("ready", async () => {
