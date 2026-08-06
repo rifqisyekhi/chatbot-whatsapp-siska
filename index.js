@@ -591,11 +591,6 @@ async function kirimDenganTyping(client, chatId, text) {
 }
 
 // VI-B. FALLBACK DOWNLOAD MEDIA LANGSUNG DARI STORE WHATSAPP WEB
-// message.downloadMedia() bawaan whatsapp-web.js sering melempar error minified
-// ("r: r") dari downloadAndMaybeDecrypt. Fungsi ini mencoba jalur lain:
-// 1) ambil blob yang sudah didekripsi di memori browser,
-// 2) paksa resolve media (re-request ke HP) lalu cek blob lagi,
-// 3) dekripsi manual memakai field dari msg maupun msg.mediaData.
 async function downloadMediaViaStore(waClient, msgId) {
   return waClient.pupPage.evaluate(async (id) => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -721,9 +716,7 @@ async function downloadMediaViaStore(waClient, msgId) {
   }, msgId);
 }
 
-// VI-C. DOWNLOAD MEDIA (percobaan tunggal — tanpa retry 3x)
-// Menyederhanakan perilaku: coba unduh via whatsapp-web.js sekali,
-// jika gagal coba fallback ke Store sekali, lalu lempar error ke pemanggil.
+// VI-C. DOWNLOAD MEDIA
 async function downloadMediaWithRetry(message, maxRetries = 1, delayMs = 2000) {
   const waClient = message.client || client;
   const msgId = message.id?._serialized;
@@ -806,18 +799,9 @@ async function simpanMediaFallback(message, chatId, prefix) {
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
 
-// Di Ubuntu 22.04+ paket `chromium-browser` dan `chromium` bukan lagi browser
-// sungguhan, melainkan skrip shim kecil yang mengalihkan ke versi snap.
-// Menjalankan Chromium snap lewat Puppeteer berbahaya untuk bot 24 jam: snapd
-// memperbarui dirinya sendiri di latar belakang beberapa kali sehari, dan saat
-// refresh berjalan proses Chromium yang aktif DIHENTIKAN lalu binary-nya
-// ditukar. Node tidak menerima error apa pun — sesi WhatsApp mati diam-diam.
-// Jadi shim semacam itu harus dilewati, bukan dipakai.
 function apakahShimSnap(binPath) {
   try {
     if (fs.realpathSync(binPath).startsWith("/snap/")) return true;
-    // Browser asli itu ELF berukuran puluhan MB. Shim snap hanya skrip
-    // beberapa KB, jadi cukup baca isinya kalau file-nya mungil.
     if (fs.statSync(binPath).size > 100000) return false;
     return /\bsnap\b/i.test(fs.readFileSync(binPath, "utf8"));
   } catch (e) {
@@ -862,22 +846,10 @@ function getPuppeteerExecutablePath() {
     return candidate;
   }
 
-  // Tidak ada yang layak: biarkan kosong supaya Puppeteer memakai Chrome
-  // bawaannya sendiri, yang versinya sudah dipastikan cocok dan tidak
-  // diutak-atik snapd. Ini justru kondisi paling stabil.
   console.log("[BROWSER] Tidak ada browser sistem yang layak, memakai Chrome bawaan Puppeteer.");
   return null;
 }
 
-// Disetel untuk proses yang hidup 24 jam, bukan sekali jalan.
-// Catatan penting soal dua flag yang SENGAJA tidak dipakai lagi:
-// - `--no-zygote`: zygote adalah proses yang mem-fork renderer. Mematikannya
-//   hanya masuk akal di lingkungan serverless (Lambda) dan biasanya harus
-//   berpasangan dengan `--single-process`. Di server jangka panjang justru
-//   membuat renderer yang crash sulit dipulihkan dan meninggalkan proses zombie.
-// - `--disable-dev-shm-usage`: hanya perlu kalau /dev/shm sempit (64 MB, khas
-//   Docker). Di VPS ini /dev/shm 3.9 GB, jadi flag itu malah memaksa Chrome
-//   menulis shared memory ke disk dan memperlambat tanpa alasan.
 const puppeteerConfig = {
   headless: true,
   args: [
@@ -891,10 +863,6 @@ const puppeteerConfig = {
     "--disable-extensions",
     "--disable-default-apps",
     "--mute-audio",
-    // Tiga flag di bawah ini yang paling menentukan untuk bot 24 jam. Chrome
-    // headless menganggap tab yang tidak terlihat sebagai background lalu
-    // meredam timer dan renderer-nya. Akibatnya keepalive WhatsApp Web ikut
-    // tersendat setelah berjam-jam, dan sesi mati diam-diam.
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
@@ -1026,14 +994,6 @@ setInterval(() => {
   }
 }, 30000); // Check setiap 30 detik
 
-// Liveness probe: watchdog di atas hanya menangkap kasus "tidak pernah READY".
-// Kalau browser mati SETELAH ready — misalnya renderer crash — event
-// `disconnected` tidak akan pernah datang, karena whatsapp-web.js memancarkannya
-// dari listener yang hidup di dalam halaman browser itu sendiri
-// (node_modules/whatsapp-web.js/src/Client.js:1064). Browser mati = listener ikut
-// mati = Node tidak pernah tahu. Akibatnya `botReady` tetap true selamanya dan
-// bot jadi zombie: proses hidup, sesi WA mati, pesan masuk cuma centang satu.
-// Jadi jangan menunggu kabar dari browser — sapa browsernya secara aktif.
 async function cekNyawaClient() {
   let timer;
   try {
@@ -3112,15 +3072,6 @@ process.on("uncaughtException", (err) => {
   logToFile("error", "UNCAUGHT", err.stack || String(err));
 });
 
-// State alur (`pengajuanBySender`) hanya hidup di memori, jadi restart membuat
-// siapa pun yang sedang di tengah pengisian kehilangan progresnya. Bot memang
-// pulih sendiri — begitu flow-nya kosong, pesan apa pun akan memunculkan menu
-// utama (lihat index.js:1933) — tapi user tidak tahu kenapa dan bisa mengira
-// data yang sudah dia isi tersimpan. Jadi kabari dulu sebelum mati.
-//
-// Batasnya jelas: ini hanya jalan untuk mematikan yang TERENCANA (cron 00:00,
-// `pm2 restart`). Kalau Chromium crash mendadak, tidak ada kesempatan mengirim
-// apa pun — untuk itu obatnya mempersistenkan state alur ke MongoDB.
 const BATAS_KABAR_SHUTDOWN_MS = 10000;
 const MAKS_USER_DIKABARI = 30;
 let sedangMatikan = false;
@@ -3185,5 +3136,20 @@ async function matikanDenganAman(label) {
 
 process.on("SIGINT", () => matikanDenganAman("SIGINT"));
 process.on("SIGTERM", () => matikanDenganAman("SIGTERM (PM2 Restart)"));
+
+// Fallback SPA. React Router memakai path sungguhan (/admin, /admin/barang),
+// jadi saat halaman itu di-refresh atau dibuka langsung dari bilah alamat,
+// Express harus tetap mengirim index.html — kalau tidak, muncul "Cannot GET
+// /admin". Ditulis sebagai middleware biasa, bukan app.get("*"), karena
+// Express 5 memakai path-to-regexp v8 yang menolak pola bintang telanjang.
+// Wajib terdaftar paling akhir supaya tidak menelan route API di atasnya.
+app.use((req, res, next) => {
+  if (req.method !== "GET" && req.method !== "HEAD") return next();
+  if (req.path.startsWith("/api/")) return next();
+  // Permintaan berkas (punya ekstensi) dibiarkan 404 apa adanya, supaya aset
+  // yang benar-benar hilang tidak menyamar jadi halaman HTML.
+  if (req.path.includes(".")) return next();
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 startApp();

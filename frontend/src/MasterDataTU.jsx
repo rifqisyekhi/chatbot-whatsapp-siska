@@ -12,14 +12,9 @@ import {
 } from "react-icons/fa";
 
 export default function AdminMasterDataTU() {
-  // ==========================================
-  // STATE AUTENTIKASI (Login Tembak API)
-  // ==========================================
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoginLoading, setIsLoginLoading] = useState(false);
-  const [usernameInput, setUsernameInput] = useState("");
-  const [passwordInput, setPasswordInput] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
+  // Gerbang login dilepas atas permintaan: pegawai admin yang memakai halaman
+  // ini kesulitan dengan proses login. Endpoint /api/login di backend sengaja
+  // dibiarkan utuh supaya login gampang dipasang lagi kalau nanti dibutuhkan.
 
   // ==========================================
   // STATE DATA MASTER
@@ -36,66 +31,7 @@ export default function AdminMasterDataTU() {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({});
 
-  // CEK LOGIN MEMORY (Cari token di localStorage)
-  useEffect(() => {
-    const savedToken = localStorage.getItem("masterdataToken");
-    if (savedToken) {
-      setIsLoggedIn(true);
-    }
-  }, []);
-
-  // FUNGSI LOGIN (Nembak API Backend)
-  // FUNGSI LOGIN (Nembak API Backend)
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setErrorMsg("");
-
-    if (!usernameInput || !passwordInput) {
-      setErrorMsg("Isi username dan password dulu, brad!");
-      return;
-    }
-
-    setIsLoginLoading(true);
-    try {
-      const requestBody = {
-        username: usernameInput.trim(),
-        password: passwordInput,
-      };
-
-      console.log("Ngirim data login:", requestBody);
-
-      const res = await apiTU({
-        url: "api/login",
-        method: "POST",
-        options: {
-          body: requestBody,
-        },
-      });
-
-      if (res && res.token) {
-        localStorage.setItem("masterdataToken", res.token);
-        setIsLoggedIn(true);
-      } else {
-        throw new Error("Token tidak diterima dari server");
-      }
-    } catch (error) {
-      console.error("Login Error:", error.message);
-      setErrorMsg("Username atau Password salah, brad!");
-    } finally {
-      setIsLoginLoading(false);
-    }
-  };
-
-  const handleLogout = () => {
-    if (window.confirm("Yakin mau logout dari Master Data?")) {
-      setIsLoggedIn(false);
-      localStorage.removeItem("masterdataToken");
-      setUsernameInput("");
-      setPasswordInput("");
-    }
-  };
-
-  // AMBIL DATA (Hanya jalan kalau sudah login, otomatis pakai token jika ada)
+  // AMBIL DATA
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -110,10 +46,8 @@ export default function AdminMasterDataTU() {
   };
 
   useEffect(() => {
-    if (isLoggedIn) {
-      fetchData();
-    }
-  }, [isLoggedIn]);
+    fetchData();
+  }, []);
 
   // FUNGSI CRUD MASTER DATA (Pakai apiTU)
   const handleChange = (e) =>
@@ -186,69 +120,6 @@ export default function AdminMasterDataTU() {
     return matchSearch && matchFilter;
   });
 
-  // ==========================================
-  // RENDER UI 1: JIKA BELUM LOGIN
-  // ==========================================
-  if (!isLoggedIn) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-sm">
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-extrabold text-blue-600 mb-2">
-              Admin Panel Tata Usaha
-            </h1>
-            <p className="text-sm text-slate-500">
-              Pegawai dan Kendaraan
-            </p>
-          </div>
-          {errorMsg && (
-            <div className="bg-red-50 text-red-600 text-sm p-3 rounded-xl mb-4 text-center border border-red-100 font-medium">
-              {errorMsg}
-            </div>
-          )}
-          <form onSubmit={handleLogin} className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                Username
-              </label>
-              <input
-                type="text"
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:border-blue-500 text-sm"
-                placeholder="Masukkan username"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                Password
-              </label>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl border border-slate-200 outline-none focus:border-blue-500 text-sm"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={isLoginLoading}
-              className="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-95 text-sm disabled:opacity-50"
-            >
-              {isLoginLoading ? "Memeriksa..." : "Login"}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-  // ==========================================
-  // RENDER UI 2: JIKA SUDAH LOGIN (PANEL ADMIN)
-  // ==========================================
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto">
@@ -286,13 +157,6 @@ export default function AdminMasterDataTU() {
                 <FaCar className="w-4 h-4" /> Kendaraan
               </button>
             </div>
-            {/* TOMBOL LOGOUT */}
-            <button
-              onClick={handleLogout}
-              className="bg-red-50 text-red-600 hover:bg-red-600 hover:text-white px-5 py-2 rounded-xl font-bold text-sm transition-all border border-red-100"
-            >
-              Logout
-            </button>
           </div>
         </div>
 
