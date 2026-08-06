@@ -826,16 +826,35 @@ function getPuppeteerExecutablePath() {
   return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
 }
 
+// Disetel untuk proses yang hidup 24 jam, bukan sekali jalan.
+// Catatan penting soal dua flag yang SENGAJA tidak dipakai lagi:
+// - `--no-zygote`: zygote adalah proses yang mem-fork renderer. Mematikannya
+//   hanya masuk akal di lingkungan serverless (Lambda) dan biasanya harus
+//   berpasangan dengan `--single-process`. Di server jangka panjang justru
+//   membuat renderer yang crash sulit dipulihkan dan meninggalkan proses zombie.
+// - `--disable-dev-shm-usage`: hanya perlu kalau /dev/shm sempit (64 MB, khas
+//   Docker). Di VPS ini /dev/shm 3.9 GB, jadi flag itu malah memaksa Chrome
+//   menulis shared memory ke disk dan memperlambat tanpa alasan.
 const puppeteerConfig = {
   headless: true,
   args: [
     "--no-sandbox",
     "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
     "--disable-accelerated-2d-canvas",
     "--no-first-run",
-    "--no-zygote",
+    "--no-default-browser-check",
     "--disable-gpu",
+    "--disable-software-rasterizer",
+    "--disable-extensions",
+    "--disable-default-apps",
+    "--mute-audio",
+    // Tiga flag di bawah ini yang paling menentukan untuk bot 24 jam. Chrome
+    // headless menganggap tab yang tidak terlihat sebagai background lalu
+    // meredam timer dan renderer-nya. Akibatnya keepalive WhatsApp Web ikut
+    // tersendat setelah berjam-jam, dan sesi mati diam-diam.
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
   ],
   timeout: 120000,
   protocolTimeout: 180000,
@@ -855,9 +874,12 @@ let botReady = false;
 let authStartTime = 0;
 let restarting = false;
 let gagalRestartBeruntun = 0;
+let gagalProbeBeruntun = 0;
 
 const STUCK_TIMEOUT_MS = 300000; // 5 menit tanpa READY dianggap stuck
 const MAX_RESTART_BERUNTUN = 3; // Lewat ini, serahkan ke PM2 (proses baru, browser bersih)
+const LIVENESS_INTERVAL_MS = 60000; // Sapa browser tiap 1 menit
+const LIVENESS_TIMEOUT_MS = 20000; // Browser sehat menjawab getState jauh di bawah ini
 
 // Satu-satunya pintu masuk buat menyalakan client, sekaligus reset timer stuck.
 // Tanpa ini, `authStartTime` cuma di-set saat QR muncul, jadi begitu sesi
@@ -924,6 +946,7 @@ client.on("ready", async () => {
   authStartTime = 0;
   restarting = false;
   gagalRestartBeruntun = 0;
+  gagalProbeBeruntun = 0;
   console.log("[READY] Bot SisKA siap!");
 
   try {
@@ -959,6 +982,57 @@ setInterval(() => {
     restartClient("watchdog stuck");
   }
 }, 30000); // Check setiap 30 detik
+
+// Liveness probe: watchdog di atas hanya menangkap kasus "tidak pernah READY".
+// Kalau browser mati SETELAH ready — misalnya renderer crash — event
+// `disconnected` tidak akan pernah datang, karena whatsapp-web.js memancarkannya
+// dari listener yang hidup di dalam halaman browser itu sendiri
+// (node_modules/whatsapp-web.js/src/Client.js:1064). Browser mati = listener ikut
+// mati = Node tidak pernah tahu. Akibatnya `botReady` tetap true selamanya dan
+// bot jadi zombie: proses hidup, sesi WA mati, pesan masuk cuma centang satu.
+// Jadi jangan menunggu kabar dari browser — sapa browsernya secara aktif.
+async function cekNyawaClient() {
+  let timer;
+  try {
+    return await Promise.race([
+      client.getState(),
+      new Promise((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`getState tidak menjawab dalam ${LIVENESS_TIMEOUT_MS / 1000}s`)),
+          LIVENESS_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+setInterval(async () => {
+  if (!botReady || restarting) return;
+
+  try {
+    const state = await cekNyawaClient();
+    if (state === "CONNECTED") {
+      gagalProbeBeruntun = 0;
+      return;
+    }
+    gagalProbeBeruntun += 1;
+    console.warn(`[HEALTH] State bukan CONNECTED: ${state} (${gagalProbeBeruntun}x)`);
+  } catch (e) {
+    gagalProbeBeruntun += 1;
+    console.warn(`[HEALTH] Probe gagal (${gagalProbeBeruntun}x):`, e?.message || e);
+  }
+
+  // Butuh 2x gagal berturut-turut supaya gangguan sesaat tidak memicu restart.
+  if (gagalProbeBeruntun >= 2) {
+    console.error("[CRITICAL] Browser tidak merespons padahal status READY — bot zombie. Restart...");
+    logToFile("error", "HEALTH", "Bot zombie terdeteksi, restart otomatis");
+    gagalProbeBeruntun = 0;
+    botReady = false;
+    await restartClient("liveness probe gagal");
+  }
+}, LIVENESS_INTERVAL_MS);
 
 // VIII. MESSAGE HANDLER
 client.on("message", async (message) => {
