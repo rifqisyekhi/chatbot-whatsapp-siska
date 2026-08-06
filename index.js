@@ -103,22 +103,43 @@ async function connectToDatabase() {
   }
 }
 
+// app.listen() melaporkan kegagalan lewat event "error", BUKAN dengan melempar
+// exception — jadi try/catch di sekelilingnya tidak pernah menangkapnya. Tanpa
+// penanganan ini, port yang sudah dipakai aplikasi lain hanya muncul sebagai
+// [UNCAUGHT EXCEPTION] samar, bot tetap jalan, dan dashboard diam-diam mati.
+// Server ini berbagi VPS dengan aplikasi lain, jadi bentrok port harus berisik.
+function nyalakanWebServer() {
+  const server = app.listen(PORT_WEB, "0.0.0.0", () => {
+    console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
+  });
+
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `[WEB SERVER] Port ${PORT_WEB} sudah dipakai aplikasi lain! Dashboard tidak akan bisa dibuka.`,
+      );
+      console.error(
+        `[WEB SERVER] Cek dengan: sudo ss -tlnp | grep ${PORT_WEB} — lalu ganti PORT_WEB di .env.`,
+      );
+    } else {
+      console.error("[WEB SERVER] Gagal menyalakan server web:", err.message);
+    }
+    logToFile("error", "WEBSERVER", err.message);
+  });
+
+  return server;
+}
+
 async function startApp() {
   try {
     await connectToDatabase();
-
-    app.listen(PORT_WEB, "0.0.0.0", () => {
-      console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
-    });
-
+    nyalakanWebServer();
     await startClient("startup");
   } catch (err) {
     console.error("[INIT] Startup gagal:", err);
     console.warn("[INIT] Mencoba melanjutkan startup walau ada error.");
     try {
-      app.listen(PORT_WEB, "0.0.0.0", () => {
-        console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
-      });
+      nyalakanWebServer();
       await startClient("startup retry");
     } catch (retryErr) {
       console.error("[INIT] Startup ulang juga gagal:", retryErr);
