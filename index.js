@@ -991,6 +991,14 @@ client.on("authenticated", () => {
   console.log(`[WA] Authenticated! (${elapsed}s) - Tunggu proses loading...`);
 });
 
+// Jeda terlama saat startup hampir selalu ada di antara "authenticated" dan
+// "ready": WhatsApp Web sedang menarik daftar chat dan pesan tertunda. Tanpa
+// ini, bagian itu tampak seperti bot menggantung tanpa sebab. Persentasenya
+// datang dari onOfflineProgressUpdateEvent di whatsapp-web.js (Client.js:386).
+client.on("loading_screen", (percent) => {
+  console.log(`[WA] Memuat data WhatsApp Web... ${percent}%`);
+});
+
 client.on("ready", async () => {
   // Kalau sudah ready sebelumnya, ini READY kedua akibat halaman WA disuntik
   // ulang — bukan bot yang baru menyala. Dibedakan supaya log tidak menipu.
