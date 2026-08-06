@@ -37,4 +37,12 @@ export default defineConfig({
     outDir: OUT_DIR,
     emptyOutDir: false,
   },
+  server: {
+    // URL API dibuat relatif (lihat services/ApiTU.js), jadi saat `npm run dev`
+    // panggilan /api akan nyasar ke server Vite. Proxy ini meneruskannya ke
+    // Express supaya mode pengembangan tetap jalan tanpa mengubah kode.
+    proxy: {
+      '/api': 'http://localhost:3000',
+    },
+  },
 })

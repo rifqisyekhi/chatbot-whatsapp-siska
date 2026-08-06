@@ -37,8 +37,15 @@
 //     throw error;
 //   }
 // };
-// Pastikan BASE_URL terdefinisi untuk Vite dan development.
-const BASE_URL = import.meta.env.VITE_API_TU || "http://localhost:3000";
+// Default sengaja string kosong supaya URL-nya RELATIF terhadap halaman yang
+// sedang dibuka. Frontend dan API disajikan oleh Express yang sama dan di port
+// yang sama, jadi "/api/barang" selalu menemukan servernya sendiri — entah
+// diakses lewat IP VPS, domain, atau localhost.
+//
+// Jangan isi VITE_API_TU dengan http://localhost:3000: nilainya dibakar ke
+// dalam bundle saat build, sehingga browser pengunjung akan memanggil
+// localhost MILIK PENGUNJUNG, bukan server.
+const BASE_URL = import.meta.env.VITE_API_TU || "";
 
 export const apiTU = async ({ 
   url, 

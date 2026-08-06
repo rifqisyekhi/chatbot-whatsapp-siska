@@ -14,9 +14,12 @@ function AdminLayout({ children }) {
         : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
     }`
 
+  // Tinggi dibuat pasti (h-screen + flex kolom) supaya halaman anak yang
+  // memakai h-full — seperti Dashboard Barang dengan tabel bergulir sendiri —
+  // mendapat tinggi yang jelas dan tidak melimpah keluar layar.
   return (
-    <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 shadow-sm">
+    <div className="h-screen flex flex-col bg-slate-50">
+      <header className="bg-white border-b border-slate-200 shadow-sm shrink-0">
         <div className="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-lg font-bold text-slate-900">SisKA Dashboard</h1>
@@ -32,7 +35,7 @@ function AdminLayout({ children }) {
           </nav>
         </div>
       </header>
-      <main>{children}</main>
+      <main className="flex-1 min-h-0 overflow-auto">{children}</main>
     </div>
   )
 }
