@@ -19,8 +19,9 @@ import { apiTU } from "./services/ApiTU";
 // 2. Gerbang login dilepas, mengikuti keputusan bahwa dashboard tidak memakai
 //    login. Versi aslinya juga tidak benar-benar mengamankan apa pun: apiTU
 //    tidak pernah mengirim token, dan /api/barang di backend memang terbuka.
-// 3. Tinggi akar diubah dari h-screen ke h-full supaya pas di dalam
-//    AdminLayout yang sudah punya bilah navigasi sendiri.
+//
+// Halaman ini berdiri sendiri tanpa navigasi bersama, supaya operator barang
+// tidak punya jalan ke dashboard data pegawai (lihat App.jsx).
 //
 // id barang: GET /api/barang memetakan id_barang menjadi `id` (index.js:320),
 // sedangkan route PUT/DELETE memakai :id_barang. Jadi `item.id` di sini sudah
@@ -280,7 +281,7 @@ const DashboardBarang = () => {
   }, [databaseBarang]);
 
   return (
-    <div className="flex h-full w-full text-[#1f2937] font-sans overflow-hidden bg-gray-50">
+    <div className="flex h-screen w-full text-[#1f2937] font-sans overflow-hidden bg-gray-50">
       <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
         <header className="h-[72px] bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0">
           <div>
