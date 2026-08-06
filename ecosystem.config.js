@@ -23,6 +23,12 @@ module.exports = {
       autorestart: true,
       restart_delay: 5000,
 
+      // Default PM2 hanya 1600 ms — terlalu pendek. Handler SIGTERM di index.js
+      // sempat mengabari user yang sedang di tengah alur (batas 10 detik) lalu
+      // menutup browser. Tanpa kelonggaran ini, prosesnya dibunuh paksa
+      // sebelum pesan sempat terkirim.
+      kill_timeout: 20000,
+
       // Kalau proses mati kurang dari 60 detik setelah start sebanyak 10 kali,
       // PM2 berhenti mencoba. Ini rem darurat supaya crash-loop tidak
       // menghabiskan CPU seperti kejadian restart beruntun sebelumnya.

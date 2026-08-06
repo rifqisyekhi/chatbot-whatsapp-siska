@@ -3069,20 +3069,78 @@ process.on("uncaughtException", (err) => {
   logToFile("error", "UNCAUGHT", err.stack || String(err));
 });
 
-process.on("SIGINT", async () => {
-  console.log("[(SIGINT)] Mematikan bot SisKA dengan aman...");
-  try {
-    await client.destroy();
-  } catch (e) {}
-  process.exit(0);
-});
+// State alur (`pengajuanBySender`) hanya hidup di memori, jadi restart membuat
+// siapa pun yang sedang di tengah pengisian kehilangan progresnya. Bot memang
+// pulih sendiri — begitu flow-nya kosong, pesan apa pun akan memunculkan menu
+// utama (lihat index.js:1933) — tapi user tidak tahu kenapa dan bisa mengira
+// data yang sudah dia isi tersimpan. Jadi kabari dulu sebelum mati.
+//
+// Batasnya jelas: ini hanya jalan untuk mematikan yang TERENCANA (cron 00:00,
+// `pm2 restart`). Kalau Chromium crash mendadak, tidak ada kesempatan mengirim
+// apa pun — untuk itu obatnya mempersistenkan state alur ke MongoDB.
+const BATAS_KABAR_SHUTDOWN_MS = 10000;
+const MAKS_USER_DIKABARI = 30;
+let sedangMatikan = false;
 
-process.on("SIGTERM", async () => {
-  console.log("[(SIGTERM)] Mematikan bot SisKA dengan aman (PM2 Restart)...");
+async function kabariUserSedangProses() {
+  if (!botReady) return;
+
+  // Yang berhenti di menu utama tidak kehilangan apa-apa, jadi tidak diganggu.
+  const korban = [
+    ...Object.keys(pengajuanBySender).filter(
+      (id) => pengajuanBySender[id] && pengajuanBySender[id].step !== "menu",
+    ),
+    ...Object.keys(helpdeskQueue),
+  ];
+  const unik = [...new Set(korban)];
+  if (unik.length === 0) return;
+
+  const dikirim = unik.slice(0, MAKS_USER_DIKABARI);
+  if (unik.length > dikirim.length) {
+    console.warn(
+      `[SHUTDOWN] ${unik.length} user di tengah alur, hanya ${dikirim.length} yang dikabari (dibatasi waktu shutdown).`,
+    );
+  }
+
+  const teks =
+    "⚠️ Mohon maaf, sistem sedang melakukan pemeliharaan rutin.\n\n" +
+    "Proses pengajuan Anda yang belum selesai perlu diulang dari awal. " +
+    "Silakan kirim pesan apa saja beberapa saat lagi untuk kembali ke menu utama.\n\nTerima kasih.";
+
+  // sendMessage langsung, bukan kirimDenganTyping — jeda mengetiknya (0,5-1,5
+  // detik per pesan) tidak terjangkau di dalam jendela shutdown.
+  await Promise.race([
+    Promise.allSettled(
+      dikirim.map((id) =>
+        client.sendMessage(id, teks).catch((e) => {
+          console.error(`[SHUTDOWN] Gagal mengabari ${id}:`, e?.message || e);
+        }),
+      ),
+    ),
+    new Promise((r) => setTimeout(r, BATAS_KABAR_SHUTDOWN_MS)),
+  ]);
+
+  console.log(`[SHUTDOWN] Selesai mengabari ${dikirim.length} user.`);
+}
+
+async function matikanDenganAman(label) {
+  if (sedangMatikan) return;
+  sedangMatikan = true;
+  console.log(`[(${label})] Mematikan bot SisKA dengan aman...`);
+
+  try {
+    await kabariUserSedangProses();
+  } catch (e) {
+    console.error("[SHUTDOWN] Gagal mengabari user:", e?.message || e);
+  }
+
   try {
     await client.destroy();
   } catch (e) {}
   process.exit(0);
-});
+}
+
+process.on("SIGINT", () => matikanDenganAman("SIGINT"));
+process.on("SIGTERM", () => matikanDenganAman("SIGTERM (PM2 Restart)"));
 
 startApp();
