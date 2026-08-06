@@ -907,6 +907,7 @@ let authStartTime = 0;
 let restarting = false;
 let gagalRestartBeruntun = 0;
 let gagalProbeBeruntun = 0;
+let jumlahReinject = 0;
 
 const STUCK_TIMEOUT_MS = 300000; // 5 menit tanpa READY dianggap stuck
 const MAX_RESTART_BERUNTUN = 3; // Lewat ini, serahkan ke PM2 (proses baru, browser bersih)
@@ -969,17 +970,41 @@ client.on("qr", (qr) => {
 });
 
 client.on("authenticated", () => {
+  // authStartTime bernilai 0 hanya SETELAH bot pernah ready. Kalau event ini
+  // menyala dalam kondisi tersebut, artinya bukan autentikasi baru: halaman
+  // WhatsApp Web berpindah/memuat ulang, lalu whatsapp-web.js menyuntik ulang
+  // dan memancarkan AUTHENTICATED + READY sekali lagi
+  // (node_modules/whatsapp-web.js/src/Client.js:495-504).
+  //
+  // Dibedakan supaya tidak menyamar jadi restart di log — dulu barisnya
+  // mencetak durasi ngawur seperti "1786043275.01s", yaitu Date.now()/1000.
+  if (authStartTime === 0) {
+    jumlahReinject += 1;
+    console.log(
+      `[WA] Halaman WhatsApp Web dimuat ulang, sesi disuntik ulang (ke-${jumlahReinject}). Bot TIDAK restart.`,
+    );
+    logToFile("info", "REINJECT", `Halaman WA dimuat ulang (ke-${jumlahReinject})`);
+    return;
+  }
+
   const elapsed = ((Date.now() - authStartTime) / 1000).toFixed(2);
   console.log(`[WA] Authenticated! (${elapsed}s) - Tunggu proses loading...`);
 });
 
 client.on("ready", async () => {
+  // Kalau sudah ready sebelumnya, ini READY kedua akibat halaman WA disuntik
+  // ulang — bukan bot yang baru menyala. Dibedakan supaya log tidak menipu.
+  const sebelumnyaReady = botReady;
   botReady = true;
   authStartTime = 0;
   restarting = false;
   gagalRestartBeruntun = 0;
   gagalProbeBeruntun = 0;
-  console.log("[READY] Bot SisKA siap!");
+  console.log(
+    sebelumnyaReady
+      ? "[READY] Sesi WhatsApp Web pulih setelah halaman dimuat ulang."
+      : "[READY] Bot SisKA siap!",
+  );
 
   try {
     const version = await client.getWWebVersion();
