@@ -25,3 +25,6 @@ npm/
 
 frontend/dist/
 frontend/.env
+# Cadangan sesi WhatsApp dari scripts/reset-sesi-wa.sh
+.wwebjs_auth.bak-*/
+.wwebjs_cache.bak-*/
