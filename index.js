@@ -920,6 +920,16 @@ const client = new Client({
   // src/webCache/WebCache.js). Folder .wwebjs_cache jadi tidak terpakai dan
   // aman dihapus.
   webVersionCache: { type: "none" },
+
+  // WhatsApp Web hanya mengizinkan SATU klien web aktif. Kalau WhatsApp masih
+  // menganggap sesi sebelumnya hidup, klien baru masuk ke state CONFLICT dan
+  // menunggu selamanya tanpa pesan apa pun — persis pola "sekali berhasil,
+  // setelah itu selalu mentok di Authenticated tanpa pernah READY".
+  // Default whatsapp-web.js adalah false (Constants.js:16), yang berarti
+  // menyerah diam-diam. Di sini bot memang harus jadi satu-satunya pemegang
+  // sesi, jadi rebut saja.
+  takeoverOnConflict: true,
+  takeoverTimeoutMs: 10000,
 });
 
 let botReady = false;
@@ -1015,6 +1025,18 @@ client.on("authenticated", () => {
 // "ready": WhatsApp Web sedang menarik daftar chat dan pesan tertunda. Tanpa
 // ini, bagian itu tampak seperti bot menggantung tanpa sebab. Persentasenya
 // datang dari onOfflineProgressUpdateEvent di whatsapp-web.js (Client.js:386).
+// Satu-satunya jendela untuk melihat apa yang sebenarnya terjadi saat bot
+// mentok di antara "authenticated" dan "ready". Nilai yang mungkin muncul ada
+// di whatsapp-web.js Constants.js WAState — yang paling menjelaskan:
+//   CONFLICT           sesi direbut / dipakai klien web lain
+//   UNPAIRED           tautan perangkat dicabut dari HP, perlu scan QR lagi
+//   DEPRECATED_VERSION versi WhatsApp Web terlalu tua untuk pustaka ini
+//   TIMEOUT / OPENING  koneksi ke server WhatsApp tersendat
+client.on("change_state", (state) => {
+  console.log(`[WA] Perubahan state: ${state}`);
+  logToFile("info", "WASTATE", String(state));
+});
+
 client.on("loading_screen", (percent) => {
   console.log(`[WA] Memuat data WhatsApp Web... ${percent}%`);
 
