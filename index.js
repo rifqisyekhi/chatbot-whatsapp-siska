@@ -900,6 +900,26 @@ if (browserExecutablePath) {
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: "siska" }),
   puppeteer: puppeteerConfig,
+
+  // INI PENYEBAB "harus hapus .wwebjs_cache biar jalan lagi".
+  //
+  // Default whatsapp-web.js adalah { type: "local" }
+  // (node_modules/whatsapp-web.js/src/util/Constants.js:11). Mode itu
+  // MEMBEKUKAN satu salinan index.html WhatsApp Web ke .wwebjs_cache/, lalu
+  // menyajikan salinan beku itu setiap kali start alih-alih halaman hidup.
+  //
+  // WhatsApp terus berubah di sisi server. Makin tua salinan beku itu, makin
+  // besar peluangnya merujuk skrip yang sudah tidak dilayani lagi: halaman
+  // terbuka, event authenticated menyala, tapi inisialisasinya tidak pernah
+  // selesai sehingga READY tidak pernah datang. Dulu restart saja cukup karena
+  // cache-nya masih segar; setelah menua, satu-satunya obat adalah
+  // menghapusnya secara manual.
+  //
+  // Dengan "none", tidak ada yang dibekukan — selalu memakai WhatsApp Web yang
+  // sedang dilayani (WebCache.resolve() mengembalikan null, lihat
+  // src/webCache/WebCache.js). Folder .wwebjs_cache jadi tidak terpakai dan
+  // aman dihapus.
+  webVersionCache: { type: "none" },
 });
 
 let botReady = false;
