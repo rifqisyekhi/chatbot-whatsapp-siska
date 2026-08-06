@@ -805,9 +805,30 @@ async function simpanMediaFallback(message, chatId, prefix) {
 }
 
 // VII. WHATSAPP CLIENT INIT & EVENT HANDLERS
+
+// Di Ubuntu 22.04+ paket `chromium-browser` dan `chromium` bukan lagi browser
+// sungguhan, melainkan skrip shim kecil yang mengalihkan ke versi snap.
+// Menjalankan Chromium snap lewat Puppeteer berbahaya untuk bot 24 jam: snapd
+// memperbarui dirinya sendiri di latar belakang beberapa kali sehari, dan saat
+// refresh berjalan proses Chromium yang aktif DIHENTIKAN lalu binary-nya
+// ditukar. Node tidak menerima error apa pun — sesi WhatsApp mati diam-diam.
+// Jadi shim semacam itu harus dilewati, bukan dipakai.
+function apakahShimSnap(binPath) {
+  try {
+    if (fs.realpathSync(binPath).startsWith("/snap/")) return true;
+    // Browser asli itu ELF berukuran puluhan MB. Shim snap hanya skrip
+    // beberapa KB, jadi cukup baca isinya kalau file-nya mungil.
+    if (fs.statSync(binPath).size > 100000) return false;
+    return /\bsnap\b/i.test(fs.readFileSync(binPath, "utf8"));
+  } catch (e) {
+    return false;
+  }
+}
+
 function getPuppeteerExecutablePath() {
   const candidates = [];
 
+  // Jalan pintas manual, dihormati lebih dulu dari deteksi otomatis.
   if (process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH) {
     candidates.push(process.env.CHROME_BIN || process.env.PUPPETEER_EXECUTABLE_PATH);
   }
@@ -820,10 +841,32 @@ function getPuppeteerExecutablePath() {
       "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
     );
   } else {
-    candidates.push("/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome");
+    // Chrome resmi dari paket .deb didahulukan; `chromium-browser` ditaruh
+    // paling belakang justru karena di Ubuntu modern itu biasanya shim snap.
+    candidates.push(
+      "/usr/bin/google-chrome-stable",
+      "/usr/bin/google-chrome",
+      "/opt/google/chrome/chrome",
+      "/usr/bin/chromium",
+      "/usr/bin/chromium-browser",
+    );
   }
 
-  return candidates.find((candidate) => candidate && fs.existsSync(candidate)) || null;
+  for (const candidate of candidates) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    if (process.platform !== "win32" && apakahShimSnap(candidate)) {
+      console.warn(`[BROWSER] ${candidate} adalah shim snap, dilewati.`);
+      continue;
+    }
+    console.log(`[BROWSER] Memakai browser sistem: ${candidate}`);
+    return candidate;
+  }
+
+  // Tidak ada yang layak: biarkan kosong supaya Puppeteer memakai Chrome
+  // bawaannya sendiri, yang versinya sudah dipastikan cocok dan tidak
+  // diutak-atik snapd. Ini justru kondisi paling stabil.
+  console.log("[BROWSER] Tidak ada browser sistem yang layak, memakai Chrome bawaan Puppeteer.");
+  return null;
 }
 
 // Disetel untuk proses yang hidup 24 jam, bukan sekali jalan.
