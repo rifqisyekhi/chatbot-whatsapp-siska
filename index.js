@@ -184,6 +184,42 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/assets", express.static(path.join(__dirname, "assets")));
 
+// Jejak perubahan data dari dashboard. Sebelumnya route API sama sekali tidak
+// mencatat apa pun, jadi ketika admin menambah atau menghapus barang, terminal
+// diam — tidak ada cara mengetahui siapa mengubah apa, apalagi kalau gagal.
+//
+// Dipasang sebagai middleware supaya berlaku untuk semua route API sekaligus,
+// termasuk yang ditambahkan nanti. GET sengaja dilewati agar log tidak
+// tenggelam oleh permintaan pembacaan biasa.
+function ringkasBody(body) {
+  if (!body || typeof body !== "object") return "";
+  const menarik = ["nama", "id_barang", "stok", "satuan", "kategori", "nip", "plat"];
+  const bagian = menarik
+    .filter((k) => body[k] !== undefined)
+    .map((k) => `${k}=${String(body[k]).slice(0, 40)}`);
+  // `img` sengaja tidak pernah dicetak: isinya base64 ratusan kilobyte dan
+  // akan membanjiri berkas log sampai tidak terbaca.
+  if (body.img) bagian.push("img=<ada>");
+  return bagian.length ? ` | ${bagian.join(" ")}` : "";
+}
+
+app.use("/api", (req, res, next) => {
+  if (req.method === "GET") return next();
+
+  const mulai = Date.now();
+  const asal = req.ip || req.socket?.remoteAddress || "?";
+
+  res.on("finish", () => {
+    const status = res.statusCode;
+    const baris = `[API] ${req.method} ${req.originalUrl} -> ${status} (${Date.now() - mulai}ms) | dari ${asal}${ringkasBody(req.body)}`;
+    if (status >= 400) console.error(baris);
+    else console.log(baris);
+    logToFile("api", req.method, baris);
+  });
+
+  next();
+});
+
 app.post("/api/login", async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -232,6 +268,7 @@ app.get("/api/pegawai", async (req, res) => {
     const data = await Pegawai.find({});
     res.json(data);
   } catch (err) {
+    console.error("[API] Gagal memuat data pegawai:", err?.message || err);
     res.status(500).json({ error: "Gagal memuat data pegawai" });
   }
 });
@@ -244,6 +281,7 @@ app.post("/api/pegawai", async (req, res) => {
     await refreshDataPegawai();
     res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
   } catch (err) {
+    console.error("[API] Gagal menambah pegawai:", err?.message || err);
     res.status(500).json({ error: "Gagal menambah pegawai" });
   }
 });
@@ -259,6 +297,7 @@ app.put("/api/pegawai/:id", async (req, res) => {
     await refreshDataPegawai();
     res.json({ message: "Data pegawai diperbarui!", data: updated });
   } catch (err) {
+    console.error("[API] Gagal update data pegawai:", err?.message || err);
     res.status(500).json({ error: "Gagal update data pegawai" });
   }
 });
@@ -272,6 +311,7 @@ app.delete("/api/pegawai/:id", async (req, res) => {
     await refreshDataPegawai();
     res.json({ message: "Pegawai berhasil dihapus!" });
   } catch (err) {
+    console.error("[API] Gagal menghapus data:", err?.message || err);
     res.status(500).json({ error: "Gagal menghapus data" });
   }
 });
@@ -286,6 +326,7 @@ app.get("/api/kendaraan", async (req, res) => {
     const data = await Kendaraan.find({});
     res.json(data);
   } catch (err) {
+    console.error("[API] Gagal memuat data kendaraan:", err?.message || err);
     res.status(500).json({ error: "Gagal memuat data kendaraan" });
   }
 });
@@ -299,6 +340,7 @@ app.post("/api/kendaraan", async (req, res) => {
       .status(201)
       .json({ message: "Kendaraan berhasil didaftarkan!", data: mobilBaru });
   } catch (err) {
+    console.error("[API] Gagal menambah kendaraan:", err?.message || err);
     res.status(500).json({ error: "Gagal menambah kendaraan" });
   }
 });
@@ -313,6 +355,7 @@ app.put("/api/kendaraan/:id", async (req, res) => {
       return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
     res.json({ message: "Data kendaraan diperbarui!", data: updated });
   } catch (err) {
+    console.error("[API] Gagal update data kendaraan:", err?.message || err);
     res.status(500).json({ error: "Gagal update data kendaraan" });
   }
 });
@@ -325,6 +368,7 @@ app.delete("/api/kendaraan/:id", async (req, res) => {
       return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
     res.json({ message: "Kendaraan berhasil dihapus!" });
   } catch (err) {
+    console.error("[API] Gagal menghapus kendaraan:", err?.message || err);
     res.status(500).json({ error: "Gagal menghapus kendaraan" });
   }
 });
@@ -347,6 +391,7 @@ app.get("/api/barang", async (req, res) => {
       })),
     );
   } catch (err) {
+    console.error("[API] Gagal memuat data persediaan:", err?.message || err);
     res.status(500).json({ error: "Gagal memuat data persediaan" });
   }
 });
@@ -377,6 +422,7 @@ app.post("/api/barang", async (req, res) => {
     await barangBaru.save();
     res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
   } catch (err) {
+    console.error("[API] Gagal menambah barang:", err?.message || err);
     res.status(500).json({ error: "Gagal menambah barang" });
   }
 });
@@ -392,6 +438,7 @@ app.put("/api/barang/:id_barang", async (req, res) => {
       return res.status(404).json({ error: "Barang tidak ditemukan" });
     res.json({ message: "Barang berhasil diperbarui!", data: updated });
   } catch (err) {
+    console.error("[API] Gagal update data barang:", err?.message || err);
     res.status(500).json({ error: "Gagal update data barang" });
   }
 });
@@ -405,6 +452,7 @@ app.delete("/api/barang/:id_barang", async (req, res) => {
       return res.status(404).json({ error: "Barang tidak ditemukan" });
     res.json({ message: "Barang berhasil dihapus!" });
   } catch (err) {
+    console.error("[API] Gagal hapus data barang:", err?.message || err);
     res.status(500).json({ error: "Gagal hapus data barang" });
   }
 });
