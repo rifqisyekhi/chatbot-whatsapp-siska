@@ -1319,6 +1319,11 @@ client.on("message", async (message) => {
         if (pjWa) {
           try {
             const sentToPJ = await client.sendMessage(pjWa, teksPengajuan);
+            // client.sendMessage tidak mencatat apa pun (hanya kirimDenganTyping
+            // yang memanggil logOut), sehingga selama ini pengiriman ke PJ tidak
+            // pernah terlihat di log — padahal justru di sinilah alur
+            // persetujuan bisa putus tanpa jejak.
+            logOut(pjWa, teksPengajuan);
 
             const listBarangOrder = [];
             const regexParser = /\[(.*?)\] (.*?) \((\d+) (.*?)\)/g;
@@ -1345,8 +1350,20 @@ client.on("message", async (message) => {
             };
 
             await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
+            console.log(
+              `[ORDER] Pengajuan persediaan ${namaPemesan} dikirim ke PJ ${pjWa}, menunggu persetujuan (msgId ${sentToPJ.id._serialized}).`,
+            );
           } catch (e) {
-            console.error("Gagal kirim notif order ke PJ:", e);
+            console.error("[ORDER] Gagal kirim notif order ke PJ:", e?.message || e);
+            // Kalau notifikasi ke PJ gagal, pemohon sudah terlanjur diberi tahu
+            // "sedang dikirim ke Penanggung Jawab" padahal tidak ada yang
+            // dikirim, dan persetujuannya tidak akan pernah datang. Jangan
+            // dibiarkan senyap.
+            await kirimDenganTyping(
+              client,
+              chatId,
+              "⚠️ Maaf, pesanan Anda tercatat tetapi notifikasi ke Penanggung Jawab gagal terkirim. Mohon hubungi Tim Persediaan secara langsung.",
+            );
           }
         }
       }
@@ -1574,9 +1591,11 @@ client.on("message", async (message) => {
       (isApprovalYes(message.body) || isApprovalNo(message.body))
     ) {
       // 1. Cek Antrian Atasan
+      // `data.atasan` bisa saja tidak ada pada entri lama yang dipulihkan dari
+      // MongoDB; tanpa penjaga ini seluruh handler pesan ikut jatuh ke catch.
       const pendingPengajuan = Object.entries(pengajuanByAtasanMsgId).filter(
         ([id, data]) => {
-          let atasanWa = data.atasan.no_wa;
+          const atasanWa = data?.atasan?.no_wa;
           return atasanWa ? getValidWaId(atasanWa) === chatId : false;
         },
       );
@@ -1618,6 +1637,20 @@ client.on("message", async (message) => {
           );
           return;
         }
+      }
+
+      // Sampai di sini berarti pesannya berbentuk persetujuan ("1", "setuju",
+      // "tolak") tetapi tidak ada satu pun antrian yang cocok. Dulu kejadian
+      // ini lolos diam-diam dan berakhir menampilkan menu utama, sehingga
+      // tampak seperti tombol persetujuan yang rusak. Catat alasannya.
+      if (!pengajuan && !orderGudang) {
+        console.warn(
+          `[APPROVAL] ${chatId} membalas "${message.body}" tapi tidak ada antrian yang cocok. ` +
+            `Antrian atasan: ${Object.keys(pengajuanByAtasanMsgId).length}, ` +
+            `antrian gudang: ${Object.keys(orderGudangMsgId).length}, ` +
+            `terdaftar di TimGudang: ${isTimGudang ? "ya" : "tidak"}, ` +
+            `quote reply: ${message.hasQuotedMsg ? qid || "gagal dibaca" : "tidak"}.`,
+        );
       }
     }
 
