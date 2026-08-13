@@ -1012,7 +1012,11 @@ let gagalRestartBeruntun = 0;
 let gagalProbeBeruntun = 0;
 let jumlahReinject = 0;
 
-const STUCK_TIMEOUT_MS = 300000; // 5 menit tanpa READY dianggap stuck
+// 2 menit tanpa READY sudah cukup untuk menyatakan stuck. Dulu 5 menit karena
+// khawatir memotong sinkronisasi yang memang lama — kekhawatiran itu kini
+// ditangani oleh event loading_screen yang menggeser titik mulai selama
+// progresnya masih bergerak. Ambang yang lebih pendek memangkas waktu mati.
+const STUCK_TIMEOUT_MS = 120000;
 const MAX_RESTART_BERUNTUN = 3; // Lewat ini, serahkan ke PM2 (proses baru, browser bersih)
 const LIVENESS_INTERVAL_MS = 60000; // Sapa browser tiap 1 menit
 const LIVENESS_TIMEOUT_MS = 20000; // Browser sehat menjawab getState jauh di bawah ini
@@ -1164,10 +1168,22 @@ setInterval(() => {
 
   const elapsed = (Date.now() - authStartTime) / 1000;
   if (elapsed * 1000 > STUCK_TIMEOUT_MS) {
+    // LANGSUNG KELUAR, jangan coba restart di dalam proses.
+    //
+    // Catatan log VPS 8-13 Agustus: begitu bot mentok, restartClient() tidak
+    // pernah sekali pun berhasil memulihkannya — tiga percobaan berturut-turut
+    // selalu mentok lagi, menghabiskan 16 menit, dan pemulihan baru terjadi
+    // setelah proses benar-benar keluar dan PM2 menyalakannya bersih.
+    // Karena itu jalan yang terbukti dipakai lebih dulu, bukan terakhir.
     console.error(
-      `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s! Force restart...`,
+      `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s. Keluar sekarang, biar PM2 start ulang bersih ` +
+        `(restart di dalam proses terbukti tidak pernah memulihkan kondisi ini).`,
     );
-    restartClient("watchdog stuck");
+    logToFile("error", "WATCHDOG", `Exit karena stuck ${elapsed.toFixed(0)}s`);
+    client
+      .destroy()
+      .catch(() => {})
+      .finally(() => process.exit(1));
   }
 }, 30000); // Check setiap 30 detik
 
@@ -1206,11 +1222,18 @@ setInterval(async () => {
 
   // Butuh 2x gagal berturut-turut supaya gangguan sesaat tidak memicu restart.
   if (gagalProbeBeruntun >= 2) {
-    console.error("[CRITICAL] Browser tidak merespons padahal status READY — bot zombie. Restart...");
-    logToFile("error", "HEALTH", "Bot zombie terdeteksi, restart otomatis");
+    // Sama seperti watchdog: browser yang sudah lepas ("detached Frame") tidak
+    // pernah pulih lewat restart di dalam proses. Serahkan langsung ke PM2.
+    console.error(
+      "[CRITICAL] Browser tidak merespons padahal status READY — bot zombie. Keluar, biar PM2 start ulang bersih.",
+    );
+    logToFile("error", "HEALTH", "Bot zombie terdeteksi, proses keluar");
     gagalProbeBeruntun = 0;
     botReady = false;
-    await restartClient("liveness probe gagal");
+    try {
+      await client.destroy();
+    } catch {}
+    process.exit(1);
   }
 }, LIVENESS_INTERVAL_MS);
 
