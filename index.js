@@ -147,6 +147,31 @@ async function startApp() {
   }
 }
 
+// whatsapp-web.js sengaja mengembalikan `undefined` dari sendMessage kalau
+// halaman tidak sempat memberikan model pesannya — lihat baris terakhir
+// Client.js#sendMessage: `return sentMsg ? new Message(this, sentMsg) : undefined`.
+// Pesannya sendiri BIASANYA TETAP TERKIRIM.
+//
+// Kode lama langsung membaca sentX.id._serialized, sehingga melempar
+// "Cannot read properties of undefined (reading 'id')" dan membatalkan
+// pendaftaran antrian. Akibatnya pengajuan sampai ke atasan, tetapi balasan
+// persetujuannya tidak pernah menemukan antrian dan berakhir di menu utama.
+//
+// Dengan kunci cadangan, antrian tetap terdaftar sehingga jalur balasan polos
+// ("1"/"2") tetap bekerja. Hanya pencocokan lewat quote reply yang tidak bisa,
+// karena memang tidak ada id pesan untuk dicocokkan.
+function idPesanAtauCadangan(sent, tipe) {
+  const id = sent?.id?._serialized;
+  if (id) return id;
+
+  const cadangan = `tanpa-id_${tipe}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  console.warn(
+    `[ANTRIAN] sendMessage tidak mengembalikan id pesan. Memakai kunci cadangan ${cadangan}. ` +
+      `Quote reply tidak akan cocok untuk antrian ini; balasan polos ("1"/"2") tetap bisa.`,
+  );
+  return cadangan;
+}
+
 async function tambahAntrian(msgId, tipe, data) {
   if (tipe === "ATASAN") pengajuanByAtasanMsgId[msgId] = data;
   if (tipe === "GUDANG") orderGudangMsgId[msgId] = data;
@@ -1349,9 +1374,10 @@ client.on("message", async (message) => {
               barangListParsed: listBarangOrder,
             };
 
-            await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
+            const antrianId = idPesanAtauCadangan(sentToPJ, "ATASAN");
+            await tambahAntrian(antrianId, "ATASAN", dataBackup);
             console.log(
-              `[ORDER] Pengajuan persediaan ${namaPemesan} dikirim ke PJ ${pjWa}, menunggu persetujuan (msgId ${sentToPJ.id._serialized}).`,
+              `[ORDER] Pengajuan persediaan ${namaPemesan} dikirim ke PJ ${pjWa}, menunggu persetujuan (kunci ${antrianId}).`,
             );
           } catch (e) {
             console.error("[ORDER] Gagal kirim notif order ke PJ:", e?.message || e);
@@ -1920,7 +1946,11 @@ client.on("message", async (message) => {
             for (const targetStaf of targetGudangList) {
               const sentMsg = await client.sendMessage(targetStaf, notifTim);
               logOut(targetStaf, notifTim);
-              await tambahAntrian(sentMsg.id._serialized, "GUDANG", dataOrder);
+              await tambahAntrian(
+                idPesanAtauCadangan(sentMsg, "GUDANG"),
+                "GUDANG",
+                dataOrder,
+              );
               await new Promise((r) => setTimeout(r, 1000));
             }
           }
@@ -2091,7 +2121,8 @@ client.on("message", async (message) => {
                 pesanEskalasi,
               );
               logOut(HELPDESK_GROUP_ID, pesanEskalasi);
-              helpdeskInstruksiMap[sentMsg.id._serialized] = chatId;
+              helpdeskInstruksiMap[idPesanAtauCadangan(sentMsg, "HELPDESK")] =
+                chatId;
             }
 
             await kirimDenganTyping(
@@ -2755,7 +2786,11 @@ client.on("message", async (message) => {
           jamKeluar,
         };
 
-        await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
+        await tambahAntrian(
+          idPesanAtauCadangan(sentToAtasan, "ATASAN"),
+          "ATASAN",
+          dataBackup,
+        );
 
         await kirimDenganTyping(
           client,
@@ -2833,7 +2868,11 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
           alasan,
         };
 
-        await tambahAntrian(sentToAtasan.id._serialized, "ATASAN", dataBackup);
+        await tambahAntrian(
+          idPesanAtauCadangan(sentToAtasan, "ATASAN"),
+          "ATASAN",
+          dataBackup,
+        );
 
         pengajuanBySender[chatId] = {
           ...flow,
@@ -3099,7 +3138,11 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
             namaKendaraan: flow.namaKendaraan,
           };
 
-          await tambahAntrian(sentToPJ.id._serialized, "ATASAN", dataBackup);
+          await tambahAntrian(
+            idPesanAtauCadangan(sentToPJ, "ATASAN"),
+            "ATASAN",
+            dataBackup,
+          );
         } catch (err) {
           console.error("Gagal kirim kendaraan ke PJ", err);
         }
