@@ -1919,6 +1919,7 @@ client.on("message", async (message) => {
           if (targetGudangList.length > 0) {
             for (const targetStaf of targetGudangList) {
               const sentMsg = await client.sendMessage(targetStaf, notifTim);
+              logOut(targetStaf, notifTim);
               await tambahAntrian(sentMsg.id._serialized, "GUDANG", dataOrder);
               await new Promise((r) => setTimeout(r, 1000));
             }
@@ -2742,6 +2743,7 @@ client.on("message", async (message) => {
           nomorAtasan,
           teksPengajuan,
         );
+        logOut(nomorAtasan, teksPengajuan);
 
         const dataBackup = {
           sender: chatId,
@@ -2761,10 +2763,19 @@ client.on("message", async (message) => {
           `Pengajuan Lembur Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan.`,
         );
       } catch (err) {
+        // Dulu error-nya dibuang total sehingga mustahil tahu KENAPA gagal.
+        // Nomor tujuannya ikut dicetak karena penyebab tersering adalah nomor
+        // atasan di database yang keliru atau tidak terdaftar di WhatsApp.
+        console.error(
+          `[ATASAN] Gagal kirim pengajuan ke ${nomorAtasan} (${atasan?.nama || "?"}):`,
+          err?.message || err,
+        );
         await kirimDenganTyping(
           client,
           chatId,
-          "Gagal mengirim pesan ke atasan.",
+          `Gagal mengirim pesan ke atasan (${atasan?.nama || "-"}). Nomor tujuan: ${String(nomorAtasan).split("@")[0]}.
+
+Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         );
         delete pengajuanBySender[chatId];
       }
@@ -2812,6 +2823,7 @@ client.on("message", async (message) => {
 
       try {
         const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
+        logOut(nomorAtasan, teksAtasan);
 
         const dataBackup = {
           sender: chatId,
@@ -2835,10 +2847,19 @@ client.on("message", async (message) => {
           `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan.`,
         );
       } catch (err) {
+        // Dulu error-nya dibuang total sehingga mustahil tahu KENAPA gagal.
+        // Nomor tujuannya ikut dicetak karena penyebab tersering adalah nomor
+        // atasan di database yang keliru atau tidak terdaftar di WhatsApp.
+        console.error(
+          `[ATASAN] Gagal kirim pengajuan ke ${nomorAtasan} (${atasan?.nama || "?"}):`,
+          err?.message || err,
+        );
         await kirimDenganTyping(
           client,
           chatId,
-          "Gagal mengirim pesan ke atasan.",
+          `Gagal mengirim pesan ke atasan (${atasan?.nama || "-"}). Nomor tujuan: ${String(nomorAtasan).split("@")[0]}.
+
+Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         );
         delete pengajuanBySender[chatId];
       }
