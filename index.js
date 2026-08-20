@@ -157,9 +157,9 @@ async function startApp() {
 // pendaftaran antrian. Akibatnya pengajuan sampai ke atasan, tetapi balasan
 // persetujuannya tidak pernah menemukan antrian dan berakhir di menu utama.
 //
-// Dengan kunci cadangan, antrian tetap terdaftar sehingga jalur balasan polos
-// ("1"/"2") tetap bekerja. Hanya pencocokan lewat quote reply yang tidak bisa,
-// karena memang tidak ada id pesan untuk dicocokkan.
+// Dengan kunci cadangan, antrian tetap terdaftar sehingga balasan polos
+// ("1"/"2") bekerja. Quote reply juga tetap bisa: pencocokannya jatuh ke
+// perbandingan isi pesan yang dikutip (lihat handler approval).
 function idPesanAtauCadangan(sent, tipe) {
   const id = sent?.id?._serialized;
   if (id) return id;
@@ -167,7 +167,8 @@ function idPesanAtauCadangan(sent, tipe) {
   const cadangan = `tanpa-id_${tipe}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   console.warn(
     `[ANTRIAN] sendMessage tidak mengembalikan id pesan. Memakai kunci cadangan ${cadangan}. ` +
-      `Quote reply tidak akan cocok untuk antrian ini; balasan polos ("1"/"2") tetap bisa.`,
+      `Persetujuan tetap bisa: balasan polos ("1"/"2") maupun quote reply, karena kutipan ` +
+      `dicocokkan lewat isi pesan.`,
   );
   return cadangan;
 }
