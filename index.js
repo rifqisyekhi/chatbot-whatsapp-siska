@@ -1395,6 +1395,7 @@ client.on("message", async (message) => {
               atasan: DATA_KETUA_SUB_TU,
               pesanan: pesananClean,
               barangListParsed: listBarangOrder,
+              teksPesan: teksPengajuan,
             };
 
             const antrianId = idPesanAtauCadangan(sentToPJ, "ATASAN");
@@ -1630,7 +1631,38 @@ client.on("message", async (message) => {
         qid = quoted.id._serialized;
         pengajuan = pengajuanByAtasanMsgId[qid];
         orderGudang = orderGudangMsgId[qid];
-      } catch (e) {}
+
+        // Kalau id-nya tidak cocok, cocokkan lewat ISI pesan yang dikutip.
+        //
+        // Perlu karena sendMessage kadang mengembalikan undefined sehingga
+        // antrian terdaftar dengan kunci cadangan yang tidak punya id pesan
+        // (lihat idPesanAtauCadangan). Tanpa jalur ini, quote reply mustahil
+        // cocok, dan atasan yang punya lebih dari satu pengajuan jadi buntu
+        // total: balasan polos ditolak karena ambigu, quote reply tidak
+        // dikenali.
+        if (!pengajuan && !orderGudang) {
+          const isiKutipan = (quoted.body || "").trim();
+          if (isiKutipan) {
+            const cocokDgnIsi = ([, data]) =>
+              (data?.teksPesan || "").trim() === isiKutipan;
+
+            const entriAtasan =
+              Object.entries(pengajuanByAtasanMsgId).find(cocokDgnIsi);
+            const entriGudang =
+              Object.entries(orderGudangMsgId).find(cocokDgnIsi);
+
+            if (entriAtasan) {
+              [qid, pengajuan] = entriAtasan;
+              console.log(`[APPROVAL] Kutipan dicocokkan lewat isi pesan -> antrian atasan ${qid}.`);
+            } else if (entriGudang) {
+              [qid, orderGudang] = entriGudang;
+              console.log(`[APPROVAL] Kutipan dicocokkan lewat isi pesan -> antrian gudang ${qid}.`);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("[APPROVAL] Gagal membaca pesan yang dikutip:", e?.message || e);
+      }
     }
 
     // FALLBACK SAKTI: Kalau Quote Reply ID-nya gak cocok ATAU bales polosan
@@ -1963,6 +1995,7 @@ client.on("message", async (message) => {
             barangListParsed: barangListParsed,
             pData: p,
             semuaTargetGudang: targetGudangList,
+            teksPesan: notifTim,
           };
 
           if (targetGudangList.length > 0) {
@@ -2807,6 +2840,7 @@ client.on("message", async (message) => {
           alasan,
           jamMasuk,
           jamKeluar,
+          teksPesan: teksPengajuan,
         };
 
         await tambahAntrian(
@@ -2889,6 +2923,7 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
           pegawai: flow.pegawai,
           atasan,
           alasan,
+          teksPesan: teksAtasan,
         };
 
         await tambahAntrian(
@@ -3159,6 +3194,7 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
             alasan: tujuan,
             kendaraanId: flow.kendaraanId,
             namaKendaraan: flow.namaKendaraan,
+            teksPesan: teksPengajuan,
           };
 
           await tambahAntrian(
