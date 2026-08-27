@@ -2270,11 +2270,20 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "5") {
+        // Bubble chat pertama: Teks instruksi
         await kirimDenganTyping(
           client,
           chatId,
-          `*Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini untuk memilih barang:\n${LINK_WEB_KATALOG}`,
+          "*Pengambilan Persediaan*\n\nSilakan buka link katalog di bawah ini untuk memilih barang:"
         );
+
+        // Bubble chat kedua: Khusus link aja
+        await kirimDenganTyping(
+          client,
+          chatId,
+          LINK_WEB_KATALOG
+        );
+
         delete pengajuanBySender[chatId];
         return;
       }
