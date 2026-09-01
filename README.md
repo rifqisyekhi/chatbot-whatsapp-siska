@@ -35,6 +35,78 @@ cd SisKA
 * Melihat Log (Untuk Scan QR Code atau Cek Error): pm2 logs bot-siska --lines 200
 ```
 
+## Menu 9 — Absensi Non-ASN
+
+Menu ini menyambungkan bot ke backend presensi (repo
+`presensi-biro-keuangan-dan-bmn-backend`), aplikasi yang sama
+dengan yang dipakai versi web. Bot **tidak** menulis ke koleksi
+`absensi` sendiri, semuanya lewat HTTP ke backend itu.
+
+Alurnya:
+
+```
+9. Absensi Non-ASN
+├─ 1. Presensi
+│   ├─ belum absen masuk  → pilih WFO / WFH / Dinas Luar
+│   │                     → foto check in → kirim lokasi → tersimpan
+│   ├─ sudah absen masuk  → foto check out → kirim lokasi
+│   │                     → kinerja harian → tersimpan
+│   └─ sudah lengkap      → tampilkan ringkasan hari ini
+└─ 2. Izin
+    ├─ 1. Cuti    → link formulir cuti
+    └─ 2. Lembur  → alur lembur (sama dengan menu 1)
+```
+
+Foto yang dikirim pegawai dicap ulang oleh bot: peta
+OpenStreetMap, alamat hasil reverse geocoding, koordinat,
+tanggal dan jam WIB, jenis kehadiran, serta nama pegawai
+ditempelkan ke foto. **Foto bercap inilah yang disimpan ke
+database**, karena itu yang diperiksa petugas. Perenderan
+memakai Chromium yang sudah dijalankan `whatsapp-web.js`, jadi
+tidak ada proses browser tambahan di VPS.
+
+Konfigurasi tambahan di `.env`:
+
+| Variabel | Arti |
+|---|---|
+| `PRESENSI_API_URL` | Alamat backend presensi. Bawaan `http://127.0.0.1:5000` |
+| `PRESENSI_OSM_UA` | User-Agent untuk Nominatim dan tile OSM (diwajibkan keduanya) |
+| `PRESENSI_GEOTAG_PETA` | Isi `0` kalau VPS tidak bisa mengakses tile OSM |
+| `PRESENSI_KATEGORI_ASN` | Kategori pegawai yang **tidak** boleh memakai menu 9 |
+
+### Siapa yang bisa melihat menu 9
+
+Menu ini hanya muncul untuk pegawai non-ASN. Penyaringnya
+memakai `kategori_pegawai` di koleksi `pegawai`, dan sengaja
+berupa **daftar-larangan**, bukan daftar-izin:
+
+* Kategori yang terdaftar di `PRESENSI_KATEGORI_ASN` diblokir.
+* Kategori lain — termasuk kategori baru yang belum ada saat
+  kode ini ditulis — otomatis mendapat akses.
+* Kategori yang masih kosong tetap diberi akses. Salah memberi
+  akses ke satu orang lebih ringan akibatnya daripada
+  memblokir pegawai non-ASN yang datanya belum lengkap
+  sehingga tidak bisa absen sama sekali.
+
+Jadi ketika kategori dirombak dari `Internal / PPNPN / Magang /
+TimGudang` menjadi `ASN / Non-ASN (tenaga ahli, outsourcing,
+magang, dst.)`, **tidak ada kode yang perlu diubah** — nilai
+bawaannya sudah mencakup `Internal` dan `ASN` sekaligus.
+
+Satu hal yang perlu diputuskan: `TimGudang` sekarang dianggap
+non-ASN dan bisa memakai menu 9. Kalau anggota Tim Gudang
+sebenarnya ASN, tambahkan `TimGudang` ke
+`PRESENSI_KATEGORI_ASN`.
+
+Catatan:
+
+* Pegawai harus terdaftar di koleksi `pegawai` dengan `no_wa`
+  yang cocok, kalau tidak backend menolak dengan 404.
+* Lokasi harus dikirim lewat **Lokasi terkini**, bukan *live
+  location* — yang terakhir tidak terbaca `whatsapp-web.js`.
+* Jam memakai zona `Asia/Jakarta`, bukan jam VPS, supaya
+  seragam dengan absensi yang masuk dari aplikasi web.
+
 ## Help
 Jika bingung dan ingin ditanyakan bisa hubungi kontak author
 

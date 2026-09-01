@@ -18,6 +18,7 @@ const {
   buatSuratPermintaanBarangAsync,
   calculateDuration,
 } = require("./features/pdf_generator");
+const absensiNonASN = require("./features/absensi");
 const {
   HELPDESK_GROUP_ID,
   FORM_CUTI_URL,
@@ -889,6 +890,459 @@ async function simpanMediaFallback(message, chatId, prefix) {
   } catch (err) {
     console.error("[MEDIA] Gagal menyimpan fallback media:", err);
     return null;
+  }
+}
+
+// VI-D. ALUR ABSENSI NON-ASN
+//
+// Menu ini tidak menulis ke MongoDB sendiri. Semua absensi
+// dikirim ke backend presensi lewat HTTP supaya aturan
+// "satu absensi per pegawai per hari", penyimpanan foto, dan
+// validasi jenis kehadiran hanya ada di satu tempat — sama
+// dengan yang dipakai aplikasi webnya.
+
+const PILIHAN_KEHADIRAN = {
+  1: "WFO",
+  2: "WFH",
+  3: "DINAS",
+};
+
+// Batas aman foto cadangan (tanpa cap geotag). Backend menolak
+// foto di atas 10 MB, dan base64 membengkak sekitar 33%.
+const BATAS_FOTO_BASE64 = 9 * 1024 * 1024;
+
+async function kirimFotoGeotag(chatId, fotoBase64, caption) {
+  const media = new MessageMedia(
+    "image/jpeg",
+    fotoBase64,
+    "absensi-geotag.jpg",
+  );
+
+  await client.sendMessage(chatId, media, { caption });
+
+  // client.sendMessage tidak mencatat apa pun, padahal foto
+  // inilah bukti yang diperiksa petugas — jangan sampai
+  // pengirimannya tidak berjejak di log.
+  logOut(chatId, `[FOTO GEOTAG] ${caption}`);
+}
+
+async function tanganiAlurAbsensi({
+  message,
+  chatId,
+  flow,
+  bodyLower,
+  pegawai,
+}) {
+  const noWa = hanyaAngka(chatId);
+
+  // =========================================================
+  // MENU ABSENSI: PRESENSI ATAU IZIN
+  // =========================================================
+
+  if (flow.step === "absensi-menu") {
+    if (bodyLower === "2") {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "*Izin*\n\nSilakan pilih:\n1. Cuti\n2. Lembur",
+      );
+
+      pengajuanBySender[chatId] = { ...flow, step: "absensi-izin" };
+      return;
+    }
+
+    if (bodyLower !== "1") {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Pilihan tidak valid. Ketik *1* untuk Presensi atau *2* untuk Izin.\n\nAtau ketik *menu* untuk kembali.",
+      );
+      return;
+    }
+
+    // Kondisi absensi hari ini yang menentukan langkah
+    // berikutnya: belum absen masuk, sudah masuk tapi belum
+    // pulang, atau sudah lengkap.
+    let status;
+
+    try {
+      status = await absensiNonASN.ambilAbsensiHariIni(noWa);
+    } catch (err) {
+      console.error(
+        "[ABSENSI] Gagal cek status hari ini:",
+        err?.message || err,
+      );
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "⚠️ Maaf, server presensi sedang tidak bisa dihubungi. Silakan coba lagi beberapa saat lagi atau absen lewat aplikasi web.",
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    const data = status?.data;
+
+    if (data?.clockIn && data?.clockOut) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `✅ *Absensi hari ini sudah lengkap.*\n\nJenis: *${data.attendanceType}*\nMasuk: *${data.clockIn}*\nPulang: *${data.clockOut}*\n\nKetik *menu* untuk kembali.`,
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    if (data?.clockIn) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Anda sudah absen masuk pukul *${data.clockIn}* sebagai *${data.attendanceType}*.\n\nSekarang *absen pulang*.\n\nSilakan kirim *foto check out* Anda.`,
+      );
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "absensi-foto",
+        mode: "out",
+        jenisKehadiran: data.attendanceType,
+        // Tanggal dokumen clock in, bukan tanggal hari ini.
+        // Penting untuk absen pulang yang lewat tengah malam.
+        tanggalAbsen: data.tanggal,
+      };
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "*Absen Masuk*\n\nSilakan pilih jenis kehadiran Anda hari ini:\n1. WFO (Work From Office)\n2. WFH (Work From Home)\n3. Dinas Luar",
+    );
+
+    pengajuanBySender[chatId] = { ...flow, step: "absensi-jenis" };
+    return;
+  }
+
+  // =========================================================
+  // MENU IZIN
+  // =========================================================
+
+  if (flow.step === "absensi-izin") {
+    if (bodyLower === "1") {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "*Pengajuan Cuti*\n\nSilakan isi formulir cuti melalui link berikut:",
+      );
+
+      await kirimDenganTyping(client, chatId, FORM_CUTI_URL);
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    if (bodyLower === "2") {
+      // Lembur memakai alur yang sudah ada di menu utama
+      // nomor 1 — tidak dibuat ulang di sini.
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "*Pengajuan Lembur*\n\nLembur ada di *menu 1* pada menu utama. Alurnya kami mulai sekarang saja ya.\n\nSilakan tuliskan *alasan/tujuan lembur* Anda.",
+      );
+
+      pengajuanBySender[chatId] = {
+        pegawai,
+        step: "alasan-lembur",
+        jenis: "Lembur",
+      };
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "Pilihan tidak valid. Ketik *1* untuk Cuti atau *2* untuk Lembur.",
+    );
+    return;
+  }
+
+  // =========================================================
+  // PILIH JENIS KEHADIRAN
+  // =========================================================
+
+  if (flow.step === "absensi-jenis") {
+    const jenis = PILIHAN_KEHADIRAN[bodyLower];
+
+    if (!jenis) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Pilihan tidak valid. Ketik *1* (WFO), *2* (WFH), atau *3* (Dinas Luar).",
+      );
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `Jenis kehadiran: *${absensiNonASN.LABEL_JENIS[jenis]}*.\n\nSilakan kirim *foto check in* Anda.`,
+    );
+
+    pengajuanBySender[chatId] = {
+      ...flow,
+      step: "absensi-foto",
+      mode: "in",
+      jenisKehadiran: jenis,
+      tanggalAbsen: absensiNonASN.tanggalHariIni(),
+    };
+    return;
+  }
+
+  // =========================================================
+  // TERIMA FOTO
+  // =========================================================
+
+  if (flow.step === "absensi-foto") {
+    const labelAbsen = flow.mode === "in" ? "check in" : "check out";
+
+    if (!message.hasMedia) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Mohon kirimkan *foto ${labelAbsen}*, bukan pesan teks.`,
+      );
+      return;
+    }
+
+    const media = await ambilMediaAman(message, chatId);
+    if (!media) return;
+
+    if (!String(media.mimetype || "").startsWith("image/")) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "File yang dikirim bukan gambar. Silakan kirim ulang berupa *foto*.",
+      );
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "Foto diterima.\n\nSekarang kirim *Lokasi Terkini* Anda lewat WhatsApp:\nklik ikon *📎 / +* → *Lokasi* → *Kirim lokasi terkini*.\n\nLokasi ini yang akan dicetak sebagai cap geotag di foto Anda.",
+    );
+
+    pengajuanBySender[chatId] = {
+      ...flow,
+      step: "absensi-lokasi",
+      fotoBase64: media.data,
+      fotoMime: media.mimetype,
+    };
+    return;
+  }
+
+  // =========================================================
+  // TERIMA LOKASI, BUAT CAP GEOTAG, KIRIM KE BACKEND
+  // =========================================================
+
+  if (flow.step === "absensi-lokasi") {
+    const lokasi = message.location;
+
+    const lat = Number(lokasi?.latitude);
+    const lng = Number(lokasi?.longitude);
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Belum ada lokasi yang terbaca.\n\nSilakan kirim lewat *📎 / + → Lokasi → Kirim lokasi terkini*. Mohon jangan memakai *Bagikan lokasi langsung (live location)* karena tidak bisa dibaca sistem.",
+      );
+      return;
+    }
+
+    const labelAbsen = flow.mode === "in" ? "CHECK IN" : "CHECK OUT";
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "Lokasi diterima. Sedang membuat foto bercap geotag, mohon tunggu sebentar...",
+    );
+
+    const alamat = await absensiNonASN.cariAlamat(lat, lng);
+    const jamTeks = absensiNonASN.jamSekarang();
+
+    // Foto bercap geotag inilah yang disimpan ke database,
+    // karena inilah yang diperiksa petugas.
+    let fotoFinal = flow.fotoBase64;
+    let mimeFinal = flow.fotoMime;
+    let geotagGagal = false;
+
+    try {
+      fotoFinal = await absensiNonASN.buatFotoGeotag({
+        browser: client.pupBrowser,
+        fotoBase64: flow.fotoBase64,
+        mimetype: flow.fotoMime,
+        lat,
+        lng,
+        alamat,
+        nama: pegawai.nama,
+        jenisAbsen: labelAbsen,
+        jenisKehadiran: flow.jenisKehadiran,
+        tanggalTeks: absensiNonASN.tanggalPanjang(),
+        jamTeks,
+      });
+
+      mimeFinal = "image/jpeg";
+    } catch (err) {
+      console.error(
+        "[ABSENSI] Gagal membuat cap geotag:",
+        err?.message || err,
+      );
+
+      geotagGagal = true;
+    }
+
+    // Foto asli dari WhatsApp bisa jauh lebih besar daripada
+    // hasil render 1080px, dan backend menolak di atas 10 MB.
+    if (geotagGagal && fotoFinal.length > BATAS_FOTO_BASE64) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "⚠️ Maaf, cap geotag gagal dibuat dan ukuran foto asli terlalu besar untuk disimpan.\n\nSilakan ulangi dari *menu* dengan foto beresolusi lebih kecil.",
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    const lokasiPayload = {
+      lat,
+      lng,
+      address: alamat,
+    };
+
+    // Absen pulang masih perlu kinerja harian sebelum
+    // dikirim, jadi datanya disimpan dulu di state.
+    if (flow.mode === "out") {
+      if (!geotagGagal) {
+        await kirimFotoGeotag(
+          chatId,
+          fotoFinal,
+          `📍 Foto check out bercap geotag\n${alamat}\n${jamTeks} WIB`,
+        );
+      }
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        geotagGagal
+          ? "⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\nTerakhir, silakan tuliskan *kinerja harian* Anda hari ini."
+          : "Terakhir, silakan tuliskan *kinerja harian* Anda hari ini.",
+      );
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "absensi-kinerja",
+        fotoBase64: fotoFinal,
+        fotoMime: mimeFinal,
+        lokasi: lokasiPayload,
+        alamat,
+        jam: jamTeks,
+      };
+      return;
+    }
+
+    // Absen masuk langsung dikirim.
+    const hasil = await absensiNonASN.kirimClockIn({
+      no_wa: noWa,
+      attendanceType: flow.jenisKehadiran,
+      clockIn: jamTeks,
+      clockInPhoto: `data:${mimeFinal};base64,${fotoFinal}`,
+      clockInLocation: lokasiPayload,
+      clockInAddress: alamat,
+      tanggal: flow.tanggalAbsen,
+    });
+
+    if (!hasil.ok) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `❌ *Absen masuk gagal.*\n${hasil.pesan}\n\nSilakan coba lagi lewat *menu*, atau gunakan aplikasi web.`,
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    if (!geotagGagal) {
+      await kirimFotoGeotag(
+        chatId,
+        fotoFinal,
+        `📍 Foto check in bercap geotag\n${alamat}\n${jamTeks} WIB`,
+      );
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `✅ *Absen masuk tersimpan.*\n\nJenis: *${absensiNonASN.LABEL_JENIS[flow.jenisKehadiran]}*\nJam masuk: *${jamTeks} WIB*\nLokasi: ${alamat}${
+        geotagGagal
+          ? "\n\n⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat."
+          : ""
+      }\n\nNanti saat pulang, buka *menu* lalu pilih *Absensi Non-ASN → Presensi* lagi untuk absen pulang.`,
+    );
+
+    delete pengajuanBySender[chatId];
+    return;
+  }
+
+  // =========================================================
+  // KINERJA HARIAN DAN ABSEN PULANG
+  // =========================================================
+
+  if (flow.step === "absensi-kinerja") {
+    const kinerja = (message.body || "").trim();
+
+    if (kinerja.length < 5) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Mohon tuliskan *kinerja harian* Anda sedikit lebih lengkap (minimal 5 karakter).",
+      );
+      return;
+    }
+
+    const hasil = await absensiNonASN.kirimClockOut({
+      no_wa: noWa,
+      clockOut: flow.jam,
+      clockOutPhoto: `data:${flow.fotoMime};base64,${flow.fotoBase64}`,
+      clockOutLocation: flow.lokasi,
+      clockOutAddress: flow.alamat,
+      kinerja_harian: kinerja,
+      tanggal: flow.tanggalAbsen,
+    });
+
+    if (!hasil.ok) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `❌ *Absen pulang gagal.*\n${hasil.pesan}\n\nSilakan coba lagi lewat *menu*, atau gunakan aplikasi web.`,
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `✅ *Absen pulang tersimpan.*\n\nJam pulang: *${flow.jam} WIB*\nLokasi: ${flow.alamat}\nKinerja harian: ${kinerja}\n\nTerima kasih, selamat beristirahat 🙏`,
+    );
+
+    delete pengajuanBySender[chatId];
+    return;
   }
 }
 
@@ -2210,7 +2664,14 @@ client.on("message", async (message) => {
     if (!flow || bodyLower === "menu") {
       if (helpdeskQueue[chatId]) return;
 
-      const menu = `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA\n8. Pengumpulan Laporan WFA/WFO`;
+      // Menu 9 hanya ditampilkan untuk pegawai non-ASN,
+      // karena hanya merekalah yang absensinya dicatat di
+      // aplikasi presensi.
+      const menu =
+        `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA\n8. Pengumpulan Laporan WFA/WFO` +
+        (absensiNonASN.bolehAbsenNonASN(pegawai)
+          ? `\n9. Absensi Non-ASN`
+          : "");
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -2323,10 +2784,34 @@ client.on("message", async (message) => {
         return;
       }
 
+      if (bodyLower === "9") {
+        // Menu ini tidak muncul untuk pegawai ASN, tapi
+        // angkanya tetap bisa diketik — jadi tetap dijaga.
+        if (!absensiNonASN.bolehAbsenNonASN(pegawai)) {
+          await kirimDenganTyping(
+            client,
+            chatId,
+            "Menu *Absensi Non-ASN* hanya untuk pegawai non-ASN.\n\nKetik *menu* untuk kembali.",
+          );
+          return;
+        }
+
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "*Absensi Non-ASN*\n\nSilakan pilih:\n1. Presensi (absen masuk / pulang)\n2. Izin",
+        );
+
+        pengajuanBySender[chatId] = { step: "absensi-menu", pegawai };
+        return;
+      }
+
       await kirimDenganTyping(
         client,
         chatId,
-        "Pilihan tidak valid. Ketik angka 1 - 8. Atau ketik *menu* untuk kembali.",
+        absensiNonASN.bolehAbsenNonASN(pegawai)
+          ? "Pilihan tidak valid. Ketik angka 1 - 9. Atau ketik *menu* untuk kembali."
+          : "Pilihan tidak valid. Ketik angka 1 - 8. Atau ketik *menu* untuk kembali.",
       );
       return;
     }
@@ -2334,6 +2819,22 @@ client.on("message", async (message) => {
     // ==========================================
     // 9. STATE MACHINE (PROSES ALUR SEMUA MENU)
     // ==========================================
+
+    // --- ALUR ABSENSI NON-ASN ---
+    //
+    // Semua langkahnya berawalan "absensi-" dan ditangani di
+    // tanganiAlurAbsensi(), termasuk pesan foto dan pesan
+    // lokasi, jadi harus diperiksa sebelum alur lain.
+    if (typeof flow.step === "string" && flow.step.startsWith("absensi-")) {
+      await tanganiAlurAbsensi({
+        message,
+        chatId,
+        flow,
+        bodyLower,
+        pegawai,
+      });
+      return;
+    }
 
     // --- ALUR WFH / WFA (SISTEM FIXED LOOP) ---
 
