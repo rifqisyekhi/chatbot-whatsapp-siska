@@ -386,7 +386,6 @@ export default function AdminMasterDataTU() {
                       value={formData.nama || ""}
                       onChange={handleChange}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
-                      required
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
@@ -400,7 +399,6 @@ export default function AdminMasterDataTU() {
                         value={formData.nip || ""}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
-                        required
                       />
                     </div>
                     <div>
@@ -413,7 +411,6 @@ export default function AdminMasterDataTU() {
                         value={formData.no_wa || ""}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
-                        required
                       />
                     </div>
                   </div>
@@ -439,7 +436,6 @@ export default function AdminMasterDataTU() {
                       value={formData.jabatan || ""}
                       onChange={handleChange}
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
-                      required
                     />
                   </div>
                   <div>
@@ -465,9 +461,8 @@ export default function AdminMasterDataTU() {
                         value={formData.sub_unit || ""}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm bg-white cursor-pointer focus:border-blue-500"
-                        required
                       >
-                        <option value="" disabled>
+                        <option value="">
                           Pilih Subunit
                         </option>
                         <option value="KOOR">KOOR</option>
@@ -487,9 +482,8 @@ export default function AdminMasterDataTU() {
                         value={formData.kategori_pegawai || ""}
                         onChange={handleChange}
                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm bg-white cursor-pointer focus:border-blue-500"
-                        required
                       >
-                        <option value="" disabled>
+                        <option value="">
                           Pilih Kategori
                         </option>
                         <option value="Internal">Internal</option>

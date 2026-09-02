@@ -321,15 +321,64 @@ app.get("/api/pegawai", async (req, res) => {
   }
 });
 
+// Kolom kosong dikirim form sebagai string kosong. Dibiarkan
+// apa adanya, "" akan ikut masuk index unik nip dan menabrak
+// pegawai lain yang juga tidak punya NIP. Diubah jadi undefined
+// supaya field-nya benar-benar tidak ada di dokumen.
+function bersihkanDataPegawai(body) {
+  const bersih = { ...body };
+
+  for (const kunci of Object.keys(bersih)) {
+    if (typeof bersih[kunci] === "string") {
+      bersih[kunci] = bersih[kunci].trim();
+    }
+  }
+
+  if (!bersih.nip) delete bersih.nip;
+
+  return bersih;
+}
+
+// Menerjemahkan error database jadi pesan yang bisa dibaca
+// petugas TU. Sebelumnya semuanya jadi 500 "Gagal menambah
+// pegawai" tanpa keterangan, sehingga NIP kembar pun terlihat
+// seperti server rusak.
+function pesanErrorPegawai(err) {
+  if (err?.code === 11000) {
+    const field = Object.keys(err.keyPattern || { nip: 1 })[0];
+
+    return {
+      status: 409,
+      error: `Nilai ${field} itu sudah dipakai pegawai lain.`,
+    };
+  }
+
+  if (err?.name === "ValidationError") {
+    return {
+      status: 400,
+      error: Object.values(err.errors || {})
+        .map((e) => e.message)
+        .join(" "),
+    };
+  }
+
+  return null;
+}
+
 // TAMBAH PEGAWAI BARU
 app.post("/api/pegawai", async (req, res) => {
   try {
-    const baru = new Pegawai(req.body);
+    const baru = new Pegawai(bersihkanDataPegawai(req.body));
     await baru.save();
     await refreshDataPegawai();
     res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
   } catch (err) {
     console.error("[API] Gagal menambah pegawai:", err?.message || err);
+
+    const kenal = pesanErrorPegawai(err);
+
+    if (kenal) return res.status(kenal.status).json({ error: kenal.error });
+
     res.status(500).json({ error: "Gagal menambah pegawai" });
   }
 });
@@ -337,15 +386,38 @@ app.post("/api/pegawai", async (req, res) => {
 // EDIT PEGAWAI
 app.put("/api/pegawai/:id", async (req, res) => {
   try {
-    const updated = await Pegawai.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-    });
+    const data = bersihkanDataPegawai(req.body);
+
+    // NIP yang dikosongkan harus benar-benar dibuang dari
+    // dokumen, bukan disimpan sebagai "". $unset mengurusnya;
+    // tanpa ini, mengosongkan NIP seorang PPNPN justru
+    // membuatnya bentrok dengan PPNPN lain.
+    const buang = {};
+
+    if (
+      Object.prototype.hasOwnProperty.call(req.body, "nip") &&
+      data.nip === undefined
+    ) {
+      buang.nip = "";
+    }
+
+    const updated = await Pegawai.findByIdAndUpdate(
+      req.params.id,
+      Object.keys(buang).length ? { $set: data, $unset: buang } : data,
+      { new: true, runValidators: true },
+    );
+
     if (!updated)
       return res.status(404).json({ error: "Pegawai tidak ditemukan" });
     await refreshDataPegawai();
     res.json({ message: "Data pegawai diperbarui!", data: updated });
   } catch (err) {
     console.error("[API] Gagal update data pegawai:", err?.message || err);
+
+    const kenal = pesanErrorPegawai(err);
+
+    if (kenal) return res.status(kenal.status).json({ error: kenal.error });
+
     res.status(500).json({ error: "Gagal update data pegawai" });
   }
 });
