@@ -49,6 +49,38 @@ export default function AdminMasterDataTU() {
     fetchData();
   }, []);
 
+  // =========================================================
+  // JENIS NOMOR IDENTITAS
+  // =========================================================
+  //
+  // Pegawai Internal memakai NIP (18 digit), selebihnya —
+  // PPNPN, magang, tenaga gudang — tidak punya NIP dan memakai
+  // NIK (16 digit).
+  //
+  // Keduanya masih disimpan di field `nip` yang sama supaya
+  // tidak ada kode lain yang perlu ikut berubah sekarang.
+  // Penamaan field-nya dibereskan menyusul bersama migrasi
+  // struktur pegawai.
+  const jenisIdentitas = (kategori) =>
+    !kategori
+      ? { label: "NIP / NIK", digit: null, contoh: "Pilih kategori dulu" }
+      : kategori === "Internal"
+        ? { label: "NIP", digit: 18, contoh: "18 digit" }
+        : { label: "NIK", digit: 16, contoh: "16 digit" };
+
+  const identitasForm = jenisIdentitas(formData.kategori_pegawai);
+
+  // Hanya penanda, bukan penghalang. Nomor yang panjangnya
+  // tidak lazim tetap boleh disimpan — data kepegawaian sering
+  // punya pengecualian, dan memblokirnya justru membuat
+  // petugas TU tidak bisa bekerja.
+  const digitIdentitas = String(formData.nip || "").replace(/\D/g, "").length;
+
+  const identitasJanggal =
+    digitIdentitas > 0 &&
+    identitasForm.digit !== null &&
+    digitIdentitas !== identitasForm.digit;
+
   // FUNGSI CRUD MASTER DATA (Pakai apiTU)
   const handleChange = (e) =>
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -228,7 +260,7 @@ export default function AdminMasterDataTU() {
                       <tr className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-100 whitespace-nowrap">
                         <th className="p-4 font-bold text-center w-16">No</th>
                         <th className="p-4 font-bold">Nama Pegawai</th>
-                        <th className="p-4 font-bold">NIP</th>
+                        <th className="p-4 font-bold">NIP / NIK</th>
                         <th className="p-4 font-bold">Sub Unit</th>
                         <th className="p-4 font-bold">Jabatan</th>
                         <th className="p-4 font-bold">Kategori</th>
@@ -391,15 +423,26 @@ export default function AdminMasterDataTU() {
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">
-                        NIP
+                        {identitasForm.label}
                       </label>
                       <input
                         type="text"
                         name="nip"
                         value={formData.nip || ""}
                         onChange={handleChange}
-                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-500"
+                        placeholder={identitasForm.contoh}
+                        className={`w-full px-4 py-2.5 rounded-xl border outline-none text-sm ${
+                          identitasJanggal
+                            ? "border-amber-400 focus:border-amber-500"
+                            : "border-slate-200 focus:border-blue-500"
+                        }`}
                       />
+                      {identitasJanggal && (
+                        <p className="mt-1 text-[11px] text-amber-600">
+                          {identitasForm.label} biasanya {identitasForm.digit}{" "}
+                          digit, ini {digitIdentitas}. Tetap bisa disimpan.
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-bold text-slate-700 mb-1.5">
