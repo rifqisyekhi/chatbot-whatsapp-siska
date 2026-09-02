@@ -190,6 +190,118 @@ async function kirimClockOut(payload) {
 }
 
 // =========================================================
+// 2B. REKAP UNTUK PETUGAS
+// =========================================================
+
+// Status petugas disimpan sebentar supaya menu utama tidak
+// memanggil backend setiap kali pegawai mengetik "menu".
+const cachePetugas = new Map();
+
+const TTL_PETUGAS = 10 * 60 * 1000;
+
+async function cekPetugas(noWa) {
+  const kunci = String(noWa || "");
+
+  const tersimpan = cachePetugas.get(kunci);
+
+  if (tersimpan && Date.now() - tersimpan.waktu < TTL_PETUGAS) {
+    return tersimpan.nilai;
+  }
+
+  try {
+    const { data } = await axios.get(`${API_URL}/api/rekap/izin`, {
+      params: { pemohon: kunci },
+      timeout: 5000,
+    });
+
+    const nilai = Boolean(data?.petugas);
+
+    cachePetugas.set(kunci, { nilai, waktu: Date.now() });
+
+    return nilai;
+  } catch (err) {
+    // Backend presensi mati bukan alasan untuk menahan menu
+    // utama semua pegawai — anggap saja bukan petugas.
+    console.error(
+      "[ABSENSI] Gagal cek status petugas:",
+      err?.message || err,
+    );
+
+    return false;
+  }
+}
+
+// Rentang tanggal siap pakai, dihitung dengan zona WIB.
+
+function rentangBulanIni() {
+  const hariIni = tanggalHariIni();
+
+  return {
+    dari: `${hariIni.slice(0, 7)}-01`,
+    sampai: hariIni,
+    label: `bulan ini (${hariIni.slice(0, 7)})`,
+  };
+}
+
+function rentangBulanLalu() {
+  const [tahun, bulan] = tanggalHariIni().split("-").map(Number);
+
+  const tahunLalu = bulan === 1 ? tahun - 1 : tahun;
+  const bulanLalu = bulan === 1 ? 12 : bulan - 1;
+
+  // Hari 0 pada bulan berikutnya = hari terakhir bulan ini.
+  const hariTerakhir = new Date(
+    Date.UTC(tahunLalu, bulanLalu, 0),
+  ).getUTCDate();
+
+  const mm = String(bulanLalu).padStart(2, "0");
+
+  return {
+    dari: `${tahunLalu}-${mm}-01`,
+    sampai: `${tahunLalu}-${mm}-${String(hariTerakhir).padStart(2, "0")}`,
+    label: `bulan lalu (${tahunLalu}-${mm})`,
+  };
+}
+
+// Mengunduh berkas Excel rekap dari backend presensi dan
+// mengembalikannya sebagai base64, siap dikirim sebagai
+// dokumen WhatsApp.
+
+async function ambilRekapExcel({ noWa, dari, sampai }) {
+  try {
+    const { data } = await axios.get(`${API_URL}/api/rekap/export`, {
+      params: { pemohon: noWa, dari, sampai },
+      responseType: "arraybuffer",
+      timeout: 60000,
+      maxContentLength: Infinity,
+    });
+
+    return {
+      ok: true,
+      base64: Buffer.from(data).toString("base64"),
+      namaBerkas: `Rekap-Absensi-${dari}-sd-${sampai}.xlsx`,
+    };
+  } catch (err) {
+    // Badan error ikut berbentuk arraybuffer karena
+    // responseType di atas, jadi pesan JSON-nya perlu
+    // diterjemahkan dulu sebelum bisa dibaca.
+    let pesan = err?.message || "Gagal mengunduh rekap.";
+
+    const badan = err?.response?.data;
+
+    if (badan) {
+      try {
+        pesan = JSON.parse(Buffer.from(badan).toString("utf8")).message || pesan;
+      } catch (e) {
+        // Bukan JSON — pakai pesan bawaan axios.
+      }
+    }
+
+    return { ok: false, pesan };
+  }
+}
+
+// =========================================================
 // 3. REVERSE GEOCODING
 // =========================================================
 
@@ -572,6 +684,10 @@ module.exports = {
   LABEL_JENIS,
   KATEGORI_ASN,
   bolehAbsenNonASN,
+  cekPetugas,
+  rentangBulanIni,
+  rentangBulanLalu,
+  ambilRekapExcel,
   tanggalHariIni,
   jamSekarang,
   tanggalPanjang,

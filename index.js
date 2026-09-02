@@ -110,8 +110,29 @@ async function connectToDatabase() {
 // [UNCAUGHT EXCEPTION] samar, bot tetap jalan, dan dashboard diam-diam mati.
 // Server ini berbagi VPS dengan aplikasi lain, jadi bentrok port harus berisik.
 function nyalakanWebServer() {
-  const server = app.listen(PORT_WEB, "0.0.0.0", () => {
-    console.log(`[WEB SERVER] API SisKA aktif di port ${PORT_WEB}`);
+  // Mengikat ke 127.0.0.1 saja: dashboard dan katalog hanya
+  // boleh dijangkau lewat nginx (port 8002), bukan langsung
+  // ke :3000 dari jaringan. Ini penting karena /api/login di
+  // berkas ini masih menerima admin/admin.
+  //
+  // Diambil dari .env supaya bisa dikembalikan ke "0.0.0.0"
+  // tanpa mengubah kode.
+  //
+  // PENTING: kalau nilainya diubah, LINK_WEB_KATALOG di .env
+  // harus ikut disesuaikan — tautan itulah yang dikirim bot
+  // ke WhatsApp pegawai.
+  const WEB_HOST = process.env.WEB_HOST || "127.0.0.1";
+
+  const server = app.listen(PORT_WEB, WEB_HOST, () => {
+    console.log(
+      `[WEB SERVER] API SisKA aktif di ${WEB_HOST}:${PORT_WEB}`,
+    );
+
+    if (WEB_HOST !== "127.0.0.1") {
+      console.warn(
+        `[WEB SERVER] Terbuka ke ${WEB_HOST} — bisa dijangkau langsung tanpa melewati nginx.`,
+      );
+    }
   });
 
   server.on("error", (err) => {
@@ -924,6 +945,114 @@ async function kirimFotoGeotag(chatId, fotoBase64, caption) {
   // inilah bukti yang diperiksa petugas — jangan sampai
   // pengirimannya tidak berjejak di log.
   logOut(chatId, `[FOTO GEOTAG] ${caption}`);
+}
+
+// Mengirim berkas rekap sebagai dokumen WhatsApp.
+async function kirimBerkasRekap(chatId, base64, namaBerkas, caption) {
+  const media = new MessageMedia(
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    base64,
+    namaBerkas,
+  );
+
+  await client.sendMessage(chatId, media, {
+    sendMediaAsDocument: true,
+    caption,
+  });
+
+  logOut(chatId, `[BERKAS REKAP] ${namaBerkas}`);
+}
+
+async function kirimRekap({ chatId, noWa, dari, sampai, label }) {
+  await kirimDenganTyping(
+    client,
+    chatId,
+    `Menyiapkan rekap absensi ${label}...\nMohon tunggu sebentar.`,
+  );
+
+  const hasil = await absensiNonASN.ambilRekapExcel({ noWa, dari, sampai });
+
+  if (!hasil.ok) {
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `❌ *Rekap gagal dibuat.*\n${hasil.pesan}`,
+    );
+
+    delete pengajuanBySender[chatId];
+    return;
+  }
+
+  await kirimBerkasRekap(
+    chatId,
+    hasil.base64,
+    hasil.namaBerkas,
+    `📊 Rekap absensi ${dari} s.d. ${sampai}\n\nBerkas berisi dua lembar: *Rekap* (rincian per hari) dan *Ringkasan* (per pegawai). Kolom foto berisi tautan yang bisa diklik.`,
+  );
+
+  delete pengajuanBySender[chatId];
+}
+
+async function tanganiAlurRekap({ message, chatId, flow, bodyLower }) {
+  const noWa = hanyaAngka(chatId);
+
+  if (flow.step === "rekap-periode") {
+    if (bodyLower === "1") {
+      const r = absensiNonASN.rentangBulanIni();
+
+      await kirimRekap({ chatId, noWa, ...r });
+      return;
+    }
+
+    if (bodyLower === "2") {
+      const r = absensiNonASN.rentangBulanLalu();
+
+      await kirimRekap({ chatId, noWa, ...r });
+      return;
+    }
+
+    if (bodyLower === "3") {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Ketik rentang tanggalnya dengan format:\n\n*2026-09-01 sampai 2026-09-30*",
+      );
+
+      pengajuanBySender[chatId] = { ...flow, step: "rekap-rentang" };
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "Pilihan tidak valid. Ketik *1*, *2*, atau *3*. Atau ketik *menu* untuk kembali.",
+    );
+    return;
+  }
+
+  if (flow.step === "rekap-rentang") {
+    const cocok = /(\d{4}-\d{2}-\d{2})\s*(?:sampai|s\.d\.|sd|-)\s*(\d{4}-\d{2}-\d{2})/i.exec(
+      message.body || "",
+    );
+
+    if (!cocok) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Format belum sesuai. Contoh yang benar:\n\n*2026-09-01 sampai 2026-09-30*",
+      );
+      return;
+    }
+
+    await kirimRekap({
+      chatId,
+      noWa,
+      dari: cocok[1],
+      sampai: cocok[2],
+      label: `${cocok[1]} s.d. ${cocok[2]}`,
+    });
+    return;
+  }
 }
 
 async function tanganiAlurAbsensi({
@@ -2666,12 +2795,20 @@ client.on("message", async (message) => {
 
       // Menu 9 hanya ditampilkan untuk pegawai non-ASN,
       // karena hanya merekalah yang absensinya dicatat di
-      // aplikasi presensi.
+      // aplikasi presensi. Menu 10 hanya untuk petugas yang
+      // ditunjuk memeriksa rekap.
+      //
+      // Status petugas di-cache 10 menit di dalam cekPetugas(),
+      // jadi pemanggilan ini tidak menambah beban tiap kali
+      // pegawai mengetik "menu".
+      const petugasRekap = await absensiNonASN.cekPetugas(hanyaAngka(chatId));
+
       const menu =
         `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA\n8. Pengumpulan Laporan WFA/WFO` +
         (absensiNonASN.bolehAbsenNonASN(pegawai)
           ? `\n9. Absensi Non-ASN`
-          : "");
+          : "") +
+        (petugasRekap ? `\n10. Rekap Absensi (Petugas)` : "");
 
       await kirimDenganTyping(client, chatId, menu);
       pengajuanBySender[chatId] = { step: "menu", pegawai };
@@ -2806,6 +2943,26 @@ client.on("message", async (message) => {
         return;
       }
 
+      if (bodyLower === "10") {
+        if (!(await absensiNonASN.cekPetugas(hanyaAngka(chatId)))) {
+          await kirimDenganTyping(
+            client,
+            chatId,
+            "Menu *Rekap Absensi* hanya untuk petugas yang ditunjuk.\n\nKetik *menu* untuk kembali.",
+          );
+          return;
+        }
+
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "*Rekap Absensi Pegawai*\n\nPilih periode:\n1. Bulan ini\n2. Bulan lalu\n3. Rentang tanggal tertentu",
+        );
+
+        pengajuanBySender[chatId] = { step: "rekap-periode", pegawai };
+        return;
+      }
+
       await kirimDenganTyping(
         client,
         chatId,
@@ -2833,6 +2990,12 @@ client.on("message", async (message) => {
         bodyLower,
         pegawai,
       });
+      return;
+    }
+
+    // --- ALUR REKAP ABSENSI (PETUGAS) ---
+    if (typeof flow.step === "string" && flow.step.startsWith("rekap-")) {
+      await tanganiAlurRekap({ message, chatId, flow, bodyLower });
       return;
     }
 

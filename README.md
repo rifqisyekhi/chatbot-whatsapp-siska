@@ -65,6 +65,29 @@ database**, karena itu yang diperiksa petugas. Perenderan
 memakai Chromium yang sudah dijalankan `whatsapp-web.js`, jadi
 tidak ada proses browser tambahan di VPS.
 
+## Menu 10 — Rekap Absensi (Petugas)
+
+Hanya muncul untuk nomor yang terdaftar di `PETUGAS_ABSENSI`
+pada .env **backend presensi** (bukan .env bot). Petugas
+memilih periode, bot mengunduh berkas Excel dari backend lalu
+mengirimkannya sebagai dokumen WhatsApp.
+
+```
+10. Rekap Absensi (Petugas)
+├─ 1. Bulan ini
+├─ 2. Bulan lalu
+└─ 3. Rentang tanggal tertentu  → ketik "2026-09-01 sampai 2026-09-30"
+```
+
+Berkasnya berisi dua lembar: *Rekap* (rincian per hari, dengan
+tautan foto yang bisa diklik) dan *Ringkasan* (jumlah hari
+hadir dan WFO/WFH/Dinas per pegawai).
+
+Status petugas di-cache 10 menit supaya menu utama tidak
+memanggil backend setiap kali pegawai mengetik "menu". Kalau
+backend presensi mati, menu 10 sekadar tidak muncul — menu
+lainnya tetap normal.
+
 Konfigurasi tambahan di `.env`:
 
 | Variabel | Arti |
