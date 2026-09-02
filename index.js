@@ -932,6 +932,11 @@ const PILIHAN_KEHADIRAN = {
 // foto di atas 10 MB, dan base64 membengkak sekitar 33%.
 const BATAS_FOTO_BASE64 = 9 * 1024 * 1024;
 
+// Batas kinerja harian, menyalin KINERJA_MIN dan KINERJA_MAX
+// di backend presensi. Backend tetap yang menegakkan.
+const KINERJA_MIN = 10;
+const KINERJA_MAX = 100;
+
 async function kirimFotoGeotag(chatId, fotoBase64, caption) {
   const media = new MessageMedia(
     "image/jpeg",
@@ -1367,8 +1372,8 @@ async function tanganiAlurAbsensi({
         client,
         chatId,
         geotagGagal
-          ? "⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\nTerakhir, silakan tuliskan *kinerja harian* Anda hari ini."
-          : "Terakhir, silakan tuliskan *kinerja harian* Anda hari ini.",
+          ? `⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\nTerakhir, silakan tuliskan *kinerja harian* Anda hari ini (${KINERJA_MIN}–${KINERJA_MAX} huruf).`
+          : `Terakhir, silakan tuliskan *kinerja harian* Anda hari ini.\n\nSingkat saja, ${KINERJA_MIN}–${KINERJA_MAX} huruf.\nContoh: _Menyusun laporan SPJ bulan Agustus_`,
       );
 
       pengajuanBySender[chatId] = {
@@ -1434,11 +1439,24 @@ async function tanganiAlurAbsensi({
   if (flow.step === "absensi-kinerja") {
     const kinerja = (message.body || "").trim();
 
-    if (kinerja.length < 5) {
+    // Harus sama dengan KINERJA_MIN / KINERJA_MAX di backend
+    // presensi (routes/absensiRoutes.js). Diperiksa di sini
+    // supaya pegawai langsung tahu, bukan setelah menunggu
+    // balasan penolakan dari server.
+    if (kinerja.length < KINERJA_MIN) {
       await kirimDenganTyping(
         client,
         chatId,
-        "Mohon tuliskan *kinerja harian* Anda sedikit lebih lengkap (minimal 5 karakter).",
+        `Kinerja harian minimal *${KINERJA_MIN} huruf*. Saat ini baru ${kinerja.length} huruf.\n\nSilakan tulis ulang.`,
+      );
+      return;
+    }
+
+    if (kinerja.length > KINERJA_MAX) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Kinerja harian maksimal *${KINERJA_MAX} huruf*. Saat ini ${kinerja.length} huruf.\n\nSilakan ringkas lalu tulis ulang.`,
       );
       return;
     }
