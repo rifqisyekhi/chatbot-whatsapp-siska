@@ -1024,6 +1024,180 @@ async function kirimFotoGeotag(chatId, fotoBase64, caption) {
   logOut(chatId, `[FOTO GEOTAG] ${caption}`);
 }
 
+// =========================================================
+// PENGINGAT ABSEN PULANG
+// =========================================================
+//
+// Pegawai yang sudah absen masuk tapi belum absen pulang
+// diingatkan sejam sekali, mulai dari jam wajib pulangnya.
+//
+// Kenapa ada batasnya: absen pulang TIDAK BISA lagi dilakukan
+// setelah tanggal berganti — alur bot mencari absensi hari ini,
+// sedangkan catatan yang tertinggal milik kemarin. Jadi
+// pengingat ini bukan sekadar kesopanan; lewat tengah malam,
+// jam pulang orang itu hilang permanen dan hanya bisa
+// dibetulkan lewat data.
+
+const PENGINGAT_AKTIF = process.env.PENGINGAT_PULANG !== "0";
+
+// Selang pemindaian, bukan selang pengingat. Pengingatnya
+// tetap sejam sekali per orang; pemindaian lebih sering supaya
+// pengingat pertama tidak meleset jauh dari jam wajib pulang.
+const PENGINGAT_SCAN_MENIT = Number(
+  process.env.PENGINGAT_SCAN_MENIT || 10,
+);
+
+const PENGINGAT_MAKS = Number(process.env.PENGINGAT_MAKS || 4);
+
+// Setelah jam ini pengingat berhenti — tidak ada gunanya
+// membangunkan orang tengah malam untuk sesuatu yang sudah
+// tidak bisa diperbaiki.
+const PENGINGAT_BATAS_JAM = process.env.PENGINGAT_BATAS_JAM || "22.00";
+
+// Kunci: "<tanggal>|<no_wa>" → jumlah pengingat terkirim.
+// Sengaja di memori: hilang saat bot restart, dan paling buruk
+// satu orang dapat pengingat tambahan. Menyimpannya ke
+// database tidak sepadan dengan risikonya.
+const pengingatTerkirim = new Map();
+
+function menitDariJamWIB(nilai) {
+  const cocok = /^(\d{1,2})[.:](\d{2})$/.exec(String(nilai || "").trim());
+
+  return cocok ? Number(cocok[1]) * 60 + Number(cocok[2]) : null;
+}
+
+// Apakah pengingat berikutnya sudah waktunya dikirim.
+//
+// Dipisah sebagai fungsi murni supaya bisa diuji tanpa
+// WhatsApp: kesalahan di sini berarti pegawai dibanjiri pesan
+// tiap sepuluh menit, atau tidak diingatkan sama sekali.
+function saatnyaMengingatkan({
+  sekarang,
+  harusPulang,
+  sudahTerkirim,
+  batas,
+  maks,
+}) {
+  if (sekarang === null || harusPulang === null) return false;
+
+  if (sudahTerkirim >= maks) return false;
+
+  if (batas !== null && sekarang > batas) return false;
+
+  if (sekarang < harusPulang) return false;
+
+  // Pengingat ke-n baru boleh dikirim setelah n jam lewat dari
+  // jam wajib pulang: ke-1 begitu lewat, ke-2 sejam kemudian.
+  return sekarang - harusPulang >= sudahTerkirim * 60;
+}
+
+async function pindaiPengingatPulang() {
+  if (!botReady) return;
+
+  const tanggal = absensiNonASN.tanggalHariIni();
+  const sekarang = menitDariJamWIB(absensiNonASN.jamSekarang());
+  const batas = menitDariJamWIB(PENGINGAT_BATAS_JAM);
+
+  if (sekarang === null || (batas !== null && sekarang > batas)) return;
+
+  // Buang catatan hari-hari sebelumnya supaya Map tidak tumbuh
+  // terus selama bot hidup berminggu-minggu.
+  for (const kunci of pengingatTerkirim.keys()) {
+    if (!kunci.startsWith(`${tanggal}|`)) pengingatTerkirim.delete(kunci);
+  }
+
+  let daftar;
+
+  try {
+    daftar = await absensiNonASN.ambilBelumPulang(tanggal);
+  } catch (err) {
+    console.error(
+      "[PENGINGAT] Gagal mengambil daftar belum pulang:",
+      err?.message || err,
+    );
+    return;
+  }
+
+  for (const orang of daftar) {
+    // Dinas luar tidak punya jam wajib pulang — jadwalnya
+    // mengikuti kegiatan di tempat tujuan. Tapi absensinya
+    // tetap harus ditutup sebelum tengah malam, jadi acuan
+    // pengingatnya jatuh ke jadwal pulang kantor biasa.
+    const harusPulang = menitDariJamWIB(
+      orang.jamHarusCheckout || orang.jamPulangJadwal,
+    );
+
+    const kunci = `${tanggal}|${orang.no_wa}`;
+    const sudah = pengingatTerkirim.get(kunci) || 0;
+
+    if (
+      !saatnyaMengingatkan({
+        sekarang,
+        harusPulang,
+        sudahTerkirim: sudah,
+        batas,
+        maks: PENGINGAT_MAKS,
+      })
+    ) {
+      continue;
+    }
+
+    const tujuan = getValidWaId(orang.no_wa);
+
+    if (!tujuan) continue;
+
+    const lewat = sekarang - harusPulang;
+
+    // Untuk dinas luar, jangan menyebut "jam pulang Anda" —
+    // jam itu tidak berlaku untuknya, dan menyebutkannya justru
+    // memberi kesan ada aturan yang dilanggar.
+    const teks =
+      `⏰ *Pengingat absen pulang*\n\n` +
+      `Anda absen masuk pukul ${orang.clockIn} WIB` +
+      (orang.attendanceType === "DINAS" ? " (Dinas Luar)" : "") +
+      ` dan belum absen pulang.\n` +
+      (orang.jamHarusCheckout
+        ? `Jam pulang Anda: *${orang.jamHarusCheckout} WIB*` +
+          (lewat >= 60 ? ` — sudah lewat ${Math.floor(lewat / 60)} jam.` : ".")
+        : `Jangan lupa ditutup setelah kegiatan selesai.`) +
+      `\n\nBuka *menu* lalu pilih *Absensi Non-ASN → Presensi*.\n\n` +
+      `_Absen pulang tidak bisa lagi dilakukan setelah lewat tengah malam._`;
+
+    try {
+      await kirimDenganTyping(client, tujuan, teks);
+
+      pengingatTerkirim.set(kunci, sudah + 1);
+
+      console.log(
+        `[PENGINGAT] ${orang.nama || orang.no_wa} — pengingat ke-${sudah + 1} ` +
+          `(masuk ${orang.clockIn}, wajib pulang ${orang.jamHarusCheckout})`,
+      );
+    } catch (err) {
+      console.error(
+        `[PENGINGAT] Gagal mengirim ke ${orang.no_wa}:`,
+        err?.message || err,
+      );
+    }
+  }
+}
+
+let timerPengingat = null;
+
+function mulaiPengingatPulang() {
+  if (!PENGINGAT_AKTIF || timerPengingat) return;
+
+  console.log(
+    `[PENGINGAT] Aktif — pindai tiap ${PENGINGAT_SCAN_MENIT} menit, ` +
+      `maksimal ${PENGINGAT_MAKS} pengingat per orang, berhenti pukul ${PENGINGAT_BATAS_JAM}.`,
+  );
+
+  timerPengingat = setInterval(() => {
+    pindaiPengingatPulang().catch((err) =>
+      console.error("[PENGINGAT] Kesalahan tak tertangani:", err),
+    );
+  }, PENGINGAT_SCAN_MENIT * 60 * 1000);
+}
+
 // Mengirim berkas rekap sebagai dokumen WhatsApp.
 async function kirimBerkasRekap(chatId, base64, namaBerkas, caption) {
   const media = new MessageMedia(
@@ -1847,6 +2021,10 @@ client.on("ready", async () => {
       ? "[READY] Sesi WhatsApp Web pulih setelah halaman dimuat ulang."
       : "[READY] Bot SisKA siap!",
   );
+
+  // Aman dipanggil berulang — penjaga di dalamnya mencegah
+  // timer kedua saat sesi WhatsApp pulih dan READY terpicu lagi.
+  mulaiPengingatPulang();
 
   try {
     const version = await client.getWWebVersion();

@@ -231,6 +231,19 @@ async function cekPetugas(noWa) {
   }
 }
 
+// =========================================================
+// 2C. PENGINGAT ABSEN PULANG
+// =========================================================
+
+async function ambilBelumPulang(tanggal) {
+  const { data } = await axios.get(`${API_URL}/api/absensi/belum-pulang`, {
+    params: { tanggal: tanggal || tanggalHariIni() },
+    timeout: TIMEOUT_API,
+  });
+
+  return data?.data || [];
+}
+
 // Rentang tanggal siap pakai, dihitung dengan zona WIB.
 
 function rentangBulanIni() {
@@ -758,6 +771,7 @@ module.exports = {
   rentangBulanIni,
   rentangBulanLalu,
   ambilRekapExcel,
+  ambilBelumPulang,
   tanggalHariIni,
   jamSekarang,
   tanggalPanjang,
