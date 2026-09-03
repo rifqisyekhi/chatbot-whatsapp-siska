@@ -487,6 +487,71 @@ const LABEL_JENIS = {
   DINAS: "Dinas Luar",
 };
 
+// =========================================================
+// JAM KERJA
+// =========================================================
+//
+// Mengikuti ketentuan hari dan jam kerja: hadir pukul 07.30,
+// pulang 16.00 pada Senin–Kamis dan 16.30 pada Jumat (Jumat
+// lebih lama karena istirahatnya 1,5 jam, bukan 1 jam).
+// Toleransi 60 menit.
+//
+// Angka-angka ini baru dipakai untuk memberi tahu pegawai
+// lewat pesan; sistem belum menolak absen pulang yang lebih
+// awal.
+
+const JAM_PULANG_SENIN_KAMIS =
+  process.env.JAM_PULANG_SENIN_KAMIS || "16.00";
+
+const JAM_PULANG_JUMAT = process.env.JAM_PULANG_JUMAT || "16.30";
+
+function jamPulangHariIni() {
+  // getDay() memakai zona server, sedangkan seluruh sistem ini
+  // memakai WIB. Hari diambil dari nama hari WIB supaya Jumat
+  // tidak meleset di server ber-UTC.
+  const hari = new Date().toLocaleDateString("en-US", {
+    timeZone: ZONA,
+    weekday: "short",
+  });
+
+  return hari === "Fri" ? JAM_PULANG_JUMAT : JAM_PULANG_SENIN_KAMIS;
+}
+
+// Nominatim mengembalikan alamat yang sangat panjang
+// ("Kementerian Ketenagakerjaan Republik Indonesia, Jalan Taman
+// Patra 13, RW 04, Kuningan Timur, Setiabudi, Jakarta Selatan,
+// …"). Untuk pesan chat, ruas pertamanya saja sudah cukup dan
+// jauh lebih enak dibaca; alamat lengkapnya tetap tersimpan di
+// database dan tercetak di cap geotag.
+function namaTempat(alamat) {
+  const ruas = String(alamat || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  return ruas[0] || "Lokasi tidak dikenali";
+}
+
+// Ruas alamat setelah nama tempat, dibuang bagian ekornya yang
+// tidak menambah kejelasan di layar ponsel: kode pos, nama
+// provinsi, dan "Indonesia". Dibatasi empat ruas supaya tetap
+// muat satu baris.
+function detailAlamat(alamat) {
+  const ruas = String(alamat || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(1)
+    .filter(
+      (r) =>
+        !/^\d+$/.test(r) &&
+        !/^indonesia$/i.test(r) &&
+        !/^(daerah khusus|provinsi)\b/i.test(r),
+    );
+
+  return ruas.slice(0, 4).join(", ");
+}
+
 function bangunHTML({
   fotoDataUrl,
   petaHTML,
@@ -682,6 +747,11 @@ async function buatFotoGeotag({
 module.exports = {
   API_URL,
   LABEL_JENIS,
+  JAM_PULANG_SENIN_KAMIS,
+  JAM_PULANG_JUMAT,
+  jamPulangHariIni,
+  namaTempat,
+  detailAlamat,
   KATEGORI_ASN,
   bolehAbsenNonASN,
   cekPetugas,

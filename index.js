@@ -1203,10 +1203,27 @@ async function tanganiAlurAbsensi({
     }
 
     if (data?.clockIn) {
+      // Jam wajib pulang dihitung backend, bukan di sini —
+      // angkanya harus sama persis dengan kolom "Jam Harus
+      // Checkout" di berkas rekap.
+      const harusPulang = status?.jamKerja?.jamHarusCheckout;
+
+      const jamSekarang = absensiNonASN.jamSekarang();
+
+      const belumWaktunya =
+        harusPulang && jamSekarang.replace(".", "") < harusPulang.replace(".", "");
+
       await kirimDenganTyping(
         client,
         chatId,
-        `Anda sudah absen masuk pukul *${data.clockIn}* sebagai *${data.attendanceType}*.\n\nSekarang *absen pulang*.\n\nSilakan kirim *foto check out* Anda.`,
+        `🕐 *Absen masuk Anda: ${data.clockIn} WIB* (${data.attendanceType})\n` +
+          (harusPulang
+            ? `⏰ Jam pulang Anda: *${harusPulang} WIB*\n` +
+              (belumWaktunya
+                ? `\n_Sekarang baru ${jamSekarang} WIB. Absen pulang lebih awal tetap tersimpan, tapi jam kerjanya tercatat kurang._\n`
+                : "")
+            : "") +
+          `\n📸 Silakan kirim *foto check out* Anda.`,
       );
 
       pengajuanBySender[chatId] = {
@@ -1433,19 +1450,26 @@ async function tanganiAlurAbsensi({
     // dikirim, jadi datanya disimpan dulu di state.
     if (flow.mode === "out") {
       if (!geotagGagal) {
+        const detail = absensiNonASN.detailAlamat(alamat);
+
         await kirimFotoGeotag(
           chatId,
           fotoFinal,
-          `📍 Foto check out bercap geotag\n${alamat}\n${jamTeks} WIB`,
+          `📍 *Foto Check-Out (${flow.jenisKehadiran})*\n` +
+            `🏢 ${absensiNonASN.namaTempat(alamat)}\n` +
+            (detail ? `📌 ${detail}\n` : "") +
+            `🕐 ${jamTeks} WIB`,
         );
       }
 
       await kirimDenganTyping(
         client,
         chatId,
-        geotagGagal
-          ? `⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\nTerakhir, silakan tuliskan *kinerja harian* Anda hari ini (${KINERJA_MIN}–${KINERJA_MAX} huruf).`
-          : `Terakhir, silakan tuliskan *kinerja harian* Anda hari ini.\n\nSingkat saja, ${KINERJA_MIN}–${KINERJA_MAX} huruf.\nContoh: _Menyusun laporan SPJ bulan Agustus_`,
+        (geotagGagal
+          ? "⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\n"
+          : "") +
+          `📝 *Terakhir, tuliskan kinerja harian Anda.*\n` +
+          `Contoh: _Menyusun laporan SPJ bulan Agustus_`,
       );
 
       pengajuanBySender[chatId] = {
@@ -1493,11 +1517,15 @@ async function tanganiAlurAbsensi({
     await kirimDenganTyping(
       client,
       chatId,
-      `✅ *Absen masuk tersimpan.*\n\nJenis: *${absensiNonASN.LABEL_JENIS[flow.jenisKehadiran]}*\nJam masuk: *${jamTeks} WIB*\nLokasi: ${alamat}${
-        geotagGagal
-          ? "\n\n⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat."
-          : ""
-      }\n\nNanti saat pulang, buka *menu* lalu pilih *Absensi Non-ASN → Presensi* lagi untuk absen pulang.`,
+      `✅ *Absen masuk tersimpan*\n\n` +
+        `Jenis: ${absensiNonASN.LABEL_JENIS[flow.jenisKehadiran]}\n` +
+        `🕐 Jam masuk: ${jamTeks} WIB\n` +
+        `📍 Lokasi: ${absensiNonASN.namaTempat(alamat)}\n\n` +
+        (geotagGagal
+          ? "⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat.\n\n"
+          : "") +
+        `⏰ *Check-out mulai pukul ${absensiNonASN.jamPulangHariIni()} WIB.*\n` +
+        `Untuk absen pulang, pilih *Absensi Non-ASN → Presensi lagi*.`,
     );
 
     delete pengajuanBySender[chatId];
@@ -1554,10 +1582,15 @@ async function tanganiAlurAbsensi({
       return;
     }
 
+    // Lokasi sengaja tidak diulang di sini — sudah tampil
+    // lengkap pada keterangan foto check-out di atas.
     await kirimDenganTyping(
       client,
       chatId,
-      `✅ *Absen pulang tersimpan.*\n\nJam pulang: *${flow.jam} WIB*\nLokasi: ${flow.alamat}\nKinerja harian: ${kinerja}\n\nTerima kasih, selamat beristirahat 🙏`,
+      `✅ *Absen pulang tersimpan*\n\n` +
+        `🕐 Jam pulang: ${flow.jam} WIB\n` +
+        `📝 Kinerja: ${kinerja}\n\n` +
+        `Terima kasih 🙏`,
     );
 
     delete pengajuanBySender[chatId];

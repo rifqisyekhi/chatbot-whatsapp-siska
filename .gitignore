@@ -11,6 +11,7 @@ node_modules/
 # Folder Hasil Generate & Upload User
 uploads/
 reports/
+docs/
 
 # Folder sementara
 temp/
