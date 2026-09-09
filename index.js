@@ -404,7 +404,10 @@ app.put("/api/pegawai/:id", async (req, res) => {
     const updated = await Pegawai.findByIdAndUpdate(
       req.params.id,
       Object.keys(buang).length ? { $set: data, $unset: buang } : data,
-      { new: true, runValidators: true },
+      // returnDocument: "after" adalah pengganti resmi opsi `new` yang
+      // sudah usang di Mongoose 6+. Artinya sama: kembalikan dokumen
+      // SESUDAH diperbarui, bukan sebelumnya.
+      { returnDocument: "after", runValidators: true },
     );
 
     if (!updated)
@@ -469,7 +472,7 @@ app.post("/api/kendaraan", async (req, res) => {
 app.put("/api/kendaraan/:id", async (req, res) => {
   try {
     const updated = await Kendaraan.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: "after",
     });
     if (!updated)
       return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
@@ -680,27 +683,59 @@ function hanyaAngka(id) {
   return (id || "").replace(/[^0-9]/g, "");
 }
 
-function isApprovalYes(text) {
-  const t = (text || "").trim().toLowerCase();
-  return (
-    t === "1" ||
-    t === "setuju" ||
-    t === "ya" ||
-    t === "y" ||
-    t.includes("setuju") ||
-    t.includes("approve")
-  );
+// Kata keputusan hanya dikenali di dalam pesan PENDEK dan sebagai
+// KATA UTUH. Log VPS 7-8 September mencatat kalimat "Lembar
+// Persetujuan/ Catatan Hasil Penelahaan Usulan Penggunaan Dana
+// PNBP ..." masuk ke jalur persetujuan, karena "Persetujuan"
+// memuat potongan "setuju". Kalau saat itu ada tepat satu
+// pengajuan menunggu di antrian atasan, kalimat surat itu akan
+// menyetujuinya diam-diam tanpa ada yang menekan apa pun.
+const MAKS_KATA_KEPUTUSAN = 4;
+
+function normalisasiKeputusan(text) {
+  return (text || "").trim().toLowerCase();
+}
+
+function adaKataUtuh(t, kata) {
+  if (t.split(/\s+/).filter(Boolean).length > MAKS_KATA_KEPUTUSAN) {
+    return false;
+  }
+
+  return new RegExp(`\\b${kata}\\b`).test(t);
 }
 
 function isApprovalNo(text) {
-  const t = (text || "").trim().toLowerCase();
+  const t = normalisasiKeputusan(text);
+
   return (
     t === "2" ||
     t === "tidak" ||
     t === "ga" ||
     t === "gak" ||
-    t.includes("tolak") ||
-    t.includes("reject")
+    adaKataUtuh(t, "tolak") ||
+    adaKataUtuh(t, "reject") ||
+    // "tidak setuju" wajib terbaca PENOLAKAN. Sebelumnya urutan
+    // pengecekan yang menentukan: pemanggilnya menguji "yes" lebih
+    // dulu, dan kata "setuju" di dalamnya menang.
+    /\b(tidak|tak|ga|gak|nggak|engga|enggak|bukan|jangan|belum)\s+setuju\b/.test(
+      t,
+    )
+  );
+}
+
+function isApprovalYes(text) {
+  const t = normalisasiKeputusan(text);
+
+  // Penolakan selalu menang, apa pun urutan pengecekan di pemanggil.
+  if (isApprovalNo(t)) return false;
+
+  return (
+    t === "1" ||
+    t === "setuju" ||
+    t === "ya" ||
+    t === "y" ||
+    adaKataUtuh(t, "setuju") ||
+    adaKataUtuh(t, "approve")
   );
 }
 
@@ -953,8 +988,14 @@ async function ambilMediaAman(message, chatId, pesanGagal) {
   try {
     return await downloadMediaWithRetry(message);
   } catch (err) {
-    console.error("[MEDIA] Gagal total mengunduh media:", err?.message || err, err);
-    if (err?.stack) console.error(err.stack);
+    // Satu kali cetak saja. Sebelumnya objek error DAN stack-nya dicetak
+    // terpisah, jadi satu kegagalan unduh menghasilkan dua tembok jejak
+    // puppeteer yang identik di log. Alurnya sendiri tidak rusak: user
+    // langsung diminta mengirim ulang fotonya.
+    console.error(
+      "[MEDIA] Gagal total mengunduh media:",
+      err?.stack || err?.message || err,
+    );
     await kirimDenganTyping(
       client,
       chatId,
@@ -1903,11 +1944,37 @@ let gagalRestartBeruntun = 0;
 let gagalProbeBeruntun = 0;
 let jumlahReinject = 0;
 
-// 2 menit tanpa READY sudah cukup untuk menyatakan stuck. Dulu 5 menit karena
-// khawatir memotong sinkronisasi yang memang lama — kekhawatiran itu kini
-// ditangani oleh event loading_screen yang menggeser titik mulai selama
-// progresnya masih bergerak. Ambang yang lebih pendek memangkas waktu mati.
-const STUCK_TIMEOUT_MS = 120000;
+// Sekali saja bot pernah READY di proses ini, browsernya sudah panas.
+// Dipakai untuk memilih ambang stuck; TIDAK ikut direset oleh restart
+// di dalam proses.
+let pernahReady = false;
+
+// Ambang stuck dibedakan antara start dingin dan start panas.
+//
+// 2 menit tanpa READY sudah cukup untuk menyatakan stuck SELAMA browsernya
+// sudah pernah hidup. Dulu ambangnya 5 menit karena khawatir memotong
+// sinkronisasi yang memang lama — kekhawatiran itu ditangani oleh event
+// loading_screen yang menggeser titik mulai selama progresnya bergerak.
+//
+// Yang tidak tertangani: fase SEBELUM loading_screen muncul — meluncurkan
+// Chromium, memuat halaman, memulihkan sesi LocalAuth. Fase itu tidak
+// memancarkan sinyal progres apa pun, jadi tidak ada yang menggeser titik
+// mulai, dan pada profil dingin ia rutin lewat 2 menit.
+//
+// Akibatnya terlihat jelas di log VPS 3-9 September. Tiap tengah malam PM2
+// menjalankan cron_restart, lalu penjaga ini membunuh bot pada detik ~145,
+// berulang 3-4 kali, dan bot baru benar-benar hidup 10 menit kemudian.
+// Bot mati bukan karena macet, tapi karena penjaganya sendiri.
+//
+// Karena itu start pertama proses ini memakai angka lama yang sudah terbukti
+// (5 menit). Begitu bot pernah READY, ambang 2 menit berlaku lagi: pada saat
+// itu browser sudah panas dan diam lebih dari 2 menit memang berarti macet.
+const STUCK_TIMEOUT_DINGIN_MS = 300000;
+const STUCK_TIMEOUT_PANAS_MS = 120000;
+
+function ambangStuckMs() {
+  return pernahReady ? STUCK_TIMEOUT_PANAS_MS : STUCK_TIMEOUT_DINGIN_MS;
+}
 const MAX_RESTART_BERUNTUN = 3; // Lewat ini, serahkan ke PM2 (proses baru, browser bersih)
 const LIVENESS_INTERVAL_MS = 60000; // Sapa browser tiap 1 menit
 const LIVENESS_TIMEOUT_MS = 20000; // Browser sehat menjawab getState jauh di bawah ini
@@ -2022,6 +2089,7 @@ client.on("ready", async () => {
   // ulang — bukan bot yang baru menyala. Dibedakan supaya log tidak menipu.
   const sebelumnyaReady = botReady;
   botReady = true;
+  pernahReady = true;
   authStartTime = 0;
   restarting = false;
   gagalRestartBeruntun = 0;
@@ -2062,7 +2130,9 @@ setInterval(() => {
   if (botReady || restarting || authStartTime === 0) return;
 
   const elapsed = (Date.now() - authStartTime) / 1000;
-  if (elapsed * 1000 > STUCK_TIMEOUT_MS) {
+  const ambang = ambangStuckMs();
+
+  if (elapsed * 1000 > ambang) {
     // LANGSUNG KELUAR, jangan coba restart di dalam proses.
     //
     // Catatan log VPS 8-13 Agustus: begitu bot mentok, restartClient() tidak
@@ -2071,10 +2141,16 @@ setInterval(() => {
     // setelah proses benar-benar keluar dan PM2 menyalakannya bersih.
     // Karena itu jalan yang terbukti dipakai lebih dulu, bukan terakhir.
     console.error(
-      `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s. Keluar sekarang, biar PM2 start ulang bersih ` +
+      `[CRITICAL] Bot stuck selama ${elapsed.toFixed(0)}s ` +
+        `(ambang ${ambang / 1000}s, start ${pernahReady ? "panas" : "dingin"}). ` +
+        `Keluar sekarang, biar PM2 start ulang bersih ` +
         `(restart di dalam proses terbukti tidak pernah memulihkan kondisi ini).`,
     );
-    logToFile("error", "WATCHDOG", `Exit karena stuck ${elapsed.toFixed(0)}s`);
+    logToFile(
+      "error",
+      "WATCHDOG",
+      `Exit karena stuck ${elapsed.toFixed(0)}s (ambang ${ambang / 1000}s)`,
+    );
     client
       .destroy()
       .catch(() => {})
@@ -2375,7 +2451,19 @@ client.on("message", async (message) => {
             nama: flow.pegawai.nama,
             nip: flow.pegawai["nip"],
             jabatan: flow.pegawai.jabatan,
-            tanggal: new Date().toISOString().split("T")[0],
+
+            // Tanggal saat pengajuan DIBUAT, bukan saat foto selesai
+            // diunggah. Persetujuan atasan bisa datang beberapa hari
+            // kemudian, dan sebelum ini yang tercatat adalah tanggal
+            // unggahan itu.
+            //
+            // Cadangannya memakai tanggal WIB, bukan toISOString().
+            // toISOString() mengembalikan tanggal UTC: antara 00.00
+            // dan 07.00 WIB ia mundur satu hari — persis jam ketika
+            // orang yang lembur sampai lewat tengah malam mengunggah
+            // buktinya.
+            tanggal: flow.tanggalPengajuan || absensiNonASN.tanggalHariIni(),
+
             kegiatan: flow.alasan || "",
             jamMasuk: flow.jamMasuk,
             jamKeluar: flow.jamKeluar,
@@ -2619,8 +2707,14 @@ client.on("message", async (message) => {
       // "tolak") tetapi tidak ada satu pun antrian yang cocok. Dulu kejadian
       // ini lolos diam-diam dan berakhir menampilkan menu utama, sehingga
       // tampak seperti tombol persetujuan yang rusak. Catat alasannya.
+      //
+      // console.log, BUKAN console.warn: sebagian besar kejadian ini normal
+      // belaka — orang mengetik "1" untuk memilih menu 1 sewaktu tidak sedang
+      // di alur mana pun, dan botnya memang benar menampilkan menu utama.
+      // Sebagai warn, ~55 baris seminggu menumpuk di aliran error dan
+      // menenggelamkan error sungguhan.
       if (!pengajuan && !orderGudang) {
-        console.warn(
+        console.log(
           `[APPROVAL] ${chatId} membalas "${message.body}" tapi tidak ada antrian yang cocok. ` +
             `Antrian atasan: ${Object.keys(pengajuanByAtasanMsgId).length}, ` +
             `antrian gudang: ${Object.keys(orderGudangMsgId).length}, ` +
@@ -2800,6 +2894,12 @@ client.on("message", async (message) => {
             alasan,
             jamMasuk,
             jamKeluar,
+
+            // Dibawa terus dari antrian. Antrian lama yang dibuat sebelum
+            // perubahan ini tidak punya field-nya; penanganannya di tempat
+            // tanggal itu dipakai.
+            tanggalPengajuan: pengajuan.tanggalPengajuan,
+
             fotoList: [],
           };
         } else if (jenis === "Cuti") {
@@ -3825,6 +3925,14 @@ client.on("message", async (message) => {
           alasan,
           jamMasuk,
           jamKeluar,
+
+          // Tanggal lembur dikunci SEKARANG, saat pengajuan dibuat, lalu
+          // ikut tersimpan ke MongoDB bersama antriannya. Dulu tanggalnya
+          // baru diambil jauh di ujung alur — saat pegawai selesai
+          // mengunggah tiga foto — sehingga persetujuan yang datang
+          // beberapa hari kemudian mencatat tanggal yang salah.
+          tanggalPengajuan: absensiNonASN.tanggalHariIni(),
+
           teksPesan: teksPengajuan,
         };
 
