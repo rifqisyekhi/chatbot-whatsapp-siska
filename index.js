@@ -1561,12 +1561,6 @@ async function tanganiAlurAbsensi({
 
     const labelAbsen = flow.mode === "in" ? "CHECK IN" : "CHECK OUT";
 
-    await kirimDenganTyping(
-      client,
-      chatId,
-      "Lokasi diterima. Sedang membuat foto bercap geotag, mohon tunggu sebentar...",
-    );
-
     const alamat = await absensiNonASN.cariAlamat(lat, lng);
     const jamTeks = absensiNonASN.jamSekarang();
 
@@ -1688,6 +1682,22 @@ async function tanganiAlurAbsensi({
       );
     }
 
+    // Jam pulang yang ditampilkan harus jam wajib pulang ORANG
+    // INI — dihitung backend dari jam datangnya — bukan jadwal
+    // pulang kantor. Datang 08.44 berarti pulang 17.14, bukan
+    // 16.00. Kalau backend belum diperbarui dan tidak mengirim
+    // jamKerja, jadwal kantor dipakai sebagai cadangan.
+    const jamKerjaMasuk = hasil.data?.jamKerja;
+
+    const barisPulang = jamKerjaMasuk?.jamHarusCheckout
+      ? `⏰ *Absen pulang mulai pukul ${jamKerjaMasuk.jamHarusCheckout} WIB.*\n` +
+        `_Jam masuk Anda + 7,5 jam kerja + istirahat._\n`
+      : jamKerjaMasuk
+        ? // Dinas luar tidak terikat jam pulang kantor.
+          `⏰ *Jam pulang menyesuaikan selesainya kegiatan.*\n` +
+          `_Absen pulang tetap wajib sebelum tengah malam._\n`
+        : `⏰ *Check-out mulai pukul ${absensiNonASN.jamPulangHariIni()} WIB.*\n`;
+
     await kirimDenganTyping(
       client,
       chatId,
@@ -1698,7 +1708,7 @@ async function tanganiAlurAbsensi({
         (geotagGagal
           ? "⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat.\n\n"
           : "") +
-        `⏰ *Check-out mulai pukul ${absensiNonASN.jamPulangHariIni()} WIB.*\n` +
+        barisPulang +
         `Untuk absen pulang, pilih *Absensi Non-ASN → Presensi lagi*.`,
     );
 
