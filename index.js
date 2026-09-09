@@ -84,13 +84,36 @@ async function connectToDatabase() {
 
     try {
       const antrianLama = await Antrian.find({});
-      antrianLama.forEach((doc) => {
-        if (doc.tipe === "ATASAN") pengajuanByAtasanMsgId[doc.msgId] = doc.data;
-        if (doc.tipe === "GUDANG") orderGudangMsgId[doc.msgId] = doc.data;
-      });
+      let jumlahAntrian = 0;
+      let jumlahFlowLembur = 0;
+
+      for (const doc of antrianLama) {
+        if (doc.tipe === "ATASAN") {
+          pengajuanByAtasanMsgId[doc.msgId] = doc.data;
+          jumlahAntrian++;
+          continue;
+        }
+
+        if (doc.tipe === "GUDANG") {
+          orderGudangMsgId[doc.msgId] = doc.data;
+          jumlahAntrian++;
+          continue;
+        }
+
+        if (doc.tipe === TIPE_FLOW_LEMBUR) {
+          if (await pulihkanFlowLembur(doc)) jumlahFlowLembur++;
+        }
+      }
+
       console.log(
-        `[INIT] Berhasil memulihkan ${antrianLama.length} antrian persetujuan dari Database.`,
+        `[INIT] Berhasil memulihkan ${jumlahAntrian} antrian persetujuan dari Database.`,
       );
+
+      if (jumlahFlowLembur > 0) {
+        console.log(
+          `[INIT] Memulihkan ${jumlahFlowLembur} alur unggah foto lembur yang belum selesai.`,
+        );
+      }
     } catch (e) {
       console.error("Gagal memulihkan memori antrian:", e);
     }
@@ -632,7 +655,136 @@ const DATA_KETUA_SUB_TU = {
 };
 
 // III. STATE MANAGEMENT
-const pengajuanBySender = {};
+
+// Alur unggah tiga foto lembur ikut disimpan ke MongoDB, tidak cuma di RAM.
+//
+// Antrian PERSETUJUAN sudah aman sejak dulu — tersimpan lewat tambahAntrian()
+// dan dipulihkan tiap bot menyala. Yang tidak aman justru langkah SESUDAH
+// disetujui: pegawai diminta mengirim tiga foto, dan keadaan itu hanya ada di
+// memori. Sekali bot restart, alurnya hilang dan pegawai harus mengajukan
+// ulang dari nol — padahal atasannya sudah menyetujui.
+//
+// Restart bukan kejadian langka. Log VPS 3-9 September mencatat 13 restart di
+// JAM KERJA dalam sepekan (deteksi zombie dan bot mentok), di luar restart
+// terjadwal tengah malam. Jadi menghapus restart terjadwal pun tidak menutup
+// lubang ini; yang menutup hanya penyimpanan.
+//
+// Yang disimpan cuma path berkas fotonya, bukan isi fotonya — fotonya sendiri
+// sudah lebih dulu ditulis ke UPLOADS_DIR.
+const TIPE_FLOW_LEMBUR = "LEMBUR_FOTO";
+
+// Alur yang menggantung lebih lama dari ini tidak dipulihkan. Tanpa batas,
+// pegawai yang berhenti membalas di tengah jalan akan terkunci selamanya di
+// langkah unggah foto: tiap pesan berikutnya, sampai kapan pun, ditelan
+// handler lembur.
+const UMUR_FLOW_LEMBUR_MS = 7 * 24 * 60 * 60 * 1000;
+
+const _pengajuanBySender = {};
+
+// Daftar chat yang salinannya sedang ada di MongoDB. Dipakai supaya
+// penghapusan tidak menembak database untuk chat yang memang tidak pernah
+// punya alur lembur — dan itu mayoritas pesan yang masuk.
+const flowLemburTersimpan = new Set();
+
+function perluDisimpan(flow) {
+  return flow?.step === "upload-foto";
+}
+
+function simpanFlowLembur(chatId, flow) {
+  flowLemburTersimpan.add(chatId);
+
+  // JSON round-trip: `pegawai` kadang berupa dokumen Mongoose, dan menaruhnya
+  // mentah-mentah ke field Mixed menyimpan bagasi internalnya sekalian.
+  const bersih = JSON.parse(JSON.stringify({ ...flow, disimpanPada: Date.now() }));
+
+  Antrian.findOneAndUpdate(
+    { msgId: chatId },
+    { msgId: chatId, tipe: TIPE_FLOW_LEMBUR, data: bersih },
+    { upsert: true },
+  ).catch((e) => console.error("[LEMBUR] Gagal menyimpan alur foto:", e?.message || e));
+}
+
+function hapusFlowLembur(chatId) {
+  if (!flowLemburTersimpan.has(chatId)) return;
+
+  flowLemburTersimpan.delete(chatId);
+
+  Antrian.findOneAndDelete({ msgId: chatId, tipe: TIPE_FLOW_LEMBUR }).catch((e) =>
+    console.error("[LEMBUR] Gagal menghapus alur foto:", e?.message || e),
+  );
+}
+
+// Memulihkan satu alur unggah foto dari MongoDB. Mengembalikan true kalau
+// alurnya benar-benar dipakai lagi.
+//
+// Dua hal diperiksa sebelum dipulihkan, dan yang gagal langsung dibuang:
+//
+//   1. Umurnya. Alur yang sudah lewat batas berarti pegawainya berhenti
+//      membalas. Memulihkannya cuma mengunci dia di langkah unggah foto.
+//
+//   2. Foto yang sudah terkirim masih ada di disk. fotoList menyimpan path,
+//      bukan isi foto — kalau berkasnya sudah hilang, laporan PDF-nya
+//      mustahil dibuat, jadi lebih jujur membatalkan sekarang daripada
+//      gagal nanti setelah pegawai mengirim foto ketiganya.
+async function pulihkanFlowLembur(doc) {
+  const flow = doc?.data;
+
+  const buang = async (alasan) => {
+    console.warn(`[LEMBUR] Alur foto ${doc.msgId} dibuang: ${alasan}.`);
+
+    await Antrian.findOneAndDelete({ msgId: doc.msgId }).catch(() => {});
+
+    return false;
+  };
+
+  if (!perluDisimpan(flow)) return buang("bukan alur unggah foto");
+
+  const umur = Date.now() - (flow.disimpanPada || 0);
+  if (umur > UMUR_FLOW_LEMBUR_MS) {
+    return buang(`sudah ${Math.round(umur / 86400000)} hari menggantung`);
+  }
+
+  for (const fotoPath of flow.fotoList || []) {
+    try {
+      await fsPromises.access(fotoPath);
+    } catch {
+      return buang(`berkas foto hilang (${path.basename(fotoPath)})`);
+    }
+  }
+
+  _pengajuanBySender[doc.msgId] = flow;
+  flowLemburTersimpan.add(doc.msgId);
+
+  return true;
+}
+
+// Proxy, bukan 38 pemanggilan manual.
+//
+// `pengajuanBySender` ditulis dan dihapus di 38 tempat berbeda di berkas ini,
+// termasuk reset global saat pegawai mengetik "menu". Menyisipkan penyimpanan
+// satu per satu berarti 38 peluang melewatkan satu — dan yang terlewat muncul
+// sebagai alur hantu: pegawai sudah keluar dari lembur, tapi sesudah bot
+// restart ia dikembalikan ke langkah unggah foto dan pesan berikutnya ditelan.
+//
+// Satu titik cegat menutup semuanya, sekarang dan nanti.
+const pengajuanBySender = new Proxy(_pengajuanBySender, {
+  set(target, kunci, nilai) {
+    target[kunci] = nilai;
+
+    if (perluDisimpan(nilai)) simpanFlowLembur(kunci, nilai);
+    else hapusFlowLembur(kunci);
+
+    return true;
+  },
+
+  deleteProperty(target, kunci) {
+    delete target[kunci];
+    hapusFlowLembur(kunci);
+
+    return true;
+  },
+});
+
 const helpdeskQueue = {};
 const helpdeskInstruksiMap = {};
 const userLastActive = {};
@@ -2415,6 +2567,12 @@ client.on("message", async (message) => {
         if (!flow.fotoList) flow.fotoList = [];
         flow.fotoList.push(fotoPath);
 
+        // push() memutasi objek yang sudah ada, jadi tidak melewati proxy
+        // pengajuanBySender dan tidak memicu penyimpanan. Tanpa baris ini,
+        // yang tersimpan selamanya "0 foto" dan pegawai yang sudah mengirim
+        // dua foto harus mengulang ketiganya setelah bot restart.
+        simpanFlowLembur(chatId, flow);
+
         const jumlahFoto = flow.fotoList.length;
 
         if (jumlahFoto < 3) {
@@ -3872,6 +4030,13 @@ client.on("message", async (message) => {
           alasan: flow.alasan,
           jamMasuk: flow.jamMasuk,
           jamKeluar: jamKeluar,
+
+          // Disetujui otomatis, jadi tanggal pengajuan ya hari ini. Tetap
+          // dikunci di sini supaya kalau bot restart sebelum fotonya
+          // selesai diunggah, tanggalnya tidak ikut bergeser — misalnya
+          // pengajuan pukul 23.50 yang fotonya masuk pukul 00.10.
+          tanggalPengajuan: absensiNonASN.tanggalHariIni(),
+
           fotoList: [],
         };
 
@@ -4481,9 +4646,17 @@ async function kabariUserSedangProses() {
   if (!botReady) return;
 
   // Yang berhenti di menu utama tidak kehilangan apa-apa, jadi tidak diganggu.
+  //
+  // Alur unggah foto lembur juga tidak lagi diganggu: sejak alurnya ikut
+  // disimpan ke MongoDB, ia selamat melewati restart dan bisa dilanjutkan
+  // begitu bot hidup lagi. Mengabarinya "perlu diulang dari awal" justru
+  // membuat pegawai mengulang sesuatu yang sebenarnya masih utuh.
+  const masihHilang = (flow) =>
+    flow && flow.step !== "menu" && flow.step !== "upload-foto";
+
   const korban = [
-    ...Object.keys(pengajuanBySender).filter(
-      (id) => pengajuanBySender[id] && pengajuanBySender[id].step !== "menu",
+    ...Object.keys(pengajuanBySender).filter((id) =>
+      masihHilang(pengajuanBySender[id]),
     ),
     ...Object.keys(helpdeskQueue),
   ];
