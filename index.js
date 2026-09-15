@@ -48,7 +48,39 @@ const RiwayatLembur = require("./models/RiwayatLembur");
 const RiwayatKendaraan = require("./models/RiwayatKendaraan");
 
 let dbPegawai = [];
-let dbTimGudang = [];
+
+// Penerima notifikasi order persediaan, dan satu-satunya yang boleh menjawab
+// "Siap Diambil / Fisik Kosong": semua pegawai berjabatan Petugas Kebersihan.
+// Siapa pun yang jabatannya diubah ke sini lewat Master Data langsung ikut
+// menerima notifikasi — tanpa mengubah kode.
+//
+// Dulu daftar ini dibaca dari pegawai ber-kategori "TimGudang". Masalahnya,
+// petugas gudang adalah PPNPN biasa, dan satu orang hanya bisa punya satu
+// kategori — jadi perannya dicatat dengan MENGGANDAKAN orangnya. Yudi Cokro
+// dan Sugianto masing-masing tercatat dua kali dengan nomor WA yang sama,
+// sekali PPNPN dan sekali TimGudang, sehingga pencarian pegawai berdasarkan
+// nomor WA bisa jatuh ke salinan yang mana saja. Jabatan tidak punya masalah
+// itu: ia melekat pada satu dokumen orang yang sama.
+const JABATAN_TIM_GUDANG = "petugas kebersihan";
+
+function daftarTimGudang() {
+  return dbPegawai.filter(
+    (p) => String(p.jabatan || "").trim().toLowerCase() === JABATAN_TIM_GUDANG,
+  );
+}
+
+// Nomor WA unik. Kalau satu orang masih tercatat ganda dengan jabatan yang
+// sama, notifikasinya tetap terkirim sekali, bukan dua kali.
+function waTimGudang() {
+  return [
+    ...new Set(daftarTimGudang().map((p) => getValidWaId(p.no_wa)).filter(Boolean)),
+  ];
+}
+
+function nomorTimGudang(chatId) {
+  return waTimGudang().includes(chatId);
+}
+
 const pengajuanByAtasanMsgId = {};
 const orderGudangMsgId = {};
 
@@ -58,10 +90,25 @@ const app = express();
 async function refreshDataPegawai() {
   try {
     dbPegawai = await Pegawai.find({});
-    dbTimGudang = dbPegawai.filter((p) => p.kategori_pegawai === "TimGudang");
     console.log(
       `[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari MongoDB Atlas.`,
     );
+
+    // Penerima notifikasi gudang kini bergantung pada teks jabatan. Kalau
+    // jabatannya diganti nama di Master Data, daftarnya kosong tanpa ada
+    // yang error — order persediaan disetujui lalu tidak sampai ke siapa
+    // pun. Jadi kosongnya harus berisik.
+    const timGudang = daftarTimGudang();
+    if (timGudang.length === 0) {
+      console.error(
+        `[GUDANG] Tidak ada pegawai berjabatan "${JABATAN_TIM_GUDANG}". ` +
+          "Notifikasi order persediaan TIDAK AKAN terkirim ke siapa pun.",
+      );
+    } else {
+      console.log(
+        `[GUDANG] Penerima notifikasi: ${timGudang.map((p) => p.nama).join(", ")}.`,
+      );
+    }
   } catch (err) {
     console.error("[CRITICAL] Gagal memuat data pegawai dari MongoDB:", err);
   }
@@ -935,6 +982,37 @@ async function cariPegawaiByWa(rawId) {
   }).lean();
 }
 
+// "Tidak punya atasan" hanya berarti PIMPINAN untuk pegawai ASN. Untuk
+// non-ASN, itu berarti atasannya BELUM DIISI di Master Data.
+//
+// Dulu keduanya diperlakukan sama: siapa pun tanpa atasan_nip dianggap
+// pimpinan, dan lemburnya disetujui otomatis. Data pegawai 15 September:
+// 3 TimGudang dan 1 Magang belum punya atasan_nip. Lembur mereka akan
+// tercatat "OTOMATIS DISETUJUI karena Anda terdeteksi sebagai Pimpinan" —
+// disetujui sendiri, tanpa atasan mana pun pernah melihatnya.
+function tanpaAtasan(pegawai) {
+  return !String(pegawai?.atasan_nip || "").trim();
+}
+
+function pegawaiASN(pegawai) {
+  return !absensiNonASN.bolehAbsenNonASN(pegawai);
+}
+
+// Pesan penolakan kalau pegawai ini belum bisa mengajukan lembur, atau null
+// kalau boleh lanjut. Dipanggil di AWAL alur supaya pegawai tidak sia-sia
+// mengisi alasan dan jam dulu, dan sekali lagi di ujung sebagai jaminan.
+function alasanTolakLembur(pegawai) {
+  if (tanpaAtasan(pegawai) && !pegawaiASN(pegawai)) {
+    return (
+      "Maaf, *atasan Anda belum terdaftar* di data pegawai, sehingga " +
+      "pengajuan lembur belum bisa dikirim untuk disetujui.\n\n" +
+      "Mohon hubungi admin TU untuk melengkapi data atasan Anda, lalu ajukan kembali."
+    );
+  }
+
+  return null;
+}
+
 async function cariAtasanPegawai(pegawai) {
   if (!pegawai || !pegawai.atasan_nip) return null;
   try {
@@ -1634,12 +1712,23 @@ async function tanganiAlurAbsensi({
     }
 
     if (bodyLower === "2") {
-      // Lembur memakai alur yang sudah ada di menu utama
-      // nomor 1 — tidak dibuat ulang di sini.
+      // Lembur memakai alur yang sudah ada di menu utama nomor 1 — tidak
+      // dibuat ulang di sini. Isinya sama persis: disetujui atasan, lalu
+      // tiga foto bukti, lalu laporan PDF. Bedanya hanya pintu masuknya,
+      // jadi pegawai tidak perlu diberi tahu soal menu 1 sama sekali.
+      const tolakLembur = alasanTolakLembur(pegawai);
+      if (tolakLembur) {
+        await kirimDenganTyping(client, chatId, tolakLembur);
+        delete pengajuanBySender[chatId];
+        return;
+      }
+
       await kirimDenganTyping(
         client,
         chatId,
-        "*Pengajuan Lembur*\n\nLembur ada di *menu 1* pada menu utama. Alurnya kami mulai sekarang saja ya.\n\nSilakan tuliskan *alasan/tujuan lembur* Anda.",
+        "*Pengajuan Lembur*\n\n" +
+          "Alurnya: tulis alasan dan jam lembur → dikirim ke atasan Anda untuk disetujui → setelah disetujui, kirim 3 foto bukti.\n\n" +
+          "Silakan tuliskan *alasan/tujuan lembur* Anda.",
       );
 
       pengajuanBySender[chatId] = {
@@ -2629,6 +2718,10 @@ client.on("message", async (message) => {
             atasan_nama: atasanObj.nama || "Nama Atasan",
             atasan_nip: atasanObj["nip"] || "-",
             atasan_jabatan: atasanObj.jabatan || "Jabatan Atasan",
+
+            // Nomornya tetap dari field `nip` — di sanalah NIK non-ASN
+            // disimpan. Yang berubah hanya label cetaknya di PDF.
+            label_identitas: pegawaiASN(flow.pegawai) ? "NIP" : "NIK",
           };
 
           try {
@@ -2835,10 +2928,7 @@ client.on("message", async (message) => {
       }
 
       // 2. Cek Antrian Tim Gudang
-      const isTimGudang = dbTimGudang.find((staf) => {
-        let waf = staf.no_wa;
-        return waf ? getValidWaId(waf) === chatId : false;
-      });
+      const isTimGudang = nomorTimGudang(chatId);
 
       if (isTimGudang && !pengajuan) {
         const pendingOrder = Object.entries(orderGudangMsgId);
@@ -3131,15 +3221,7 @@ client.on("message", async (message) => {
 
           const notifTim = `📦 *ORDER PERSEDIAAN DISETUJUI* 📦\n\n*Pemohon:* ${p ? p.nama : "User"}\n*Unit:* ${p ? p["Unit Kerja"] || p.sub_unit || "-" : "-"}\n\n*Detail Pesanan:*\n${pesanan}\n\n_Mohon Tim Persediaan segera menyiapkan pesanan tersebut._\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Siap Diambil\n2. Fisik Kosong / Rusak`;
 
-          const targetGudangList = [];
-          if (dbTimGudang && dbTimGudang.length > 0) {
-            for (const staf of dbTimGudang) {
-              const noWaStaf = staf.no_wa;
-              if (noWaStaf) {
-                targetGudangList.push(formatNomorId(noWaStaf) + "@c.us");
-              }
-            }
-          }
+          const targetGudangList = waTimGudang();
 
           const dataOrder = {
             pemohonId: pemohonId,
@@ -3389,6 +3471,12 @@ client.on("message", async (message) => {
     // ==========================================
     if (flow.step === "menu") {
       if (bodyLower === "1") {
+        const tolakLembur = alasanTolakLembur(flow.pegawai);
+        if (tolakLembur) {
+          await kirimDenganTyping(client, chatId, tolakLembur);
+          return;
+        }
+
         await kirimDenganTyping(
           client,
           chatId,
@@ -4010,9 +4098,19 @@ client.on("message", async (message) => {
       pengajuanBySender[chatId].jamKeluar = jamKeluar;
       let atasan = await cariAtasanPegawai(flow.pegawai);
 
+      // Jaminan terakhir. Pintu masuk alurnya sudah memeriksa ini, tapi
+      // keputusan setuju-otomatis dibuat DI SINI, jadi di sinilah
+      // pemeriksaan yang tidak boleh terlewat.
+      const tolak = alasanTolakLembur(flow.pegawai);
+      if (tolak) {
+        await kirimDenganTyping(client, chatId, tolak);
+        delete pengajuanBySender[chatId];
+        return;
+      }
+
       // --- LOGIKA AUTO-APPROVE PIMPINAN ---
-      const isPimpinan =
-        !flow.pegawai.atasan_nip || flow.pegawai.atasan_nip.trim() === "";
+      // Hanya ASN tanpa atasan yang pimpinan. Lihat alasanTolakLembur().
+      const isPimpinan = tanpaAtasan(flow.pegawai) && pegawaiASN(flow.pegawai);
 
       if (isPimpinan) {
         let pesanPegawai = `*Pengajuan Lembur OTOMATIS DISETUJUI* karena Anda terdeteksi sebagai Pimpinan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;

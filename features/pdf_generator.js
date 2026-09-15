@@ -67,10 +67,23 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
   await ensureDirAsync(REPORTS_DIR);
   await ensureDirAsync(UPLOADS_DIR);
 
-  const tanggalLaporan = new Date().toISOString().split("T")[0];
+  // Tanggal LEMBUR yang dikirim pemanggil, bukan tanggal PDF ini dibuat.
+  // Dulu baris ini selalu memakai hari ini — dan dalam UTC pula — sehingga
+  // lembur yang diajukan Senin tapi fotonya baru lengkap Rabu tercetak
+  // Rabu, dan yang fotonya masuk 00.00-07.00 WIB tercetak mundur sehari.
+  // Cadangannya tanggal WIB, bukan toISOString().
+  const tanggalLaporan =
+    data.tanggal ||
+    new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
   const safeSubstansi = (data.substansi || "TU").replace(/[\/\\]/g, "_");
-  
-  const namaFile = `Laporan Lembur_${data.nama}_${data.nip}_${safeSubstansi}_${tanggalLaporan}.pdf`;
+
+  // ASN memakai NIP, non-ASN memakai NIK — keduanya disimpan di field
+  // `nip` yang sama. Tanpa ini, PPNPN tercetak "NIP. <NIK-nya>", dan yang
+  // nomornya belum diisi tercetak "NIP. undefined".
+  const labelIdentitas = data.label_identitas || "NIP";
+  const nomorIdentitas = data.nip || "-";
+
+  const namaFile = `Laporan Lembur_${data.nama}_${nomorIdentitas}_${safeSubstansi}_${tanggalLaporan}.pdf`;
   const filePath = path.join(REPORTS_DIR, namaFile);
 
   const doc = new PDFDocument({
@@ -118,7 +131,7 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     doc.font("TMR").fontSize(11);
     const identitas = [
       ["Nama", data.nama],
-      ["NIP", data.nip],
+      [labelIdentitas, nomorIdentitas],
       ["Tanggal", tanggalLaporan],
       ["Jam Mulai", data.jamMasuk],
       ["Jam Selesai", data.jamKeluar],
@@ -251,8 +264,12 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     const hNamaPegawai = doc.font("TMR-Bold").heightOfString(data.nama, { width: colTtdWidth });
     const hMaxNama = Math.max(hNamaAtasan, hNamaPegawai);
     
-    const hNipAtasan = doc.font("TMR").heightOfString(`NIP. ${data.atasan_nip}`, { width: colTtdWidth });
-    const hNipPegawai = doc.font("TMR").heightOfString(`NIP. ${data.nip}`, { width: colTtdWidth });
+    // Atasan selalu ASN, jadi labelnya tetap NIP.
+    const barisIdAtasan = `NIP. ${data.atasan_nip || "-"}`;
+    const barisIdPegawai = `${labelIdentitas}. ${nomorIdentitas}`;
+
+    const hNipAtasan = doc.font("TMR").heightOfString(barisIdAtasan, { width: colTtdWidth });
+    const hNipPegawai = doc.font("TMR").heightOfString(barisIdPegawai, { width: colTtdWidth });
     const hMaxNip = Math.max(hNipAtasan, hNipPegawai);
 
     const totalGrupTtdHeight = hMengetahui + hMaxJabatan + hSpaceTtd + hMaxNama + hMaxNip + 15; 
@@ -273,10 +290,10 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     const yNama = startY_ttd + hMengetahui + hMaxJabatan + hSpaceTtd; 
 
     doc.font("TMR-Bold").text(data.atasan_nama, leftColX, yNama, { align: "center", width: colTtdWidth });
-    doc.font("TMR").text(`NIP. ${data.atasan_nip}`, leftColX, doc.y, { align: "center", width: colTtdWidth });
+    doc.font("TMR").text(barisIdAtasan, leftColX, doc.y, { align: "center", width: colTtdWidth });
 
     doc.font("TMR-Bold").text(data.nama, rightColX, yNama, { align: "center", width: colTtdWidth });
-    doc.font("TMR").text(`NIP. ${data.nip}`, rightColX, doc.y, { align: "center", width: colTtdWidth });
+    doc.font("TMR").text(barisIdPegawai, rightColX, doc.y, { align: "center", width: colTtdWidth });
 
     doc.end();
 

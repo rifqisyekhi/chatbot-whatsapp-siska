@@ -532,7 +532,10 @@ export default function AdminMasterDataTU() {
                         <option value="Internal">Internal</option>
                         <option value="PPNPN">PPNPN</option>
                         <option value="Magang">Magang</option>
-                        <option value="TimGudang">Tim Gudang</option>
+                        {/* Tidak ada "Tim Gudang": itu peran, bukan kategori.
+                            Notifikasi gudang dikirim ke semua pegawai
+                            berjabatan "Petugas Kebersihan" (JABATAN_TIM_GUDANG
+                            di index.js). */}
                       </select>
                     </div>
                   </div>
