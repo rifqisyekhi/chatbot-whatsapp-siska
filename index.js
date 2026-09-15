@@ -1023,6 +1023,298 @@ async function cariAtasanPegawai(pegawai) {
   }
 }
 
+// =========================================================
+// LEMBUR NON-ASN — JAMNYA DIBACA DARI ABSENSI
+// =========================================================
+//
+// Pegawai non-ASN tidak mengetik jam lembur. Jamnya diambil dari
+// absensinya sendiri:
+//
+//   mulai   = Jam Harus Checkout (jam masuk + 7,5 jam kerja + istirahat)
+//   selesai = jam absen pulang
+//
+// Yang ditanyakan hanya alasannya, lalu diteruskan ke atasan. Di rekap,
+// lembur baru dihitung setelah atasan menyetujui; tanpa persetujuan,
+// pulang telat tercatat 00.00 lembur.
+//
+// Bukti lembur (3 foto → PDF) diminta setelah DUA hal terjadi: atasan
+// menyetujui, dan pegawai sudah absen pulang. Urutan keduanya tidak bisa
+// ditebak — atasan bisa membalas sebelum atau sesudah pegawainya pulang —
+// jadi masing-masing memeriksa apakah yang lain sudah terjadi.
+//
+// ASN tetap memakai alur lama (mengetik jam mulai dan selesai), karena
+// absensi ASN tidak dicatat di aplikasi presensi ini.
+
+// Absensi menyimpan "16.47"; parser durasi di PDF membaca "16:47".
+function jamTitikDua(jam) {
+  return String(jam || "").replace(".", ":");
+}
+
+function pulangMelewati(jamPulang, jamHarusCheckout) {
+  const pulang = menitDariJamWIB(jamPulang);
+  const harus = menitDariJamWIB(jamHarusCheckout);
+
+  return pulang !== null && harus !== null && pulang > harus;
+}
+
+// Ditulis langsung ke koleksi `absensi` milik aplikasi presensi — bot dan
+// backend memakai database yang sama. Sengaja bukan lewat API: endpoint
+// tulis di backend bisa dijangkau dari jaringan kantor lewat nginx, dan
+// pegawai tidak boleh bisa menyetujui lemburnya sendiri.
+async function catatLemburDisetujui({ noWa, tanggal, alasan, atasan }) {
+  const hasil = await mongoose.connection.db.collection("absensi").updateOne(
+    { no_wa: noWa, tanggal },
+    {
+      $set: {
+        "lembur.disetujui": true,
+        "lembur.alasan": alasan || "",
+        "lembur.atasan": atasan || "",
+        "lembur.disetujuiPada": new Date(),
+      },
+    },
+  );
+
+  return hasil.matchedCount > 0;
+}
+
+// Memasang alur unggah 3 foto, lalu mengembalikan teks permintaannya
+// untuk dikirim pemanggil. Alur unggahnya sama persis dengan lembur ASN,
+// termasuk penyimpanan ke MongoDB supaya selamat dari restart.
+function mintaBuktiLembur(chatId, { pegawai, atasan, alasan, tanggal, jamMulai, jamSelesai }) {
+  const mulai = jamTitikDua(jamMulai);
+  const selesai = jamTitikDua(jamSelesai);
+
+  pengajuanBySender[chatId] = {
+    step: "upload-foto",
+    pegawai,
+    atasan,
+    alasan,
+    jamMasuk: mulai,
+    jamKeluar: selesai,
+    tanggalPengajuan: tanggal,
+    fotoList: [],
+  };
+
+  return (
+    `🕐 Jam lembur Anda: *${mulai} – ${selesai} WIB* (${calculateDuration(mulai, selesai)}).\n\n` +
+    "Mohon upload *3 foto* dokumentasi lembur sebagai bukti:\n" +
+    "1. Foto hasil lembur\n" +
+    "2. Foto Anda di tempat lembur\n" +
+    "3. Screenshot persetujuan dari atasan\n\n" +
+    "⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*"
+  );
+}
+
+// Pintu masuk lembur non-ASN, dari menu 9 maupun menu 1.
+async function mulaiLemburNonASN(chatId, pegawai) {
+  const berhenti = async (teks) => {
+    await kirimDenganTyping(client, chatId, teks);
+    delete pengajuanBySender[chatId];
+  };
+
+  const tolak = alasanTolakLembur(pegawai);
+  if (tolak) return berhenti(tolak);
+
+  let status;
+  try {
+    status = await absensiNonASN.ambilAbsensiHariIni(hanyaAngka(chatId));
+  } catch (err) {
+    console.error("[LEMBUR] Gagal membaca absensi:", err?.message || err);
+    return berhenti("Maaf, absensi Anda hari ini gagal dibaca. Silakan coba lagi sebentar lagi.");
+  }
+
+  const absen = status?.exists ? status.data : null;
+  const jamHarus = status?.jamKerja?.jamHarusCheckout;
+
+  if (!absen?.clockIn) {
+    return berhenti(
+      "Anda belum absen masuk hari ini.\n\n" +
+        "Jam mulai lembur dihitung dari jam absen masuk Anda, jadi silakan " +
+        "absen masuk dulu lewat *Absensi Non-ASN → Presensi*.",
+    );
+  }
+
+  if (absen.attendanceType === "DINAS") {
+    return berhenti(
+      "Lembur tidak berlaku untuk *Dinas Luar* — tidak ada jam harus pulang " +
+        "yang bisa dijadikan awal lembur.",
+    );
+  }
+
+  if (absen.lembur?.disetujui) {
+    return berhenti(
+      "Lembur Anda hari ini *sudah disetujui* atasan.\n\n" +
+        "Jam absen pulang Anda adalah jam selesai lemburnya.",
+    );
+  }
+
+  if (!jamHarus) {
+    return berhenti("Maaf, jam harus pulang Anda gagal dihitung. Silakan hubungi admin TU.");
+  }
+
+  if (absen.clockOut && !pulangMelewati(absen.clockOut, jamHarus)) {
+    return berhenti(
+      `Anda sudah absen pulang pukul *${absen.clockOut} WIB*, belum melewati ` +
+        `jam harus pulang *${jamHarus} WIB* — tidak ada jam lembur yang bisa diajukan.`,
+    );
+  }
+
+  pengajuanBySender[chatId] = {
+    pegawai,
+    step: "alasan-lembur",
+    jenis: "Lembur",
+    berbasisAbsensi: true,
+    tanggalAbsen: absen.tanggal,
+    jamMulai: jamHarus,
+    jamSelesai: absen.clockOut || "",
+  };
+
+  await kirimDenganTyping(
+    client,
+    chatId,
+    "*Pengajuan Lembur*\n\n" +
+      `⏰ Mulai: *${jamHarus} WIB* (jam harus pulang Anda)\n` +
+      (absen.clockOut
+        ? `🏁 Selesai: *${absen.clockOut} WIB* (jam absen pulang Anda)\n\n`
+        : "🏁 Selesai: saat Anda *absen pulang*\n\n") +
+      "Lembur dihitung per *jam penuh*, dan baru tercatat setelah disetujui atasan.\n\n" +
+      "Silakan tuliskan *alasan/tujuan lembur* Anda.",
+  );
+}
+
+async function kirimLemburNonASNKeAtasan(chatId, flow) {
+  const atasan = await cariAtasanPegawai(flow.pegawai);
+  const nomorAtasan = getValidWaId(atasan?.no_wa);
+
+  if (!nomorAtasan) {
+    await kirimDenganTyping(
+      client,
+      chatId,
+      "Maaf, data atasan Anda tidak ditemukan atau nomor WA-nya tidak valid. Hubungi admin TU.",
+    );
+    delete pengajuanBySender[chatId];
+    return;
+  }
+
+  const teks =
+    `*Pengajuan Lembur* dari ${flow.pegawai.nama}\n` +
+    `Alasan: ${flow.alasan}\n` +
+    `Mulai: ${flow.jamMulai} WIB (jam harus pulang)\n` +
+    (flow.jamSelesai
+      ? `Selesai: ${flow.jamSelesai} WIB (sudah absen pulang)\n`
+      : "Selesai: saat pegawai absen pulang\n") +
+    "\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju";
+
+  try {
+    const terkirim = await client.sendMessage(nomorAtasan, teks);
+    logOut(nomorAtasan, teks);
+
+    await tambahAntrian(idPesanAtauCadangan(terkirim, "ATASAN"), "ATASAN", {
+      sender: chatId,
+      jenis: "Lembur",
+      berbasisAbsensi: true,
+      pegawai: flow.pegawai,
+      atasan,
+      alasan: flow.alasan,
+      noWa: hanyaAngka(chatId),
+      tanggalPengajuan: flow.tanggalAbsen,
+      teksPesan: teks,
+    });
+
+    // Pegawai TIDAK dikunci di status "menunggu persetujuan" seperti alur
+    // lama: ia harus tetap bisa absen pulang selagi atasannya belum membalas.
+    // Persetujuannya tetap sampai, karena antriannya tersimpan di MongoDB.
+    delete pengajuanBySender[chatId];
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `Pengajuan lembur sudah diteruskan ke atasan (${atasan.nama}).\n\n` +
+        (flow.jamSelesai
+          ? "Begitu disetujui, bot akan meminta 3 foto bukti lembur."
+          : "Silakan lanjutkan pekerjaan. Setelah selesai, *absen pulang* seperti biasa — " +
+            "jam absen pulang itulah jam selesai lembur Anda."),
+    );
+  } catch (err) {
+    console.error(
+      `[ATASAN] Gagal kirim pengajuan lembur ke ${nomorAtasan} (${atasan?.nama || "?"}):`,
+      err?.message || err,
+    );
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `Gagal mengirim pesan ke atasan (${atasan?.nama || "-"}). Mohon laporkan ke admin agar nomor atasan diperiksa.`,
+    );
+    delete pengajuanBySender[chatId];
+  }
+}
+
+// Dipanggil saat atasan membalas "1". Mengembalikan pesan untuk pegawai.
+async function lemburNonASNDisetujui(pengajuan) {
+  const { sender: pemohonId, pegawai, atasan, alasan, tanggalPengajuan } = pengajuan;
+  const noWa = pengajuan.noWa || hanyaAngka(pemohonId);
+
+  let tercatat = false;
+  try {
+    tercatat = await catatLemburDisetujui({
+      noWa,
+      tanggal: tanggalPengajuan,
+      alasan,
+      atasan: atasan?.nama,
+    });
+  } catch (err) {
+    console.error("[LEMBUR] Gagal mencatat persetujuan ke absensi:", err?.message || err);
+  }
+
+  if (!tercatat) {
+    return (
+      `Pengajuan *Lembur* Anda tanggal ${tanggalPengajuan} telah *DISETUJUI* oleh atasan, ` +
+      "tetapi persetujuannya *gagal dicatat* ke absensi Anda.\n\n" +
+      "Mohon laporkan ke admin TU supaya lemburnya tetap terhitung di rekap."
+    );
+  }
+
+  // Sudah absen pulang lebih dulu? Buktinya bisa diminta sekarang.
+  let status = null;
+  try {
+    status = await absensiNonASN.ambilAbsensiHariIni(noWa, tanggalPengajuan);
+  } catch (err) {
+    console.error("[LEMBUR] Gagal membaca absensi setelah disetujui:", err?.message || err);
+  }
+
+  const absen = status?.data;
+  const jamHarus = status?.jamKerja?.jamHarusCheckout;
+
+  if (absen?.clockOut && jamHarus) {
+    if (!pulangMelewati(absen.clockOut, jamHarus)) {
+      return (
+        "Pengajuan *Lembur* Anda telah *DISETUJUI* oleh atasan, tetapi jam absen pulang Anda " +
+        `(*${absen.clockOut} WIB*) tidak melewati jam harus pulang (*${jamHarus} WIB*), ` +
+        "jadi tidak ada jam lembur yang tercatat."
+      );
+    }
+
+    return (
+      "Pengajuan *Lembur* Anda telah *DISETUJUI* oleh atasan.\n\n" +
+      mintaBuktiLembur(pemohonId, {
+        pegawai,
+        atasan,
+        alasan,
+        tanggal: tanggalPengajuan,
+        jamMulai: jamHarus,
+        jamSelesai: absen.clockOut,
+      })
+    );
+  }
+
+  return (
+    "Pengajuan *Lembur* Anda telah *DISETUJUI* oleh atasan.\n\n" +
+    "Silakan lanjutkan lembur. Setelah selesai, *absen pulang* lewat " +
+    "*Absensi Non-ASN → Presensi* — jam absen pulang itulah jam selesai lembur, " +
+    "dan bot akan langsung meminta 3 foto bukti lembur."
+  );
+}
+
 // VI. WHATSAPP CLIENT HELPER
 async function kirimDenganTyping(client, chatId, text) {
   if (!chatId) return null;
@@ -1394,9 +1686,16 @@ async function pindaiPengingatPulang() {
     // mengikuti kegiatan di tempat tujuan. Tapi absensinya
     // tetap harus ditutup sebelum tengah malam, jadi acuan
     // pengingatnya jatuh ke jadwal pulang kantor biasa.
-    const harusPulang = menitDariJamWIB(
-      orang.jamHarusCheckout || orang.jamPulangJadwal,
-    );
+    //
+    // Yang lemburnya sudah disetujui memang sengaja belum pulang — jangan
+    // ditegur tiap jam sejak jam harus pulang. Tapi tetap diingatkan
+    // sejam sebelum batas pengingat: absen pulang yang lewat tengah malam
+    // hilang, dan bersamanya seluruh jam lembur orang itu.
+    const lembur = orang.lemburDisetujui === true && batas !== null;
+
+    const harusPulang = lembur
+      ? batas - 60
+      : menitDariJamWIB(orang.jamHarusCheckout || orang.jamPulangJadwal);
 
     const kunci = `${tanggal}|${orang.no_wa}`;
     const sudah = pengingatTerkirim.get(kunci) || 0;
@@ -1422,8 +1721,14 @@ async function pindaiPengingatPulang() {
     // Untuk dinas luar, jangan menyebut "jam pulang Anda" —
     // jam itu tidak berlaku untuknya, dan menyebutkannya justru
     // memberi kesan ada aturan yang dilanggar.
-    const teks =
-      `⏰ *Pengingat absen pulang*\n\n` +
+    const teks = lembur
+      ? `⏰ *Pengingat absen pulang*\n\n` +
+        `Anda sedang lembur (sudah disetujui atasan) dan belum absen pulang.\n\n` +
+        `Begitu selesai, buka *menu* lalu pilih *Absensi Non-ASN → Presensi* — ` +
+        `jam absen pulang adalah jam selesai lembur Anda.\n\n` +
+        `_Absen pulang tidak bisa lagi dilakukan setelah lewat tengah malam, ` +
+        `dan jam lemburnya ikut hilang._`
+      : `⏰ *Pengingat absen pulang*\n\n` +
       `Anda absen masuk pukul ${orang.clockIn} WIB` +
       (orang.attendanceType === "DINAS" ? " (Dinas Luar)" : "") +
       ` dan belum absen pulang.\n` +
@@ -1712,30 +2017,8 @@ async function tanganiAlurAbsensi({
     }
 
     if (bodyLower === "2") {
-      // Lembur memakai alur yang sudah ada di menu utama nomor 1 — tidak
-      // dibuat ulang di sini. Isinya sama persis: disetujui atasan, lalu
-      // tiga foto bukti, lalu laporan PDF. Bedanya hanya pintu masuknya,
-      // jadi pegawai tidak perlu diberi tahu soal menu 1 sama sekali.
-      const tolakLembur = alasanTolakLembur(pegawai);
-      if (tolakLembur) {
-        await kirimDenganTyping(client, chatId, tolakLembur);
-        delete pengajuanBySender[chatId];
-        return;
-      }
-
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "*Pengajuan Lembur*\n\n" +
-          "Alurnya: tulis alasan dan jam lembur → dikirim ke atasan Anda untuk disetujui → setelah disetujui, kirim 3 foto bukti.\n\n" +
-          "Silakan tuliskan *alasan/tujuan lembur* Anda.",
-      );
-
-      pengajuanBySender[chatId] = {
-        pegawai,
-        step: "alasan-lembur",
-        jenis: "Lembur",
-      };
+      // Jam lembur dibaca dari absensi — lihat mulaiLemburNonASN().
+      await mulaiLemburNonASN(chatId, pegawai);
       return;
     }
 
@@ -2060,6 +2343,40 @@ async function tanganiAlurAbsensi({
     );
 
     delete pengajuanBySender[chatId];
+
+    // Lembur yang sudah disetujui berakhir tepat di sini: jam absen pulang
+    // inilah jam selesai lemburnya. Kalau atasan belum membalas, bukti
+    // lemburnya diminta nanti saat persetujuan datang (lemburNonASNDisetujui).
+    const absenPulang = hasil.data?.data;
+    const jamHarus = hasil.data?.jamKerja?.jamHarusCheckout;
+
+    if (absenPulang?.lembur?.disetujui && jamHarus) {
+      if (pulangMelewati(absenPulang.clockOut, jamHarus)) {
+        const atasan = await cariAtasanPegawai(pegawai);
+
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "*Lembur Anda sudah disetujui atasan.*\n\n" +
+            mintaBuktiLembur(chatId, {
+              pegawai,
+              atasan,
+              alasan: absenPulang.lembur.alasan,
+              tanggal: absenPulang.tanggal,
+              jamMulai: jamHarus,
+              jamSelesai: absenPulang.clockOut,
+            }),
+        );
+      } else {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Lembur Anda sudah disetujui, tetapi jam pulang Anda belum melewati ` +
+            `jam harus pulang (*${jamHarus} WIB*), jadi tidak ada jam lembur yang tercatat.`,
+        );
+      }
+    }
+
     return;
   }
 }
@@ -3133,7 +3450,9 @@ client.on("message", async (message) => {
       if (isApprovalYes(message.body)) {
         let pesanPegawai = "";
 
-        if (jenis === "Lembur") {
+        if (jenis === "Lembur" && pengajuan.berbasisAbsensi) {
+          pesanPegawai = await lemburNonASNDisetujui(pengajuan);
+        } else if (jenis === "Lembur") {
           pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nMohon upload *3 foto* dokumentasi lembur Anda sebagai bukti:\n1. Foto hasil lembur\n2. Foto Anda di tempat lembur\n3. Screenshot approval dari atasan (pesan ini).\n\n⚠️ *PENTING: Harap kirimkan foto SATU PER SATU secara berurutan, jangan dikirim sekaligus.*`;
           pengajuanBySender[pemohonId] = {
             step: "upload-foto",
@@ -3288,7 +3607,12 @@ client.on("message", async (message) => {
           chatId,
           `[APPROVAL] Ditolak untuk ${p ? p.nama : "User"}`,
         );
-        delete pengajuanBySender[pemohonId];
+
+        // Pemohon lembur non-ASN tidak sedang menunggu di alur mana pun —
+        // ia dibebaskan begitu pengajuannya terkirim. Menghapus alurnya di
+        // sini justru memutus apa pun yang sedang ia kerjakan, misalnya
+        // absen pulang yang tinggal satu langkah lagi.
+        if (!pengajuan.berbasisAbsensi) delete pengajuanBySender[pemohonId];
       }
 
       await hapusAntrian(qid, "ATASAN");
@@ -3471,6 +3795,15 @@ client.on("message", async (message) => {
     // ==========================================
     if (flow.step === "menu") {
       if (bodyLower === "1") {
+        // Non-ASN yang masuk lewat menu 1 diarahkan ke alur yang sama
+        // dengan menu 9. Kalau tidak, menu 1 jadi jalan belakang untuk
+        // mengetik jam lembur sendiri, dan jam di PDF-nya bisa berbeda
+        // dengan jam di absensi.
+        if (!pegawaiASN(flow.pegawai)) {
+          await mulaiLemburNonASN(chatId, flow.pegawai);
+          return;
+        }
+
         const tolakLembur = alasanTolakLembur(flow.pegawai);
         if (tolakLembur) {
           await kirimDenganTyping(client, chatId, tolakLembur);
@@ -4051,6 +4384,13 @@ client.on("message", async (message) => {
           chatId,
           `❌ Uraian kegiatan terlalu panjang! (Saat ini: ${jumlahKata} kata).\n\nMaksimal *${maxKata} kata* agar format tabel laporan PDF tidak rusak. Silakan ringkas dan ketik kembali uraian kegiatan lembur Anda.`,
         );
+        return;
+      }
+
+      // Non-ASN: jamnya sudah dibaca dari absensi, jadi tidak ada lagi
+      // yang perlu ditanyakan — langsung diteruskan ke atasan.
+      if (flow.berbasisAbsensi) {
+        await kirimLemburNonASNKeAtasan(chatId, { ...flow, alasan: teksAlasan });
         return;
       }
 

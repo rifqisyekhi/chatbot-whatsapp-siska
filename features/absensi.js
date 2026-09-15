@@ -131,9 +131,10 @@ function pesanError(err, bawaan) {
   return err?.response?.data?.message || err?.message || bawaan;
 }
 
-async function ambilAbsensiHariIni(no_wa) {
-  const tanggal = tanggalHariIni();
-
+// `tanggal` boleh diisi untuk membaca absensi hari lain. Dipakai saat
+// atasan menyetujui lembur keesokan harinya: yang dibaca harus absensi
+// tanggal lemburnya, bukan absensi hari persetujuan itu datang.
+async function ambilAbsensiHariIni(no_wa, tanggal = tanggalHariIni()) {
   const { data } = await axios.get(
     `${API_URL}/api/absensi/today/${encodeURIComponent(no_wa)}`,
     {
