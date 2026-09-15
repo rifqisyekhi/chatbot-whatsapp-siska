@@ -1892,18 +1892,26 @@ async function tanganiAlurAbsensi({
   const noWa = hanyaAngka(chatId);
 
   // =========================================================
-  // MENU ABSENSI: PRESENSI ATAU IZIN
+  // MENU ABSENSI: PRESENSI, LEMBUR, ATAU CUTI
   // =========================================================
 
   if (flow.step === "absensi-menu") {
     if (bodyLower === "2") {
+      // Jam lembur dibaca dari absensi — lihat mulaiLemburNonASN().
+      await mulaiLemburNonASN(chatId, pegawai);
+      return;
+    }
+
+    if (bodyLower === "3") {
       await kirimDenganTyping(
         client,
         chatId,
-        "*Izin*\n\nSilakan pilih:\n1. Cuti\n2. Lembur",
+        "*Pengajuan Cuti*\n\nSilakan isi formulir cuti melalui link berikut:",
       );
 
-      pengajuanBySender[chatId] = { ...flow, step: "absensi-izin" };
+      await kirimDenganTyping(client, chatId, FORM_CUTI_URL);
+
+      delete pengajuanBySender[chatId];
       return;
     }
 
@@ -1911,7 +1919,7 @@ async function tanganiAlurAbsensi({
       await kirimDenganTyping(
         client,
         chatId,
-        "Pilihan tidak valid. Ketik *1* untuk Presensi atau *2* untuk Izin.\n\nAtau ketik *menu* untuk kembali.",
+        "Pilihan tidak valid. Ketik *1* untuk Presensi, *2* untuk Lembur, atau *3* untuk Cuti.\n\nAtau ketik *menu* untuk kembali.",
       );
       return;
     }
@@ -1995,38 +2003,6 @@ async function tanganiAlurAbsensi({
     );
 
     pengajuanBySender[chatId] = { ...flow, step: "absensi-jenis" };
-    return;
-  }
-
-  // =========================================================
-  // MENU IZIN
-  // =========================================================
-
-  if (flow.step === "absensi-izin") {
-    if (bodyLower === "1") {
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "*Pengajuan Cuti*\n\nSilakan isi formulir cuti melalui link berikut:",
-      );
-
-      await kirimDenganTyping(client, chatId, FORM_CUTI_URL);
-
-      delete pengajuanBySender[chatId];
-      return;
-    }
-
-    if (bodyLower === "2") {
-      // Jam lembur dibaca dari absensi — lihat mulaiLemburNonASN().
-      await mulaiLemburNonASN(chatId, pegawai);
-      return;
-    }
-
-    await kirimDenganTyping(
-      client,
-      chatId,
-      "Pilihan tidak valid. Ketik *1* untuk Cuti atau *2* untuk Lembur.",
-    );
     return;
   }
 
@@ -3926,7 +3902,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "*Absensi Non-ASN*\n\nSilakan pilih:\n1. Presensi (absen masuk / pulang)\n2. Izin",
+          "*Absensi Non-ASN*\n\nSilakan pilih:\n1. Presensi (absen masuk / pulang)\n2. Lembur\n3. Cuti",
         );
 
         pengajuanBySender[chatId] = { step: "absensi-menu", pegawai };
