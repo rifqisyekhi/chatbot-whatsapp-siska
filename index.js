@@ -19,6 +19,7 @@ const {
   calculateDuration,
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
+const profilWA = require("./features/profilWA");
 const {
   HELPDESK_GROUP_ID,
   FORM_CUTI_URL,
@@ -2740,9 +2741,44 @@ const LIVENESS_TIMEOUT_MS = 20000; // Browser sehat menjawab getState jauh di ba
 // Satu-satunya pintu masuk buat menyalakan client, sekaligus reset timer stuck.
 // Tanpa ini, `authStartTime` cuma di-set saat QR muncul, jadi begitu sesi
 // LocalAuth tersimpan (tidak ada QR lagi) nilainya basi dan watchdog nembak terus.
+// Setelah sekian kali gagal mencapai READY berturut-turut, cache profil
+// Chromium dibuang otomatis. Dua kali sudah cukup: sekali bisa jaringan,
+// dua kali berturut-turut polanya sudah jelas.
+const AMBANG_BERSIHKAN_CACHE = 2;
+
 async function startClient(alasan = "startup") {
   authStartTime = Date.now();
   botReady = false;
+
+  // Perawatan profil sebelum Chromium dinyalakan. Keduanya tidak pernah
+  // menyentuh sesi WhatsApp — lihat features/profilWA.js.
+  try {
+    const kunci = await profilWA.hapusKunci();
+
+    if (kunci.length) {
+      console.warn(
+        `[PROFIL WA] Sisa kunci proses sebelumnya dibuang: ${kunci.join(", ")}.`,
+      );
+    }
+
+    const gagal = await profilWA.bacaGagal();
+
+    if (gagal >= AMBANG_BERSIHKAN_CACHE) {
+      const dibuang = await profilWA.hapusCache();
+
+      console.warn(
+        `[PROFIL WA] Gagal READY ${gagal}x berturut-turut. Cache profil dibuang ` +
+          `(${dibuang.length ? dibuang.join(", ") : "tidak ada yang tersisa"}). ` +
+          "Sesi WhatsApp TIDAK dihapus — tidak perlu scan QR.",
+      );
+      logToFile("warn", "PROFILWA", `Cache dibuang setelah ${gagal}x gagal READY`);
+
+      await profilWA.tulisGagal(0);
+    }
+  } catch (err) {
+    console.error("[PROFIL WA] Perawatan profil dilewati:", err?.message || err);
+  }
+
   console.log(`[WA] Menyalakan client (${alasan})...`);
   try {
     await client.initialize();
@@ -2849,6 +2885,9 @@ client.on("ready", async () => {
   botReady = true;
   pernahReady = true;
   authStartTime = 0;
+
+  // Berhasil sampai READY — rantai kegagalan putus.
+  profilWA.tulisGagal(0).catch(() => {});
   restarting = false;
   gagalRestartBeruntun = 0;
   gagalProbeBeruntun = 0;
@@ -2909,10 +2948,20 @@ setInterval(() => {
       "WATCHDOG",
       `Exit karena stuck ${elapsed.toFixed(0)}s (ambang ${ambang / 1000}s)`,
     );
-    client
-      .destroy()
+
+    // Dicatat ke disk, bukan ke memori: prosesnya sebentar lagi mati dan
+    // PM2 menyalakan yang baru. Hitungan inilah yang membuat start
+    // berikutnya tahu kapan harus membuang cache profil.
+    profilWA
+      .bacaGagal()
+      .then((n) => profilWA.tulisGagal(n + 1))
       .catch(() => {})
-      .finally(() => process.exit(1));
+      .finally(() => {
+        client
+          .destroy()
+          .catch(() => {})
+          .finally(() => process.exit(1));
+      });
   }
 }, 30000); // Check setiap 30 detik
 
