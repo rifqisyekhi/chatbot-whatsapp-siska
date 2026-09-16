@@ -1141,6 +1141,18 @@ async function mulaiLemburNonASN(chatId, pegawai) {
     );
   }
 
+  // Supir dan sejenisnya: jam kerjanya mengikuti jadwal tugas, jadi
+  // tidak ada jam harus pulang yang bisa dijadikan awal lembur.
+  // Diperiksa sebelum pesan "gagal dihitung" di bawah, supaya
+  // alasannya jelas dan tidak terdengar seperti kerusakan sistem.
+  if (absen.bebasJamKerja) {
+    return berhenti(
+      "Lembur tidak berlaku untuk jabatan Anda — jam kerja Anda mengikuti " +
+        "jadwal tugas, bukan jam kantor.\n\n" +
+        "Cukup absen masuk saat tugas dimulai dan absen pulang saat selesai.",
+    );
+  }
+
   if (absen.lembur?.disetujui) {
     return berhenti(
       "Lembur Anda hari ini *sudah disetujui* atasan.\n\n" +
@@ -1173,12 +1185,11 @@ async function mulaiLemburNonASN(chatId, pegawai) {
     client,
     chatId,
     "*Pengajuan Lembur*\n\n" +
-      `⏰ Mulai: *${jamHarus} WIB* (jam harus pulang Anda)\n` +
+      `⏰ Mulai: *${jamHarus} WIB*\n` +
       (absen.clockOut
-        ? `🏁 Selesai: *${absen.clockOut} WIB* (jam absen pulang Anda)\n\n`
-        : "🏁 Selesai: saat Anda *absen pulang*\n\n") +
-      "Lembur dihitung per *jam penuh*, dan baru tercatat setelah disetujui atasan.\n\n" +
-      "Silakan tuliskan *alasan/tujuan lembur* Anda.",
+        ? `🏁 Selesai: *${absen.clockOut} WIB*\n\n`
+        : "🏁 Selesai: saat Anda absen pulang\n\n") +
+      "Tuliskan alasan lembur.",
   );
 }
 
@@ -1308,10 +1319,127 @@ async function lemburNonASNDisetujui(pengajuan) {
   }
 
   return (
-    "Pengajuan *Lembur* Anda telah *DISETUJUI* oleh atasan.\n\n" +
-    "Silakan lanjutkan lembur. Setelah selesai, *absen pulang* lewat " +
-    "*Absensi Non-ASN → Presensi* — jam absen pulang itulah jam selesai lembur, " +
-    "dan bot akan langsung meminta 3 foto bukti lembur."
+    `⏰ *Lembur disetujui.*\nMulai: *${jamHarus || "-"} WIB*\n\n` +
+    "Absen pulang lewat *menu → Absensi Non-ASN → Presensi* saat lembur selesai."
+  );
+}
+
+// =========================================================
+// RESET DATA PENGUJIAN
+// =========================================================
+//
+// Satu nomor uji coba — dan HANYA nomor itu — boleh menghapus
+// seluruh jejak pengujiannya sendiri dengan mengetik "reset".
+// Nomor lain yang mengetik kata yang sama tidak terjadi apa-apa;
+// pesannya jatuh ke penanganan biasa.
+//
+// Yang dihapus semuanya milik nomor itu sendiri: absensi, antrian
+// persetujuan, riwayat lembur, foto absensi, dan PDF laporannya.
+// Tidak ada satu pun query di bawah ini yang bisa menyentuh data
+// pegawai lain.
+const NOMOR_UJI = String(process.env.NOMOR_UJI || "6285156417757").replace(
+  /\D/g,
+  "",
+);
+
+// Folder foto milik aplikasi presensi (UPLOAD_DIR di backend). Bot
+// berjalan di server yang sama, jadi bisa menghapusnya langsung.
+// Kalau tidak diisi, fotonya dilewati dan dilaporkan apa adanya.
+const PRESENSI_UPLOAD_DIR = process.env.PRESENSI_UPLOAD_DIR || "";
+
+// Folder PDF laporan lembur — sama dengan REPORTS_DIR di
+// features/pdf_generator.js, yang tidak diekspor.
+const REPORTS_DIR = path.join(__dirname, "reports");
+
+// Menyalin aturan nama folder di backend (utils/simpanFoto.js).
+function amankanNamaFolder(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^A-Za-z0-9_.-]/g, "")
+    .replace(/\.{2,}/g, ".")
+    .replace(/^\.+/, "")
+    .slice(0, 80);
+}
+
+async function hapusBerkasBerawalan(dir, cocok) {
+  let jumlah = 0;
+
+  try {
+    for (const nama of await fsPromises.readdir(dir)) {
+      if (!cocok(nama)) continue;
+
+      await fsPromises.rm(path.join(dir, nama), { force: true });
+      jumlah++;
+    }
+  } catch (err) {
+    if (err?.code !== "ENOENT") throw err;
+  }
+
+  return jumlah;
+}
+
+async function resetDataUji(chatId) {
+  const noWa = hanyaAngka(chatId);
+  const pegawai = await cariPegawaiByWa(noWa);
+  const nama = pegawai?.nama || "";
+  const hasil = [];
+
+  // 1. Absensi — sumber yang dibaca bot maupun aplikasi web.
+  const absensi = await mongoose.connection.db
+    .collection("absensi")
+    .deleteMany({ no_wa: noWa });
+  hasil.push(`${absensi.deletedCount} absensi`);
+
+  // 2. Antrian persetujuan dan alur unggah foto yang menggantung.
+  const antrian = await Antrian.deleteMany({
+    $or: [{ msgId: chatId }, { "data.sender": chatId }],
+  });
+  hasil.push(`${antrian.deletedCount} antrian`);
+
+  for (const kunci of Object.keys(pengajuanByAtasanMsgId)) {
+    if (pengajuanByAtasanMsgId[kunci]?.sender === chatId) {
+      delete pengajuanByAtasanMsgId[kunci];
+    }
+  }
+  delete pengajuanBySender[chatId];
+  flowLemburTersimpan.delete(chatId);
+
+  // 3. Riwayat lembur. Dicari lewat nama karena koleksi itu tidak
+  //    menyimpan nomor WA; kalau namanya kosong, dilewati daripada
+  //    menghapus dokumen milik orang lain.
+  let riwayat = 0;
+  if (nama) {
+    riwayat = (await RiwayatLembur.deleteMany({ nama })).deletedCount;
+  }
+  hasil.push(`${riwayat} riwayat lembur`);
+
+  // 4. Foto absensi bercap geotag di folder aplikasi presensi.
+  let foto = "dilewati (PRESENSI_UPLOAD_DIR belum diatur)";
+  if (PRESENSI_UPLOAD_DIR && nama) {
+    const folder = path.join(PRESENSI_UPLOAD_DIR, amankanNamaFolder(nama));
+
+    await fsPromises.rm(folder, { recursive: true, force: true });
+    foto = "folder foto dihapus";
+  }
+  hasil.push(foto);
+
+  // 5. Sisa berkas di sisi bot: foto sementara dan PDF laporan lembur.
+  const sisaFoto = await hapusBerkasBerawalan(UPLOADS_DIR, (n) =>
+    n.startsWith(`foto_${noWa}_`),
+  );
+  const pdf = nama
+    ? await hapusBerkasBerawalan(REPORTS_DIR, (n) => n.includes(nama))
+    : 0;
+  hasil.push(`${sisaFoto + pdf} berkas di bot`);
+
+  console.warn(`[RESET UJI] ${noWa} (${nama || "tanpa nama"}): ${hasil.join(", ")}`);
+
+  return (
+    "🧹 *Data pengujian dihapus.*\n\n" +
+    hasil.map((baris) => `• ${baris}`).join("\n") +
+    "\n\nData pegawai Anda sendiri tidak ikut terhapus.\n\n" +
+    "_Di aplikasi web, muat ulang halamannya agar ikut bersih._"
   );
 }
 
@@ -1629,6 +1757,17 @@ function menitDariJamWIB(nilai) {
   return cocok ? Number(cocok[1]) * 60 + Number(cocok[2]) : null;
 }
 
+function jamWIBDariMenit(menit) {
+  if (menit === null || !Number.isFinite(menit)) return "";
+
+  const m = ((Math.round(menit) % 1440) + 1440) % 1440;
+
+  return (
+    `${String(Math.floor(m / 60)).padStart(2, "0")}.` +
+    `${String(m % 60).padStart(2, "0")}`
+  );
+}
+
 // Apakah pengingat berikutnya sudah waktunya dikirim.
 //
 // Dipisah sebagai fungsi murni supaya bisa diuji tanpa
@@ -1687,15 +1826,21 @@ async function pindaiPengingatPulang() {
     // tetap harus ditutup sebelum tengah malam, jadi acuan
     // pengingatnya jatuh ke jadwal pulang kantor biasa.
     //
-    // Yang lemburnya sudah disetujui memang sengaja belum pulang — jangan
-    // ditegur tiap jam sejak jam harus pulang. Tapi tetap diingatkan
-    // sejam sebelum batas pengingat: absen pulang yang lewat tengah malam
-    // hilang, dan bersamanya seluruh jam lembur orang itu.
+    // Dua golongan yang tidak boleh ditegur tiap jam sejak jam harus
+    // pulang: yang lemburnya sudah disetujui, dan yang jam kerjanya
+    // memang mengikuti tugas (supir). Keduanya sedang bekerja, bukan
+    // lupa.
+    //
+    // Tapi tetap diingatkan sekali sejam sebelum batas pengingat:
+    // absen pulang yang lewat tengah malam hilang permanen, dan
+    // bersamanya seluruh catatan kehadiran orang itu hari itu.
     const lembur = orang.lemburDisetujui === true && batas !== null;
+    const bebasJadwal = orang.bebasJamKerja === true && batas !== null;
 
-    const harusPulang = lembur
-      ? batas - 60
-      : menitDariJamWIB(orang.jamHarusCheckout || orang.jamPulangJadwal);
+    const harusPulang =
+      lembur || bebasJadwal
+        ? batas - 60
+        : menitDariJamWIB(orang.jamHarusCheckout || orang.jamPulangJadwal);
 
     const kunci = `${tanggal}|${orang.no_wa}`;
     const sudah = pengingatTerkirim.get(kunci) || 0;
@@ -1728,6 +1873,12 @@ async function pindaiPengingatPulang() {
         `jam absen pulang adalah jam selesai lembur Anda.\n\n` +
         `_Absen pulang tidak bisa lagi dilakukan setelah lewat tengah malam, ` +
         `dan jam lemburnya ikut hilang._`
+      : bebasJadwal
+      ? `⏰ *Pengingat absen pulang*\n\n` +
+        `Anda absen masuk pukul ${orang.clockIn} WIB dan belum absen pulang.\n\n` +
+        `Jam pulang Anda mengikuti selesainya tugas — tidak ada jam wajib. ` +
+        `Begitu tugas selesai, buka *menu* lalu pilih *Absensi Non-ASN → Presensi*.\n\n` +
+        `_Absen pulang tidak bisa lagi dilakukan setelah lewat tengah malam._`
       : `⏰ *Pengingat absen pulang*\n\n` +
       `Anda absen masuk pukul ${orang.clockIn} WIB` +
       (orang.attendanceType === "DINAS" ? " (Dinas Luar)" : "") +
@@ -1971,6 +2122,49 @@ async function tanganiAlurAbsensi({
       const belumWaktunya =
         harusPulang && jamSekarang.replace(".", "") < harusPulang.replace(".", "");
 
+      // Lembur dihitung per JAM PENUH. Kalau lemburnya sudah disetujui
+      // tapi jam pertama belum genap, absen pulang sekarang membuat
+      // lemburnya tercatat nol — dan itu baru ketahuan setelah semuanya
+      // tersimpan dan tidak bisa diulang.
+      //
+      // Absen pulangnya TIDAK diblokir. Memblokirnya berarti pegawai
+      // yang lemburnya batal, sakit, atau ada urusan mendadak tidak bisa
+      // menutup absensinya sama sekali — dan absen pulang yang lewat
+      // tengah malam hilang permanen beserta seluruh kehadiran hari itu.
+      // Kerugian itu jauh lebih besar daripada nol jam lembur yang
+      // hendak dicegah. Jadi: diberi tahu dulu, lalu dia yang memutuskan.
+      const menitSekarang = menitDariJamWIB(jamSekarang);
+      const menitHarusPulang = menitDariJamWIB(harusPulang);
+
+      const lemburDisetujui = data.lembur?.disetujui === true;
+
+      const ambangSatuJam =
+        lemburDisetujui && menitHarusPulang !== null
+          ? menitHarusPulang + 60
+          : null;
+
+      if (
+        ambangSatuJam !== null &&
+        menitSekarang !== null &&
+        menitSekarang < ambangSatuJam
+      ) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `⏳ 1 jam lembur baru genap *${jamWIBDariMenit(ambangSatuJam)} WIB*.\n` +
+            `Sekarang *${jamSekarang} WIB* — pulang sekarang tercatat *0 jam lembur*.\n\n` +
+            `Tetap absen pulang?\n1. Ya, pulang sekarang\n2. Tidak, lanjut lembur`,
+        );
+
+        pengajuanBySender[chatId] = {
+          ...flow,
+          step: "absensi-pulang-konfirmasi",
+          jenisKehadiran: data.attendanceType,
+          tanggalAbsen: data.tanggal,
+        };
+        return;
+      }
+
       await kirimDenganTyping(
         client,
         chatId,
@@ -1980,6 +2174,11 @@ async function tanganiAlurAbsensi({
               (belumWaktunya
                 ? `\n_Sekarang baru ${jamSekarang} WIB. Absen pulang lebih awal tetap tersimpan, tapi jam kerjanya tercatat kurang._\n`
                 : "")
+            : "") +
+          (ambangSatuJam !== null && menitSekarang !== null
+            ? `✅ Lembur disetujui — terhitung *${Math.floor(
+                (menitSekarang - menitHarusPulang) / 60,
+              )} jam* kalau absen pulang sekarang.\n`
             : "") +
           `\n📸 Silakan kirim *foto check out* Anda.`,
       );
@@ -2003,6 +2202,33 @@ async function tanganiAlurAbsensi({
     );
 
     pengajuanBySender[chatId] = { ...flow, step: "absensi-jenis" };
+    return;
+  }
+
+  // =========================================================
+  // KONFIRMASI ABSEN PULANG SEBELUM LEMBUR GENAP SEJAM
+  // =========================================================
+
+  if (flow.step === "absensi-pulang-konfirmasi") {
+    if (bodyLower === "2") {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        "Baik, lembur dilanjutkan.\n\nAbsen pulang lewat *menu → Absensi Non-ASN → Presensi* saat selesai.",
+      );
+
+      delete pengajuanBySender[chatId];
+      return;
+    }
+
+    if (bodyLower !== "1") {
+      await kirimDenganTyping(client, chatId, "Ketik *1* atau *2*.");
+      return;
+    }
+
+    await kirimDenganTyping(client, chatId, "📸 Silakan kirim *foto check out* Anda.");
+
+    pengajuanBySender[chatId] = { ...flow, step: "absensi-foto", mode: "out" };
     return;
   }
 
@@ -2231,13 +2457,11 @@ async function tanganiAlurAbsensi({
     const jamKerjaMasuk = hasil.data?.jamKerja;
 
     const barisPulang = jamKerjaMasuk?.jamHarusCheckout
-      ? `⏰ *Absen pulang mulai pukul ${jamKerjaMasuk.jamHarusCheckout} WIB.*\n` +
-        `_Jam masuk Anda + 7,5 jam kerja + istirahat._\n`
+      ? `⏰ Jam pulang Anda: *${jamKerjaMasuk.jamHarusCheckout} WIB*\n`
       : jamKerjaMasuk
-        ? // Dinas luar tidak terikat jam pulang kantor.
-          `⏰ *Jam pulang menyesuaikan selesainya kegiatan.*\n` +
-          `_Absen pulang tetap wajib sebelum tengah malam._\n`
-        : `⏰ *Check-out mulai pukul ${absensiNonASN.jamPulangHariIni()} WIB.*\n`;
+        ? // Dinas luar dan supir tidak terikat jam pulang kantor.
+          `⏰ Jam pulang menyesuaikan selesainya tugas.\n`
+        : `⏰ Jam pulang: *${absensiNonASN.jamPulangHariIni()} WIB*\n`;
 
     await kirimDenganTyping(
       client,
@@ -2250,7 +2474,7 @@ async function tanganiAlurAbsensi({
           ? "⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat.\n\n"
           : "") +
         barisPulang +
-        `Untuk absen pulang, pilih *Absensi Non-ASN → Presensi lagi*.`,
+        `\nUntuk absen pulang, pilih *Absensi Non-ASN → Presensi lagi*.`,
     );
 
     delete pengajuanBySender[chatId];
@@ -2800,6 +3024,27 @@ client.on("message", async (message) => {
     if (bodyLower.startsWith("!")) bodyLower = bodyLower.replace(/^!+/, "");
 
     const flow = pengajuanBySender[chatId];
+
+    // ==========================================
+    // RESET DATA PENGUJIAN (khusus nomor uji)
+    // ==========================================
+    //
+    // Sengaja diletakkan paling awal: harus tetap bekerja walau nomor
+    // uji sedang tersangkut di tengah alur — justru itu keadaan yang
+    // paling sering perlu dibersihkan.
+    if (bodyLower === "reset" && hanyaAngka(chatId) === NOMOR_UJI) {
+      try {
+        await kirimDenganTyping(client, chatId, await resetDataUji(chatId));
+      } catch (err) {
+        console.error("[RESET UJI] Gagal:", err?.message || err);
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `⚠️ Reset gagal: ${err?.message || err}`,
+        );
+      }
+      return;
+    }
 
     // ===========
     // FITUR ADMIN
