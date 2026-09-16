@@ -2708,6 +2708,9 @@ let jumlahReinject = 0;
 // di dalam proses.
 let pernahReady = false;
 
+// Supaya potret diagnostik hanya diambil sekali per percobaan start.
+let potretMentokDiambil = false;
+
 // Ambang stuck dibedakan antara start dingin dan start panas.
 //
 // 2 menit tanpa READY sudah cukup untuk menyatakan stuck SELAMA browsernya
@@ -2741,6 +2744,88 @@ const LIVENESS_TIMEOUT_MS = 20000; // Browser sehat menjawab getState jauh di ba
 // Satu-satunya pintu masuk buat menyalakan client, sekaligus reset timer stuck.
 // Tanpa ini, `authStartTime` cuma di-set saat QR muncul, jadi begitu sesi
 // LocalAuth tersimpan (tidak ada QR lagi) nilainya basi dan watchdog nembak terus.
+// =========================================================
+// POTRET HALAMAN SAAT MENTOK
+// =========================================================
+//
+// Bot yang berhenti di antara AUTHENTICATED dan READY tidak memberi tahu
+// apa pun lewat event — halamannya hidup, tapi inisialisasinya tidak
+// pernah selesai. Satu-satunya cara mengetahui sebabnya adalah melihat
+// halaman itu sendiri sebelum prosesnya dibuang.
+//
+// Yang direkam: alamat, judul, teks yang tampak di layar, dan apakah
+// modul internal WhatsApp Web sudah tersedia. Ketiganya membedakan
+// penyebab yang selama ini tertukar — banner "WhatsApp Web perlu
+// diperbarui", layar sinkronisasi yang memang belum selesai, halaman
+// error, atau sesi yang diam-diam sudah dicabut dari HP.
+async function potretHalamanWA(alasan) {
+  const page = client.pupPage;
+
+  if (!page) {
+    console.error("[DIAGNOSTIK] Tidak ada halaman browser untuk diperiksa.");
+    return;
+  }
+
+  try {
+    const info = await page.evaluate(() => {
+      const aman = (fn) => {
+        try {
+          return fn();
+        } catch (err) {
+          return `gagal: ${err.message}`;
+        }
+      };
+
+      return {
+        alamat: location.href,
+        judul: document.title,
+        teks: (document.body?.innerText || "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 500),
+        adaRequire: typeof window.require === "function",
+        adaAuthStore: typeof window.AuthStore !== "undefined",
+
+        // window.WWebJS, BUKAN window.Store: sejak 1.34.x pustaka tidak
+        // lagi membangun window.Store. Inilah penanda bahwa penyuntikan
+        // benar-benar selesai, dan yang ditunggu tepat sebelum READY.
+        adaWWebJS: typeof window.WWebJS !== "undefined",
+        socket: aman(() => window.require("WAWebSocketModel").Socket.state),
+        stream: aman(() => window.require("WAWebSocketModel").Stream.mode),
+      };
+    });
+
+    console.error(
+      `[DIAGNOSTIK] Halaman saat mentok (${alasan}):\n` +
+        `  alamat   : ${info.alamat}\n` +
+        `  judul    : ${info.judul}\n` +
+        `  socket   : ${info.socket}\n` +
+        `  stream   : ${info.stream}\n` +
+        `  require  : ${info.adaRequire} | AuthStore: ${info.adaAuthStore} | WWebJS: ${info.adaWWebJS}\n` +
+        `  di layar : ${info.teks || "(kosong)"}`,
+    );
+
+    logToFile(
+      "error",
+      "DIAGNOSTIK",
+      `socket=${info.socket} stream=${info.stream} judul=${info.judul} teks=${info.teks}`,
+    );
+
+    await ensureDirAsync(LOGS_DIR);
+
+    const berkas = path.join(
+      LOGS_DIR,
+      `mentok-${new Date().toISOString().replace(/[:.]/g, "-")}.png`,
+    );
+
+    await page.screenshot({ path: berkas, fullPage: false });
+
+    console.error(`[DIAGNOSTIK] Tangkapan layar disimpan: ${berkas}`);
+  } catch (err) {
+    console.error("[DIAGNOSTIK] Gagal memotret halaman:", err?.message || err);
+  }
+}
+
 // Setelah sekian kali gagal mencapai READY berturut-turut, cache profil
 // Chromium dibuang otomatis. Dua kali sudah cukup: sekali bisa jaringan,
 // dua kali berturut-turut polanya sudah jelas.
@@ -2749,6 +2834,7 @@ const AMBANG_BERSIHKAN_CACHE = 2;
 async function startClient(alasan = "startup") {
   authStartTime = Date.now();
   botReady = false;
+  potretMentokDiambil = false;
 
   // Perawatan profil sebelum Chromium dinyalakan. Keduanya tidak pernah
   // menyentuh sesi WhatsApp — lihat features/profilWA.js.
@@ -2929,6 +3015,16 @@ setInterval(() => {
   const elapsed = (Date.now() - authStartTime) / 1000;
   const ambang = ambangStuckMs();
 
+  // Potret awal, jauh sebelum watchdog bertindak. Menunggu lima menit
+  // hanya untuk tahu apa yang salah terlalu mahal ketika sedang
+  // menelusuri masalah — dan pada detik ke-90 start yang sehat sudah
+  // lama selesai.
+  if (!potretMentokDiambil && elapsed > 90) {
+    potretMentokDiambil = true;
+
+    potretHalamanWA(`${elapsed.toFixed(0)}s belum READY`).catch(() => {});
+  }
+
   if (elapsed * 1000 > ambang) {
     // LANGSUNG KELUAR, jangan coba restart di dalam proses.
     //
@@ -2949,11 +3045,15 @@ setInterval(() => {
       `Exit karena stuck ${elapsed.toFixed(0)}s (ambang ${ambang / 1000}s)`,
     );
 
-    // Dicatat ke disk, bukan ke memori: prosesnya sebentar lagi mati dan
-    // PM2 menyalakan yang baru. Hitungan inilah yang membuat start
-    // berikutnya tahu kapan harus membuang cache profil.
-    profilWA
-      .bacaGagal()
+    // Halaman dipotret DULU, selagi browsernya masih hidup. Setelah
+    // client.destroy() tidak ada lagi yang bisa dilihat.
+    //
+    // Hitungan gagal dicatat ke disk, bukan ke memori: prosesnya sebentar
+    // lagi mati dan PM2 menyalakan yang baru. Hitungan inilah yang membuat
+    // start berikutnya tahu kapan harus membuang cache profil.
+    potretHalamanWA(`stuck ${elapsed.toFixed(0)}s`)
+      .catch(() => {})
+      .then(() => profilWA.bacaGagal())
       .then((n) => profilWA.tulisGagal(n + 1))
       .catch(() => {})
       .finally(() => {
