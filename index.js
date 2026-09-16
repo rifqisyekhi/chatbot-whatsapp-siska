@@ -3116,9 +3116,55 @@ setInterval(async () => {
 }, LIVENESS_INTERVAL_MS);
 
 // VIII. MESSAGE HANDLER
+// =========================================================
+// PENYARING PESAN KEMBAR
+// =========================================================
+//
+// whatsapp-web.js 1.34.7 memanggil attachEventListeners() setiap kali
+// sinkronisasi selesai (Client.js:369) TANPA mencabut pendengar lama —
+// tidak ada penjaga anti-ganda sama sekali di versi ini. Jadi setiap
+// halaman WhatsApp Web dimuat ulang, satu lapis pendengar bertambah,
+// dan satu pesan masuk dipancarkan berkali-kali. Gejalanya: pegawai
+// mengetik sekali, bot membalas lima kali.
+//
+// Disaring di sini berdasarkan id pesan, jadi berlaku untuk semua
+// fitur sekaligus dan tidak bergantung pada perbaikan pustaka.
+// Pesan berisi teks sama yang dikirim dua kali tetap diproses dua
+// kali, karena id-nya berbeda.
+const pesanTerproses = new Map();
+
+const TTL_PESAN_KEMBAR = 5 * 60 * 1000;
+
+function sudahDiproses(message) {
+  const id =
+    message?.id?._serialized ||
+    message?.id?.$1 ||
+    `${message?.from}|${message?.timestamp}|${(message?.body || "").slice(0, 40)}`;
+
+  const sekarang = Date.now();
+
+  // Buang catatan lama sekalian, supaya Map ini tidak tumbuh selamanya.
+  for (const [kunci, waktu] of pesanTerproses) {
+    if (sekarang - waktu > TTL_PESAN_KEMBAR) pesanTerproses.delete(kunci);
+  }
+
+  if (pesanTerproses.has(id)) return true;
+
+  pesanTerproses.set(id, sekarang);
+  return false;
+}
+
 client.on("message", async (message) => {
   // 1. Buang update status WA dulu biar enteng
   if (message.from === "status@broadcast") return;
+
+  if (sudahDiproses(message)) {
+    console.warn(
+      `[KEMBAR] Pesan dari ${message.from} diabaikan karena sudah diproses. ` +
+        "Pendengar pustaka kemungkinan menumpuk — lihat catatan pesanTerproses.",
+    );
+    return;
+  }
 
   // 2. FILTER ANTI-SPAM (Pesan basi saat bot mati)
   const waktuSekarang = Math.floor(Date.now() / 1000);

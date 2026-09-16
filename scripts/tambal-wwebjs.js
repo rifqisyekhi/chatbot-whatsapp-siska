@@ -55,6 +55,33 @@ const AKAR = path.join(__dirname, "..", "node_modules", "whatsapp-web.js", "src"
 // pemicu error "binding already exists" yang dikeluhkan di utas itu.
 const TAMBALAN = [
   {
+    nama: "Client.js — pendengar halaman tidak lagi menumpuk tiap sinkronisasi",
+    berkas: path.join(AKAR, "Client.js"),
+    cari: "    async attachEventListeners() {",
+    ganti: [
+      "    async attachEventListeners() {",
+      "        // Dipanggil ulang setiap sinkronisasi selesai (lihat",
+      "        // pemanggilnya), tanpa mencabut pendengar lama — sehingga satu",
+      "        // pesan masuk dipancarkan sebanyak jumlah pemanggilan. Gejalanya:",
+      "        // user mengetik sekali, bot membalas berkali-kali.",
+      "        //",
+      "        // Penandanya sengaja ditaruh DI HALAMAN, bukan di Node: kalau",
+      "        // halaman benar-benar dimuat ulang, pendengarnya memang ikut",
+      "        // hilang dan penandanya ikut hilang juga, jadi pemasangan ulang",
+      "        // tetap terjadi saat memang dibutuhkan.",
+      "        const sudahTerpasang = await this.pupPage",
+      "            .evaluate(() => {",
+      "                if (window.__wwebjsListenersAttached) return true;",
+      "                window.__wwebjsListenersAttached = true;",
+      "                return false;",
+      "            })",
+      "            .catch(() => false);",
+      "",
+      "        if (sudahTerpasang) return;",
+    ].join("\n"),
+    penanda: "__wwebjsListenersAttached",
+  },
+  {
     nama: "util/Puppeteer.js — binding CDP yang sudah ada tidak lagi fatal",
     berkas: path.join(AKAR, "util", "Puppeteer.js"),
     cari: "    await page.exposeFunction(name, fn);",
