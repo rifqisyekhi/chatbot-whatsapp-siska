@@ -64,6 +64,23 @@ let dbPegawai = [];
 // itu: ia melekat pada satu dokumen orang yang sama.
 const JABATAN_TIM_GUDANG = "petugas kebersihan";
 
+// Jabatan yang lemburnya diakui tanpa pengajuan dan tanpa persetujuan
+// atasan. Harus sama dengan JABATAN_LEMBUR_OTOMATIS di backend presensi
+// (utils/jamKerja.js) — di sanalah jamnya benar-benar dihitung.
+//
+// Kebetulan jabatannya sama dengan JABATAN_TIM_GUDANG di atas, tapi
+// artinya berbeda: yang di atas soal siapa yang menerima notifikasi
+// gudang. Sengaja dipisah supaya mengubah salah satunya tidak
+// diam-diam mengubah yang lain.
+const JABATAN_LEMBUR_OTOMATIS = "petugas kebersihan";
+
+function jabatanLemburOtomatis(pegawai) {
+  return (
+    String(pegawai?.jabatan || "").trim().toLowerCase() ===
+    JABATAN_LEMBUR_OTOMATIS
+  );
+}
+
 function daftarTimGudang() {
   return dbPegawai.filter(
     (p) => String(p.jabatan || "").trim().toLowerCase() === JABATAN_TIM_GUDANG,
@@ -1003,6 +1020,18 @@ function pegawaiASN(pegawai) {
 // kalau boleh lanjut. Dipanggil di AWAL alur supaya pegawai tidak sia-sia
 // mengisi alasan dan jam dulu, dan sekali lagi di ujung sebagai jaminan.
 function alasanTolakLembur(pegawai) {
+  // Bukan penolakan karena ada yang kurang, melainkan karena tidak ada
+  // yang perlu diajukan: lemburnya sudah terhitung sendiri dari jam
+  // absen pulang.
+  if (jabatanLemburOtomatis(pegawai)) {
+    return (
+      "Lembur Anda *sudah otomatis terhitung*, jadi tidak perlu diajukan.\n\n" +
+      "Jamnya dihitung sendiri dari jam absen pulang Anda. Absen pulang " +
+      "seperti biasa lewat *Absensi Non-ASN → Presensi*, lalu tuliskan " +
+      "kinerja lembur Anda saat diminta."
+    );
+  }
+
   if (tanpaAtasan(pegawai) && !pegawaiASN(pegawai)) {
     return (
       "Maaf, *atasan Anda belum terdaftar* di data pegawai, sehingga " +
@@ -1049,6 +1078,23 @@ async function cariAtasanPegawai(pegawai) {
 // Absensi menyimpan "16.47"; parser durasi di PDF membaca "16:47".
 function jamTitikDua(jam) {
   return String(jam || "").replace(".", ":");
+}
+
+// Berapa JAM PENUH lembur otomatis yang didapat kalau absen pulang pada
+// jam ini. Dibulatkan ke bawah, sama seperti kolom Pembulatan Lembur di
+// rekap: pulang 16.40 dari jam harus pulang 16.00 tetap nol jam.
+//
+// Nol juga untuk semua orang selain jabatan yang lemburnya otomatis —
+// lembur mereka dihitung lewat persetujuan atasan, bukan di sini.
+function hitungJamLemburOtomatis(flow, jamPulang) {
+  if (flow?.lemburOtomatis !== true) return 0;
+
+  const pulang = menitDariJamWIB(jamPulang);
+  const harus = menitDariJamWIB(flow.jamHarusCheckout);
+
+  if (pulang === null || harus === null) return 0;
+
+  return Math.max(0, Math.floor((pulang - harus) / 60));
 }
 
 function pulangMelewati(jamPulang, jamHarusCheckout) {
@@ -1835,7 +1881,10 @@ async function pindaiPengingatPulang() {
     // Tapi tetap diingatkan sekali sejam sebelum batas pengingat:
     // absen pulang yang lewat tengah malam hilang permanen, dan
     // bersamanya seluruh catatan kehadiran orang itu hari itu.
-    const lembur = orang.lemburDisetujui === true && batas !== null;
+    const lemburOtomatis = orang.lemburOtomatis === true;
+
+    const lembur =
+      (orang.lemburDisetujui === true || lemburOtomatis) && batas !== null;
     const bebasJadwal = orang.bebasJamKerja === true && batas !== null;
 
     const harusPulang =
@@ -1869,7 +1918,9 @@ async function pindaiPengingatPulang() {
     // memberi kesan ada aturan yang dilanggar.
     const teks = lembur
       ? `⏰ *Pengingat absen pulang*\n\n` +
-        `Anda sedang lembur (sudah disetujui atasan) dan belum absen pulang.\n\n` +
+        `Anda sedang lembur${
+          lemburOtomatis ? "" : " (sudah disetujui atasan)"
+        } dan belum absen pulang.\n\n` +
         `Begitu selesai, buka *menu* lalu pilih *Absensi Non-ASN → Presensi* — ` +
         `jam absen pulang adalah jam selesai lembur Anda.\n\n` +
         `_Absen pulang tidak bisa lagi dilakukan setelah lewat tengah malam, ` +
@@ -2139,9 +2190,24 @@ async function tanganiAlurAbsensi({
 
       const lemburDisetujui = data.lembur?.disetujui === true;
 
+      // Petugas kebersihan tidak ikut konfirmasi ini. Lemburnya tidak
+      // pernah diajukan, jadi tidak ada niat lembur yang bisa dilanggar:
+      // pulang 16.30 baginya cuma hari biasa yang selesai sedikit lebih
+      // lambat. Menanyainya "tetap pulang?" tiap sore hanya jadi
+      // gangguan harian.
       const ambangSatuJam =
         lemburDisetujui && menitHarusPulang !== null
           ? menitHarusPulang + 60
+          : null;
+
+      const lemburOtomatis = data.lemburOtomatis === true;
+
+      const jamLemburBerjalan =
+        (lemburDisetujui || lemburOtomatis) &&
+        menitSekarang !== null &&
+        menitHarusPulang !== null &&
+        menitSekarang > menitHarusPulang
+          ? Math.floor((menitSekarang - menitHarusPulang) / 60)
           : null;
 
       if (
@@ -2176,10 +2242,10 @@ async function tanganiAlurAbsensi({
                 ? `\n_Sekarang baru ${jamSekarang} WIB. Absen pulang lebih awal tetap tersimpan, tapi jam kerjanya tercatat kurang._\n`
                 : "")
             : "") +
-          (ambangSatuJam !== null && menitSekarang !== null
-            ? `✅ Lembur disetujui — terhitung *${Math.floor(
-                (menitSekarang - menitHarusPulang) / 60,
-              )} jam* kalau absen pulang sekarang.\n`
+          (jamLemburBerjalan !== null
+            ? `${
+                lemburOtomatis ? "🧹 Lembur otomatis" : "✅ Lembur disetujui"
+              } — terhitung *${jamLemburBerjalan} jam* kalau absen pulang sekarang.\n`
             : "") +
           `\n📸 Silakan kirim *foto check out* Anda.`,
       );
@@ -2192,6 +2258,11 @@ async function tanganiAlurAbsensi({
         // Tanggal dokumen clock in, bukan tanggal hari ini.
         // Penting untuk absen pulang yang lewat tengah malam.
         tanggalAbsen: data.tanggal,
+
+        // Dibawa dalam state supaya langkah kinerja nanti tidak perlu
+        // memanggil backend lagi hanya untuk tahu dua angka ini.
+        lemburOtomatis,
+        jamHarusCheckout: harusPulang || "",
       };
       return;
     }
@@ -2398,19 +2469,33 @@ async function tanganiAlurAbsensi({
         );
       }
 
+      // Lembur otomatis tidak melewati pengajuan maupun persetujuan
+      // atasan, jadi catatan kinerja lembur inilah satu-satunya
+      // keterangan tentang apa yang dikerjakan pada jam-jam itu.
+      //
+      // Ditanyakan lebih dulu, bukan terakhir, supaya kinerja harian
+      // tetap jadi langkah penutup seperti alur yang sudah dikenal
+      // pegawai lain.
+      const jamLembur = hitungJamLemburOtomatis(flow, jamTeks);
+
       await kirimDenganTyping(
         client,
         chatId,
         (geotagGagal
           ? "⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\n"
           : "") +
-          `📝 *Terakhir, tuliskan kinerja harian Anda.*\n` +
-          `Contoh: _Menyusun laporan SPJ bulan Agustus_`,
+          (jamLembur >= 1
+            ? `🧹 Anda lembur *${jamLembur} jam* hari ini.\n\n` +
+              `📝 *Tuliskan kinerja lembur Anda.*\n` +
+              `Contoh: _Membersihkan ruang rapat lantai 3 dan 4_`
+            : `📝 *Terakhir, tuliskan kinerja harian Anda.*\n` +
+              `Contoh: _Menyusun laporan SPJ bulan Agustus_`),
       );
 
       pengajuanBySender[chatId] = {
         ...flow,
-        step: "absensi-kinerja",
+        step: jamLembur >= 1 ? "absensi-kinerja-lembur" : "absensi-kinerja",
+        jamLembur,
         fotoBase64: fotoFinal,
         fotoMime: mimeFinal,
         lokasi: lokasiPayload,
@@ -2486,6 +2571,46 @@ async function tanganiAlurAbsensi({
   // KINERJA HARIAN DAN ABSEN PULANG
   // =========================================================
 
+  // =========================================================
+  // KINERJA LEMBUR (JABATAN DENGAN LEMBUR OTOMATIS)
+  // =========================================================
+
+  if (flow.step === "absensi-kinerja-lembur") {
+    const kinerja = (message.body || "").trim();
+
+    if (kinerja.length < KINERJA_MIN) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Kinerja lembur minimal *${KINERJA_MIN} huruf*. Saat ini baru ${kinerja.length} huruf.\n\nSilakan tulis ulang.`,
+      );
+      return;
+    }
+
+    if (kinerja.length > KINERJA_MAX) {
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `Kinerja lembur maksimal *${KINERJA_MAX} huruf*. Saat ini ${kinerja.length} huruf.\n\nSilakan ringkas lalu tulis ulang.`,
+      );
+      return;
+    }
+
+    await kirimDenganTyping(
+      client,
+      chatId,
+      `📝 *Terakhir, tuliskan kinerja harian Anda.*\n` +
+        `Contoh: _Menyapu dan mengepel seluruh lantai 2_`,
+    );
+
+    pengajuanBySender[chatId] = {
+      ...flow,
+      step: "absensi-kinerja",
+      kinerjaLembur: kinerja,
+    };
+    return;
+  }
+
   if (flow.step === "absensi-kinerja") {
     const kinerja = (message.body || "").trim();
 
@@ -2518,6 +2643,7 @@ async function tanganiAlurAbsensi({
       clockOutLocation: flow.lokasi,
       clockOutAddress: flow.alamat,
       kinerja_harian: kinerja,
+      kinerja_lembur: flow.kinerjaLembur || "",
       tanggal: flow.tanggalAbsen,
     });
 
@@ -2539,8 +2665,12 @@ async function tanganiAlurAbsensi({
       chatId,
       `✅ *Absen pulang tersimpan*\n\n` +
         `🕐 Jam pulang: ${flow.jam} WIB\n` +
-        `📝 Kinerja: ${kinerja}\n\n` +
-        `Terima kasih 🙏`,
+        `📝 Kinerja: ${kinerja}\n` +
+        (flow.kinerjaLembur
+          ? `🧹 Kinerja lembur: ${flow.kinerjaLembur}\n` +
+            `⏱️ Lembur tercatat: *${flow.jamLembur} jam*\n`
+          : "") +
+        `\nTerima kasih 🙏`,
     );
 
     delete pengajuanBySender[chatId];
