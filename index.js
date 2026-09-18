@@ -1758,40 +1758,120 @@ const KINERJA_MAX = 100;
 // Fungsi ini mengulang langkah-langkah yang sama di dalam halaman
 // dan melaporkan apa adanya, supaya kejadian berikutnya tidak
 // perlu ditebak lagi.
+// Uji kirim ke diri sendiri hanya sekali per proses. Sekali saja sudah
+// menjawab pertanyaannya, dan kalau banyak pegawai absen bersamaan
+// jangan sampai chat bot sendiri dibanjiri gambar uji.
+let ujiMediaSudahJalan = false;
+
 async function diagnosaJalurMedia(fotoBase64) {
+  const waSendiri = client.info?.wid?._serialized || "";
+
+  const bolehUji = Boolean(waSendiri) && !ujiMediaSudahJalan;
+
+  if (bolehUji) ujiMediaSudahJalan = true;
+
   try {
-    return await client.pupPage.evaluate(async (b64) => {
-      try {
-        const file = window.WWebJS.mediaInfoToFile({
+    return await client.pupPage.evaluate(
+      async (b64, tujuanUji, jalankanUji) => {
+        const langkah = [];
+
+        const mediaInfo = {
           data: b64,
           mimetype: "image/jpeg",
           filename: "uji-geotag.jpg",
-        });
-
-        const OpaqueData = window.require("WAWebMediaOpaqueData");
-
-        const opaque = await OpaqueData.createFromData(file, "image/jpeg");
-
-        const prep = window
-          .require("WAWebPrepRawMedia")
-          .prepRawMedia(opaque, {});
-
-        const data = await prep.waitForPrep();
-
-        return {
-          tahap: "prep selesai",
-          filehash: data?.filehash || "(KOSONG — inilah penyebabnya)",
-          tipe: data?.type || "(kosong)",
-          ukuranBerkas: file?.size ?? null,
-          lebar: data?.fullWidth ?? null,
-          tinggi: data?.fullHeight ?? null,
         };
-      } catch (e) {
-        return { tahap: "prep gagal", pesan: String(e?.message || e) };
-      }
-    }, fotoBase64);
+
+        // ---- Tahap 1: siapkan dan hitung hash ----
+        try {
+          const file = window.WWebJS.mediaInfoToFile(mediaInfo);
+
+          const OpaqueData = window.require("WAWebMediaOpaqueData");
+
+          const opaque = await OpaqueData.createFromData(file, "image/jpeg");
+
+          const data = await window
+            .require("WAWebPrepRawMedia")
+            .prepRawMedia(opaque, {})
+            .waitForPrep();
+
+          langkah.push(
+            `1. siapkan+hash: OK (${file?.size ?? "?"} byte, ` +
+              `${data?.fullWidth}x${data?.fullHeight}, ` +
+              `filehash ${data?.filehash ? "ada" : "KOSONG"})`,
+          );
+        } catch (e) {
+          langkah.push(`1. siapkan+hash: GAGAL — ${String(e?.message || e)}`);
+
+          return { gagalDi: "penyiapan media", langkah };
+        }
+
+        // ---- Tahap 2: proses penuh, termasuk unggah ke server WhatsApp ----
+        try {
+          const hasil = await window.WWebJS.processMediaData(mediaInfo, {});
+
+          langkah.push(
+            `2. proses+unggah: OK (clientUrl ${
+              hasil?.clientUrl ? "ada" : "KOSONG"
+            }, mediaKey ${hasil?.mediaKey ? "ada" : "KOSONG"})`,
+          );
+        } catch (e) {
+          langkah.push(`2. proses+unggah: GAGAL — ${String(e?.message || e)}`);
+
+          return { gagalDi: "unggah media ke server WhatsApp", langkah };
+        }
+
+        // ---- Tahap 3: benarkah SEMUA media gagal? ----
+        //
+        // Gambar 1x1 yang dibuat sendiri dikirim ke chat bot sendiri.
+        // Kalau yang ini pun gagal, masalahnya bukan pada foto absensi
+        // melainkan pada seluruh jalur pengiriman media.
+        if (!jalankanUji) {
+          langkah.push("3. uji kirim: dilewati (sudah pernah dijalankan)");
+        } else {
+          try {
+            const kanvas = document.createElement("canvas");
+
+            kanvas.width = 1;
+            kanvas.height = 1;
+            kanvas.getContext("2d").fillRect(0, 0, 1, 1);
+
+            const chat = await window.WWebJS.getChat(tujuanUji, {
+              getAsModel: false,
+            });
+
+            if (!chat) {
+              langkah.push("3. uji kirim: chat bot sendiri tidak ditemukan");
+            } else {
+              await window.WWebJS.sendMessage(chat, "", {
+                media: {
+                  mimetype: "image/jpeg",
+                  data: kanvas.toDataURL("image/jpeg").split(",")[1],
+                  filename: "uji.jpg",
+                },
+                caption: "uji kirim media (otomatis)",
+              });
+
+              langkah.push(
+                "3. uji kirim gambar 1x1 ke diri sendiri: BERHASIL — " +
+                  "jalur medianya sehat, yang ditolak foto absensinya",
+              );
+            }
+          } catch (e) {
+            langkah.push(
+              "3. uji kirim gambar 1x1 ke diri sendiri: GAGAL — " +
+                `${String(e?.message || e)} — SELURUH pengiriman media sedang rusak`,
+            );
+          }
+        }
+
+        return { gagalDi: "pengiriman pesannya, sesudah media terunggah", langkah };
+      },
+      fotoBase64,
+      waSendiri,
+      bolehUji,
+    );
   } catch (e) {
-    return { tahap: "tidak bisa diperiksa", pesan: String(e?.message || e) };
+    return { gagalDi: "tidak bisa diperiksa", pesan: String(e?.message || e) };
   }
 }
 
@@ -1889,10 +1969,17 @@ async function kirimFotoGeotag(chatId, fotoBase64, caption) {
     }
   }
 
-  console.error(
-    "[FOTO GEOTAG] Diagnosa jalur media WhatsApp:",
-    JSON.stringify(await diagnosaJalurMedia(fotoBase64)),
-  );
+  const diagnosa = await diagnosaJalurMedia(fotoBase64);
+
+  console.error(`[FOTO GEOTAG] Diagnosa — gagal di: ${diagnosa.gagalDi}`);
+
+  for (const baris of diagnosa.langkah || []) {
+    console.error(`[FOTO GEOTAG]   ${baris}`);
+  }
+
+  if (diagnosa.pesan) {
+    console.error(`[FOTO GEOTAG]   ${diagnosa.pesan}`);
+  }
 
   throw galatTerakhir;
 }
@@ -2965,6 +3052,17 @@ const puppeteerConfig = {
   protocolTimeout: 180000,
 };
 
+// Kosong berarti "pakai WhatsApp Web yang sedang dilayani" — lihat
+// catatan panjang di webVersionCache di bawah.
+const WA_WEB_VERSION = (process.env.WA_WEB_VERSION || "").trim();
+
+if (WA_WEB_VERSION) {
+  console.warn(
+    `[WA] Versi WhatsApp Web dikunci ke ${WA_WEB_VERSION}. ` +
+      "Kosongkan WA_WEB_VERSION di .env begitu tidak dibutuhkan lagi.",
+  );
+}
+
 const browserExecutablePath = getPuppeteerExecutablePath();
 if (browserExecutablePath) {
   puppeteerConfig.executablePath = browserExecutablePath;
@@ -2992,7 +3090,35 @@ const client = new Client({
   // sedang dilayani (WebCache.resolve() mengembalikan null, lihat
   // src/webCache/WebCache.js). Folder .wwebjs_cache jadi tidak terpakai dan
   // aman dihapus.
-  webVersionCache: { type: "none" },
+  //
+  // PENGECUALIAN — TUAS DARURAT.
+  //
+  // Selalu memakai WhatsApp Web terbaru juga berarti selalu menanggung
+  // perubahan terbarunya. Terjadi 18 September 2026: pengiriman MEDIA
+  // berhenti bekerja sama sekali (pesan teks tetap normal), dan
+  // tidak ada versi pustaka yang lebih baru untuk menambalnya.
+  //
+  // Kalau itu terulang, isi WA_WEB_VERSION di .env dengan salah satu
+  // versi dari arsip berikut, lalu restart — bot akan memakai salinan
+  // WhatsApp Web versi itu alih-alih yang sedang dilayani:
+  //
+  //   https://github.com/wppconnect-team/wa-version/tree/main/html
+  //   contoh: WA_WEB_VERSION=2.3000.1047835881-alpha
+  //
+  // Kosongkan lagi begitu masalahnya lewat. Jangan dibiarkan terkunci
+  // lama-lama: salinan yang menua persis penyakit yang dijelaskan di
+  // atas, dan ujungnya bot tidak pernah READY lagi.
+  ...(WA_WEB_VERSION
+    ? {
+        webVersion: WA_WEB_VERSION,
+        webVersionCache: {
+          type: "remote",
+          remotePath:
+            "https://raw.githubusercontent.com/wppconnect-team/" +
+            "wa-version/main/html/{version}.html",
+        },
+      }
+    : { webVersionCache: { type: "none" } }),
 
   // WhatsApp Web hanya mengizinkan SATU klien web aktif. Kalau WhatsApp masih
   // menganggap sesi sebelumnya hidup, klien baru masuk ke state CONFLICT dan
