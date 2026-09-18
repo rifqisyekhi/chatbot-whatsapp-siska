@@ -1747,19 +1747,189 @@ const BATAS_FOTO_BASE64 = 9 * 1024 * 1024;
 const KINERJA_MIN = 10;
 const KINERJA_MAX = 100;
 
+// Menanyai WhatsApp Web langsung kenapa fotonya ditolak.
+//
+// Pesan yang sampai ke Node ("Data passed to getter must include
+// an id property") menyesatkan: itu error memoize milik WhatsApp
+// yang muncul karena prepRawMedia mengembalikan data tanpa
+// filehash, lalu getOrCreateMediaObject(undefined) dipanggil satu
+// baris SEBELUM pustakanya sempat memeriksa filehash itu sendiri.
+//
+// Fungsi ini mengulang langkah-langkah yang sama di dalam halaman
+// dan melaporkan apa adanya, supaya kejadian berikutnya tidak
+// perlu ditebak lagi.
+async function diagnosaJalurMedia(fotoBase64) {
+  try {
+    return await client.pupPage.evaluate(async (b64) => {
+      try {
+        const file = window.WWebJS.mediaInfoToFile({
+          data: b64,
+          mimetype: "image/jpeg",
+          filename: "uji-geotag.jpg",
+        });
+
+        const OpaqueData = window.require("WAWebMediaOpaqueData");
+
+        const opaque = await OpaqueData.createFromData(file, "image/jpeg");
+
+        const prep = window
+          .require("WAWebPrepRawMedia")
+          .prepRawMedia(opaque, {});
+
+        const data = await prep.waitForPrep();
+
+        return {
+          tahap: "prep selesai",
+          filehash: data?.filehash || "(KOSONG — inilah penyebabnya)",
+          tipe: data?.type || "(kosong)",
+          ukuranBerkas: file?.size ?? null,
+          lebar: data?.fullWidth ?? null,
+          tinggi: data?.fullHeight ?? null,
+        };
+      } catch (e) {
+        return { tahap: "prep gagal", pesan: String(e?.message || e) };
+      }
+    }, fotoBase64);
+  } catch (e) {
+    return { tahap: "tidak bisa diperiksa", pesan: String(e?.message || e) };
+  }
+}
+
+// =========================================================
+// KIRIM FOTO BERCAP GEOTAG
+// =========================================================
+//
+// Foto ini BUKAN pelengkap: inilah bukti kehadiran yang dipegang
+// pegawai. Karena itu pengirimannya tidak berhenti pada satu cara.
+//
+// Empat cara, dari yang paling wajar ke yang paling sederhana —
+// yang penting fotonya sampai, bukan lewat jalur mana:
+//
+//   1. Kirim biasa.
+//   2. Lewat objek chat-nya. Menyingkirkan kemungkinan chat-nya
+//      yang gagal dikenali di dalam halaman.
+//   3. Foto dirender ulang kecil dan polos. Membuang EXIF, profil
+//      warna, mode progresif, dan dimensi besar — hal-hal yang
+//      bisa membuat pipeline gambar WhatsApp gagal.
+//   4. Dikirim sebagai dokumen. Ini yang paling penting: dengan
+//      asDocument, WhatsApp TIDAK mentranskode gambarnya sama
+//      sekali, hanya menghitung hash berkasnya. Jadi kalau yang
+//      rusak adalah jalur gambarnya, cara ini tetap jalan — foto
+//      tetap utuh dan tetap bisa dibuka, hanya tampil sebagai
+//      lampiran berkas.
 async function kirimFotoGeotag(chatId, fotoBase64, caption) {
-  const media = new MessageMedia(
-    "image/jpeg",
-    fotoBase64,
-    "absensi-geotag.jpg",
+  const buatMedia = (b64) =>
+    new MessageMedia("image/jpeg", b64, "absensi-geotag.jpg");
+
+  const caraKirim = [
+    {
+      nama: "kirim biasa",
+      jalankan: () =>
+        client.sendMessage(chatId, buatMedia(fotoBase64), { caption }),
+    },
+    {
+      nama: "lewat objek chat",
+      jalankan: async () => {
+        const chat = await client.getChatById(chatId);
+
+        return chat.sendMessage(buatMedia(fotoBase64), { caption });
+      },
+    },
+    {
+      nama: "foto dirender ulang lebih kecil",
+      jalankan: async () => {
+        const kecil = await absensiNonASN.kecilkanFotoJPEG({
+          browser: client.pupBrowser,
+          fotoBase64,
+        });
+
+        return client.sendMessage(chatId, buatMedia(kecil), { caption });
+      },
+    },
+    {
+      nama: "sebagai dokumen (tanpa transkode gambar)",
+      jalankan: () =>
+        client.sendMessage(chatId, buatMedia(fotoBase64), {
+          caption,
+          sendMediaAsDocument: true,
+        }),
+    },
+  ];
+
+  let galatTerakhir = null;
+
+  for (let i = 0; i < caraKirim.length; i++) {
+    const cara = caraKirim[i];
+
+    try {
+      await cara.jalankan();
+
+      if (i > 0) {
+        console.warn(
+          `[FOTO GEOTAG] Terkirim lewat cara ke-${i + 1} (${cara.nama}).`,
+        );
+      }
+
+      // client.sendMessage tidak mencatat apa pun, padahal foto
+      // inilah bukti yang diperiksa petugas — jangan sampai
+      // pengirimannya tidak berjejak di log.
+      logOut(chatId, `[FOTO GEOTAG] ${caption}`);
+      return;
+    } catch (err) {
+      galatTerakhir = err;
+
+      console.error(
+        `[FOTO GEOTAG] Cara ke-${i + 1} (${cara.nama}) gagal ` +
+          `[${Math.round(fotoBase64.length / 1024)} KB]: ${err?.message || err}`,
+      );
+
+      if (i < caraKirim.length - 1) {
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
+  }
+
+  console.error(
+    "[FOTO GEOTAG] Diagnosa jalur media WhatsApp:",
+    JSON.stringify(await diagnosaJalurMedia(fotoBase64)),
   );
 
-  await client.sendMessage(chatId, media, { caption });
+  throw galatTerakhir;
+}
 
-  // client.sendMessage tidak mencatat apa pun, padahal foto
-  // inilah bukti yang diperiksa petugas — jangan sampai
-  // pengirimannya tidak berjejak di log.
-  logOut(chatId, `[FOTO GEOTAG] ${caption}`);
+// =========================================================
+// KIRIM FOTO GEOTAG TANPA MENGGAGALKAN ABSENSI
+// =========================================================
+//
+// Foto yang dikirim ke chat hanyalah SALINAN. Yang diperiksa
+// petugas adalah foto yang sama persis yang sudah tersimpan di
+// backend presensi — dan untuk absen masuk, penyimpanannya
+// sudah selesai sebelum baris ini dijalankan.
+//
+// Karena itu kegagalan mengirimnya tidak boleh menjatuhkan
+// seluruh alur. Terjadi 18 September 2026: pengiriman media
+// gagal di dalam WhatsApp Web sendiri
+// ("Data passed to getter must include an id property"),
+// pengecualiannya naik sampai penangan pesan paling luar, dan
+// akibatnya pegawai tidak pernah menerima konfirmasi "Absen
+// masuk tersimpan" padahal absensinya sudah masuk database —
+// sedangkan yang sedang absen pulang kehilangan seluruh
+// alurnya sebelum sempat menulis kinerja harian.
+//
+// Mengembalikan true kalau fotonya benar-benar terkirim.
+async function kirimFotoGeotagAman(chatId, fotoBase64, caption) {
+  try {
+    await kirimFotoGeotag(chatId, fotoBase64, caption);
+
+    return true;
+  } catch (err) {
+    console.error(
+      "[FOTO GEOTAG] Gagal mengirim salinan foto ke chat " +
+        `${chatId}: ${err?.message || err}`,
+    );
+
+    return false;
+  }
 }
 
 // =========================================================
@@ -2456,10 +2626,12 @@ async function tanganiAlurAbsensi({
     // Absen pulang masih perlu kinerja harian sebelum
     // dikirim, jadi datanya disimpan dulu di state.
     if (flow.mode === "out") {
+      let fotoTerkirim = true;
+
       if (!geotagGagal) {
         const detail = absensiNonASN.detailAlamat(alamat);
 
-        await kirimFotoGeotag(
+        fotoTerkirim = await kirimFotoGeotagAman(
           chatId,
           fotoFinal,
           `📍 *Foto Check-Out (${flow.jenisKehadiran})*\n` +
@@ -2483,7 +2655,9 @@ async function tanganiAlurAbsensi({
         chatId,
         (geotagGagal
           ? "⚠️ Cap geotag gagal dibuat, foto asli tetap akan disimpan beserta titik lokasinya.\n\n"
-          : "") +
+          : !fotoTerkirim
+            ? "⚠️ WhatsApp menolak mengirim salinan fotonya ke chat ini. Fotonya tetap akan tersimpan di sistem dan bisa dibuka di aplikasi web menu *Riwayat*.\n\n"
+            : "") +
           (jamLembur >= 1
             ? `🧹 Anda lembur *${jamLembur} jam* hari ini.\n\n` +
               `📝 *Tuliskan kinerja lembur Anda.*\n` +
@@ -2527,8 +2701,10 @@ async function tanganiAlurAbsensi({
       return;
     }
 
+    let fotoTerkirim = true;
+
     if (!geotagGagal) {
-      await kirimFotoGeotag(
+      fotoTerkirim = await kirimFotoGeotagAman(
         chatId,
         fotoFinal,
         `📍 Foto check in bercap geotag\n${alamat}\n${jamTeks} WIB`,
@@ -2558,7 +2734,10 @@ async function tanganiAlurAbsensi({
         `📍 Lokasi: ${absensiNonASN.namaTempat(alamat)}\n\n` +
         (geotagGagal
           ? "⚠️ Cap geotag gagal dibuat, foto asli yang tersimpan. Titik lokasi tetap tercatat.\n\n"
-          : "") +
+          : !fotoTerkirim
+            ? "⚠️ Foto bercap geotag Anda *sudah tersimpan di sistem*, tapi WhatsApp menolak mengirim salinannya ke chat ini.\n" +
+              "Fotonya bisa dibuka di aplikasi web menu *Riwayat*.\n\n"
+            : "") +
         barisPulang +
         `\nUntuk absen pulang, pilih *Absensi Non-ASN → Presensi lagi*.`,
     );

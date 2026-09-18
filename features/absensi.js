@@ -758,6 +758,87 @@ async function buatFotoGeotag({
   }
 }
 
+// =========================================================
+// PERKECIL FOTO
+// =========================================================
+//
+// Merender ulang JPEG lewat Chromium yang sama, lebih kecil dan
+// lebih sederhana. Dipakai hanya sebagai upaya penyelamat ketika
+// WhatsApp menolak memproses foto aslinya.
+//
+// Gunanya bukan menghemat kuota, melainkan membuang segala hal
+// yang bisa membuat pipeline media WhatsApp tersandung: hasil
+// canvas selalu JPEG baseline, tanpa EXIF, tanpa profil warna,
+// tanpa mode progresif, dan dimensinya pasti kecil.
+
+async function kecilkanFotoJPEG({
+  browser,
+  fotoBase64,
+  // Kartu geotag aslinya 1080px. 900px masih membuat teks alamat,
+  // jam, dan nama tetap terbaca jelas sebagai bukti — pengecilannya
+  // bukan untuk menghemat kuota, jadi tidak perlu agresif.
+  maxLebar = 900,
+  kualitas = 0.8,
+}) {
+  if (!browser) {
+    throw new Error("Browser Chromium belum siap.");
+  }
+
+  let page = null;
+
+  try {
+    page = await browser.newPage();
+
+    await page.setContent("<!doctype html><html><body></body></html>", {
+      waitUntil: "load",
+      timeout: 15000,
+    });
+
+    const hasil = await page.evaluate(
+      async (b64, lebarMaks, mutu) => {
+        const img = new Image();
+
+        img.src = `data:image/jpeg;base64,${b64}`;
+
+        await img.decode();
+
+        const skala = Math.min(1, lebarMaks / img.naturalWidth);
+
+        const kanvas = document.createElement("canvas");
+
+        kanvas.width = Math.max(1, Math.round(img.naturalWidth * skala));
+        kanvas.height = Math.max(1, Math.round(img.naturalHeight * skala));
+
+        kanvas
+          .getContext("2d")
+          .drawImage(img, 0, 0, kanvas.width, kanvas.height);
+
+        return kanvas.toDataURL("image/jpeg", mutu).split(",")[1] || "";
+      },
+      fotoBase64,
+      maxLebar,
+      kualitas,
+    );
+
+    if (!hasil) {
+      throw new Error("Hasil perkecilan foto kosong.");
+    }
+
+    return hasil;
+  } finally {
+    if (page) {
+      try {
+        await page.close();
+      } catch (e) {
+        console.error(
+          "[ABSENSI] Gagal menutup tab perkecil foto:",
+          e?.message || e,
+        );
+      }
+    }
+  }
+}
+
 module.exports = {
   API_URL,
   LABEL_JENIS,
@@ -781,4 +862,5 @@ module.exports = {
   kirimClockOut,
   cariAlamat,
   buatFotoGeotag,
+  kecilkanFotoJPEG,
 };
