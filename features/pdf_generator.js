@@ -627,6 +627,18 @@ async function buatLaporanWFAAsync(data, chatId, client) {
             });
           } catch(e) {
              console.error("❌ Gagal kirim WFH ke user:", e);
+
+             // Jangan diam saja. Tanpa kabar, pegawai menyangka
+             // laporannya sudah terkirim dan baru sadar berhari-hari
+             // kemudian — saat berkasnya dibutuhkan.
+             try {
+               await client.sendMessage(
+                 chatId,
+                 "⚠️ Laporan Kinerja WFH Anda *sudah selesai dibuat*, tapi WhatsApp menolak mengirim berkasnya ke chat ini.\n\nSilakan hubungi admin TU untuk mengambil berkasnya.",
+               );
+             } catch (e2) {
+               console.error("❌ Gagal memberi tahu kegagalan kirim WFH:", e2?.message || e2);
+             }
           }
 
           if (Array.isArray(data.wfaList)) {
@@ -1492,6 +1504,15 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
             });
           } catch(e) {
              console.error("❌ Gagal kirim PDF Permintaan Barang ke user:", e);
+
+             try {
+               await client.sendMessage(
+                 chatId,
+                 "⚠️ *Bukti Serah Terima Barang Persediaan* Anda sudah dibuat, tapi WhatsApp menolak mengirim berkasnya ke chat ini.\n\nSilakan hubungi admin TU untuk mengambil berkasnya.",
+               );
+             } catch (e2) {
+               console.error("❌ Gagal memberi tahu kegagalan kirim PDF barang:", e2?.message || e2);
+             }
           }
           resolve();
         } catch (err) {

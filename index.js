@@ -1814,6 +1814,16 @@ async function diagnosaJalurMedia(fotoBase64) {
               hasil?.clientUrl ? "ada" : "KOSONG"
             }, mediaKey ${hasil?.mediaKey ? "ada" : "KOSONG"})`,
           );
+
+          // Diisi oleh tambalan di scripts/tambal-wwebjs.js. Inilah
+          // nama-nama medan yang benar-benar dikirim WhatsApp pada
+          // jawaban unggahnya — kalau clientUrl masih kosong, daftar
+          // ini yang menunjukkan nama barunya.
+          if (window.__wwebjsMediaEntryKeys) {
+            langkah.push(
+              `   medan jawaban unggah: ${window.__wwebjsMediaEntryKeys}`,
+            );
+          }
         } catch (e) {
           langkah.push(`2. proses+unggah: GAGAL — ${String(e?.message || e)}`);
 
