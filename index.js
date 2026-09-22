@@ -3101,6 +3101,83 @@ let pernahReady = false;
 // Supaya potret diagnostik hanya diambil sekali per percobaan start.
 let potretMentokDiambil = false;
 
+// =========================================================
+// READY YANG TIDAK PERNAH DATANG
+// =========================================================
+//
+// whatsapp-web.js memancarkan READY HANYA dari satu tempat: callback
+// onAppStateHasSyncedEvent (Client.js, di dalam exposeFunctionIfAbsent).
+// Halaman memanggil callback itu HANYA ketika nilai hasSynced BERUBAH:
+//
+//     Socket.on("change:hasSynced", () => window.onAppStateHasSyncedEvent())
+//
+// dan pendengar itu baru dipasang di baris-baris terakhir inject().
+//
+// Di situlah balapannya. Pada sesi yang dipulihkan dari profil lama,
+// sinkronisasi bisa SUDAH selesai sebelum pendengarnya sempat terpasang.
+// hasSynced terlanjur true dan tidak akan berubah lagi — peristiwanya
+// tidak pernah menyala, dan READY tidak pernah datang meskipun socket
+// tersambung, AuthStore siap, dan WWebJS sudah tersuntik. Persis yang
+// terbaca di diagnostik kita selama ini.
+//
+// Itu juga menjelaskan kenapa menghapus .wwebjs_auth selalu "menyembuhkan":
+// bukan karena sesinya rusak, tapi karena jalur QR memaksa hasSynced
+// berubah false -> true SESUDAH pendengarnya siap.
+//
+// Jadi peristiwanya dipanggil sendiri, sekali, kalau halaman memang sudah
+// sinkron tapi READY tak kunjung datang.
+const JEDA_DORONG_READY_DETIK = 25;
+
+let readySudahDidorong = false;
+
+async function dorongReady() {
+  if (readySudahDidorong || botReady) return;
+
+  readySudahDidorong = true;
+
+  try {
+    const keadaan = await client.pupPage.evaluate(() => {
+      const Socket = window.require("WAWebSocketModel").Socket;
+
+      return {
+        hasSynced: Boolean(Socket?.hasSynced),
+        state: String(Socket?.state || ""),
+        adaPemicu: typeof window.onAppStateHasSyncedEvent === "function",
+      };
+    });
+
+    if (!keadaan.adaPemicu) {
+      console.warn(
+        "[WA] READY belum datang, tapi pemicunya belum terpasang di halaman. " +
+          "Penyuntikan masih berjalan — dibiarkan, watchdog yang menangani.",
+      );
+      return;
+    }
+
+    if (!keadaan.hasSynced) {
+      console.log(
+        `[WA] READY belum datang, halaman memang belum sinkron (socket ${keadaan.state}). Ditunggu.`,
+      );
+      return;
+    }
+
+    console.warn(
+      `[WA] READY belum datang padahal halaman SUDAH sinkron (socket ${keadaan.state}). ` +
+        "Peristiwa sinkronisasinya kemungkinan lewat sebelum pendengarnya terpasang — dipicu sekali dari sini.",
+    );
+
+    logToFile("warn", "DORONG READY", `socket=${keadaan.state} hasSynced=true`);
+
+    // Hanya memancarkan AUTHENTICATED + READY. Aman dipanggil walau
+    // ternyata tidak perlu: pemasangan pendengar di dalamnya sudah
+    // dijaga agar tidak menumpuk (lihat scripts/tambal-wwebjs.js),
+    // dan fungsi ini sendiri hanya berjalan sekali per proses.
+    await client.pupPage.evaluate(() => window.onAppStateHasSyncedEvent());
+  } catch (err) {
+    console.error("[WA] Gagal memicu READY:", err?.message || err);
+  }
+}
+
 // Ambang stuck dibedakan antara start dingin dan start panas.
 //
 // 2 menit tanpa READY sudah cukup untuk menyatakan stuck SELAMA browsernya
@@ -3181,7 +3258,23 @@ async function potretHalamanWA(alasan) {
         // benar-benar selesai, dan yang ditunggu tepat sebelum READY.
         adaWWebJS: typeof window.WWebJS !== "undefined",
         socket: aman(() => window.require("WAWebSocketModel").Socket.state),
-        stream: aman(() => window.require("WAWebSocketModel").Stream.mode),
+
+        // Stream ada di WAWebStreamModel, BUKAN WAWebSocketModel. Salah
+        // modul di sini membuat baris ini selalu berbunyi "gagal: Cannot
+        // read properties of undefined (reading 'mode')" — kesalahan
+        // diagnostiknya sendiri, yang sempat berbulan-bulan disangka
+        // gejala kerusakan WhatsApp.
+        stream: aman(() => window.require("WAWebStreamModel").Stream.mode),
+
+        // Dua baris paling menentukan untuk masalah "tidak pernah READY".
+        // READY hanya dipancarkan dari onAppStateHasSyncedEvent, dan
+        // halaman hanya memanggilnya ketika hasSynced BERUBAH. Kalau di
+        // sini hasSynced sudah true sementara READY tak kunjung datang,
+        // berarti perubahannya terjadi sebelum pendengarnya terpasang.
+        hasSynced: aman(() =>
+          String(window.require("WAWebSocketModel").Socket.hasSynced),
+        ),
+        pemicuReady: aman(() => typeof window.onAppStateHasSyncedEvent),
       };
     });
 
@@ -3191,6 +3284,7 @@ async function potretHalamanWA(alasan) {
         `  judul    : ${info.judul}\n` +
         `  socket   : ${info.socket}\n` +
         `  stream   : ${info.stream}\n` +
+        `  hasSynced: ${info.hasSynced} | pemicu READY: ${info.pemicuReady}\n` +
         `  require  : ${info.adaRequire} | AuthStore: ${info.adaAuthStore} | WWebJS: ${info.adaWWebJS}\n` +
         `  di layar : ${info.teks || "(kosong)"}`,
     );
@@ -3198,7 +3292,8 @@ async function potretHalamanWA(alasan) {
     logToFile(
       "error",
       "DIAGNOSTIK",
-      `socket=${info.socket} stream=${info.stream} judul=${info.judul} teks=${info.teks}`,
+      `socket=${info.socket} stream=${info.stream} hasSynced=${info.hasSynced} ` +
+        `pemicuReady=${info.pemicuReady} judul=${info.judul} teks=${info.teks}`,
     );
 
     await ensureDirAsync(LOGS_DIR);
@@ -3225,6 +3320,7 @@ async function startClient(alasan = "startup") {
   authStartTime = Date.now();
   botReady = false;
   potretMentokDiambil = false;
+  readySudahDidorong = false;
 
   // Perawatan profil sebelum Chromium dinyalakan. Keduanya tidak pernah
   // menyentuh sesi WhatsApp — lihat features/profilWA.js.
@@ -3415,6 +3511,12 @@ setInterval(() => {
   // hanya untuk tahu apa yang salah terlalu mahal ketika sedang
   // menelusuri masalah — dan pada detik ke-90 start yang sehat sudah
   // lama selesai.
+  // Dicoba jauh sebelum potret dan watchdog: kalau dugaannya benar,
+  // botnya pulih dalam hitungan detik dan tidak perlu restart sama sekali.
+  if (!readySudahDidorong && elapsed > JEDA_DORONG_READY_DETIK) {
+    dorongReady().catch(() => {});
+  }
+
   if (!potretMentokDiambil && elapsed > 90) {
     potretMentokDiambil = true;
 
