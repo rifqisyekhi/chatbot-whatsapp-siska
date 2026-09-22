@@ -270,6 +270,98 @@ async function startApp() {
 // Dengan kunci cadangan, antrian tetap terdaftar sehingga balasan polos
 // ("1"/"2") bekerja. Quote reply juga tetap bisa: pencocokannya jatuh ke
 // perbandingan isi pesan yang dikutip (lihat handler approval).
+// =========================================================
+// MEMBACA PESAN YANG DIKUTIP TANPA MEMANGGIL HALAMAN
+// =========================================================
+//
+// message.getQuotedMessage() mencari model pesan DI DALAM halaman
+// WhatsApp (Msg.get / getQuotedMsgObj / getMessageModel). Pencarian
+// itu sedang tidak bisa diandalkan — lihat "[APPROVAL] Gagal membaca
+// pesan yang dikutip" di log, keluarga masalah yang sama dengan
+// pengiriman media yang rusak sejak 18 September 2026.
+//
+// Padahal datanya tidak perlu dicari: WhatsApp sudah menyertakan
+// salinan pesan yang dikutip di dalam payload pesan yang masuk.
+// Dibaca dari sana, tidak ada yang bisa gagal.
+function kutipanDariPesan(message) {
+  const data = message?._data || {};
+  const kutipan = data.quotedMsg || {};
+
+  const idMentah =
+    data.quotedStanzaID ||
+    (typeof kutipan.id === "string" ? kutipan.id : kutipan.id?._serialized) ||
+    "";
+
+  const idKandidat = [];
+
+  if (idMentah) {
+    idKandidat.push(idMentah);
+
+    // quotedStanzaID hanya bagian id-nya, sedangkan kunci antrian
+    // memakai bentuk lengkap "true_<chat>_<id>". Disusun ulang di
+    // sini supaya keduanya bisa dicoba.
+    if (!idMentah.includes("_") && message?.from) {
+      idKandidat.push(`true_${message.from}_${idMentah}`);
+    }
+  }
+
+  return {
+    idKandidat,
+    isi: String(kutipan.body || kutipan.caption || "").trim(),
+  };
+}
+
+// Panjang minimal untuk pencocokan awalan. Pesan pengajuan diawali
+// kalimat yang sama untuk semua orang ("*Pengajuan Persediaan Barang*
+// dari ..."), jadi potongan pendek bisa cocok ke pengajuan milik
+// orang lain. 60 huruf sudah melewati nama pemohon.
+const MIN_AWALAN_KUTIPAN = 60;
+
+// Mencari antrian yang teks pesannya sama dengan isi kutipan.
+//
+// Dipakai karena kunci antrian sering berupa kunci cadangan tanpa id
+// pesan (lihat idPesanAtauCadangan), sehingga pencocokan lewat id
+// mustahil. Mengembalikan null kalau tidak ada yang cocok ATAU kalau
+// yang cocok lebih dari satu — menebak di antara dua pengajuan jauh
+// lebih berbahaya daripada meminta atasan mengulang.
+function cariAntrianDariIsi(isiKutipan) {
+  if (!isiKutipan) return null;
+
+  const semua = [
+    ...Object.entries(pengajuanByAtasanMsgId).map(([qid, data]) => ({
+      qid,
+      data,
+      jenis: "atasan",
+    })),
+    ...Object.entries(orderGudangMsgId).map(([qid, data]) => ({
+      qid,
+      data,
+      jenis: "gudang",
+    })),
+  ].filter((e) => String(e.data?.teksPesan || "").trim());
+
+  const persis = semua.filter(
+    (e) => String(e.data.teksPesan).trim() === isiKutipan,
+  );
+
+  if (persis.length === 1) return persis[0];
+
+  // WhatsApp memotong isi pesan yang dikutip kalau panjang, jadi
+  // kecocokan awalan tetap diterima — asalkan potongannya cukup
+  // panjang untuk memastikan hanya satu pengajuan yang cocok.
+  if (!persis.length && isiKutipan.length >= MIN_AWALAN_KUTIPAN) {
+    const awalan = semua.filter((e) => {
+      const teks = String(e.data.teksPesan).trim();
+
+      return teks.startsWith(isiKutipan) || isiKutipan.startsWith(teks);
+    });
+
+    if (awalan.length === 1) return awalan[0];
+  }
+
+  return null;
+}
+
 function idPesanAtauCadangan(sent, tipe) {
   const id = sent?.id?._serialized;
   if (id) return id;
@@ -4038,6 +4130,44 @@ client.on("message", async (message) => {
     let orderGudang = null;
 
     if (message.hasQuotedMsg) {
+      // ---- Jalur 1: dari payload pesan masuk, tanpa memanggil halaman ----
+      //
+      // Didahulukan karena inilah satu-satunya jalur yang tidak bisa
+      // gagal: datanya sudah ada di tangan, tidak perlu dicari.
+      const kutipan = kutipanDariPesan(message);
+
+      for (const kunci of kutipan.idKandidat) {
+        if (pengajuanByAtasanMsgId[kunci]) {
+          qid = kunci;
+          pengajuan = pengajuanByAtasanMsgId[kunci];
+          break;
+        }
+
+        if (orderGudangMsgId[kunci]) {
+          qid = kunci;
+          orderGudang = orderGudangMsgId[kunci];
+          break;
+        }
+      }
+
+      if (!pengajuan && !orderGudang) {
+        const cocok = cariAntrianDariIsi(kutipan.isi);
+
+        if (cocok) {
+          qid = cocok.qid;
+
+          if (cocok.jenis === "atasan") pengajuan = cocok.data;
+          else orderGudang = cocok.data;
+
+          console.log(
+            `[APPROVAL] Kutipan dikenali dari payload -> antrian ${cocok.jenis} ${qid}.`,
+          );
+        }
+      }
+    }
+
+    // ---- Jalur 2: bertanya ke halaman, hanya kalau jalur 1 buntu ----
+    if (message.hasQuotedMsg && !pengajuan && !orderGudang) {
       try {
         const quoted = await message.getQuotedMessage();
         qid = quoted.id._serialized;
