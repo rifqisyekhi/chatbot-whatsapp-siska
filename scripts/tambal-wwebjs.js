@@ -44,6 +44,33 @@ const path = require("path");
 
 const AKAR = path.join(__dirname, "..", "node_modules", "whatsapp-web.js", "src");
 
+// =========================================================
+// TAMBALAN YANG DIBATALKAN
+// =========================================================
+//
+// 18–21 September 2026 saya menduga kegagalan pengiriman media berasal
+// dari mediaEntry.mmsUrl yang kosong, lalu memasang pemilih URL di
+// Injected/Utils.js. Dugaan itu KELIRU — penyebab sebenarnya adalah
+// tabrakan properti id (lihat tambalan "id pesan" di bawah).
+//
+// Tambalan itu harus dicabut, bukan sekadar ditinggalkan: begitu bug
+// aslinya sembuh, pemilih URL itu bisa mengisi clientUrl dengan alamat
+// yang salah — berkasnya terkirim tapi gagal dibuka penerimanya.
+//
+// Dicabut otomatis karena mesin yang sudah terlanjur memasangnya tidak
+// akan tersentuh tambalan baru: skrip ini melewati berkas yang
+// penandanya sudah ada.
+const PEMBATALAN = [
+  {
+    nama: "Injected/Utils.js — cabut pemilih URL unggah (dugaan yang keliru)",
+    berkas: path.join(AKAR, "util", "Injected", "Utils.js"),
+    penanda: "__wwebjsMediaEntryKeys",
+    awal: "            // TAMBALAN — SELURUH PENGIRIMAN MEDIA GAGAL.",
+    akhir: "            })(),",
+    ganti: "            clientUrl: mediaEntry.mmsUrl,",
+  },
+];
+
 // CATATAN PENTING — tambalan yang SENGAJA TIDAK dipakai.
 //
 // PR #5755 juga menambahkan `window.Store` ke pemeriksaan penyuntikan
@@ -102,70 +129,85 @@ const TAMBALAN = [
     penanda: "already exists",
   },
   {
-    nama: "Injected/Utils.js — URL media hasil unggah tidak lagi bernama mmsUrl",
+    nama: "Injected/Utils.js — id pesan media tidak lagi ditimpa model MobX",
     berkas: path.join(AKAR, "util", "Injected", "Utils.js"),
-    cari: "            clientUrl: mediaEntry.mmsUrl,",
-    ganti: [
-      "            // TAMBALAN — SELURUH PENGIRIMAN MEDIA GAGAL.",
-      "            //",
-      "            // Sejak 18 September 2026, semua pengiriman media dari bot",
-      "            // gagal dengan pesan yang menyesatkan:",
-      "            //   'Data passed to getter must include an id property",
-      "            //    (it's how we memoize) but got undefined'",
-      "            //",
-      "            // Ditelusuri bertahap di dalam halaman: penyiapan dan",
-      "            // penghitungan filehash normal, unggahnya pun berhasil",
-      "            // (mediaKey terisi), tetapi clientUrl KOSONG. WhatsApp",
-      "            // mengubah bentuk jawaban unggahnya — mediaEntry.mmsUrl",
-      "            // sudah tidak ada lagi. Pesan media tanpa clientUrl gagal",
-      "            // saat modelnya dibentuk (stack menunjuk Model.initialize),",
-      "            // dan error memoize itulah yang muncul ke permukaan.",
-      "            //",
-      "            // Diambil medan pertama yang benar-benar berisi URL, apa pun",
-      "            // namanya sekarang — sengaja tidak mengunci satu nama baru,",
-      "            // karena nama itu bisa berubah lagi.",
-      "            clientUrl: (function () {",
-      "                var e = mediaEntry || {};",
+    cari: [
+      "            ...extraOptions,",
+      "        };",
       "",
-      "                // Dititipkan ke halaman supaya diagnosa di index.js bisa",
-      "                // melaporkan nama-nama medan yang sebenarnya dikirim",
-      "                // WhatsApp, tanpa perlu menebak lagi.",
-      "                window.__wwebjsMediaEntryKeys = Object.keys(e).join(', ');",
-      "",
-      "                var urut = [",
-      "                    e.mmsUrl,",
-      "                    e.url,",
-      "                    e.clientUrl,",
-      "                    e.downloadUrl,",
-      "                    e.mmsDownloadUrl,",
-      "                ];",
-      "",
-      "                for (var i = 0; i < urut.length; i++) {",
-      "                    if (typeof urut[i] === 'string' && urut[i]) return urut[i];",
-      "                }",
-      "",
-      "                var kunci = Object.keys(e);",
-      "",
-      "                for (var j = 0; j < kunci.length; j++) {",
-      "                    var nilai = e[kunci[j]];",
-      "",
-      "                    if (typeof nilai === 'string' && nilai.indexOf('http') === 0) {",
-      "                        return nilai;",
-      "                    }",
-      "                }",
-      "",
-      "                return undefined;",
-      "            })(),",
+      "        // Bot's won't reply if canonicalUrl is set (linking)",
     ].join("\n"),
-    penanda: "__wwebjsMediaEntryKeys",
+    ganti: [
+      "            ...extraOptions,",
+      "        };",
+      "",
+      "        // TAMBALAN — SEMUA PENGIRIMAN MEDIA GAGAL SEJAK 18 SEPTEMBER 2026.",
+      "        //",
+      "        // mediaOptions adalah model MobX (MediaData). Menyebarnya ke dalam",
+      "        // objek message ikut membawa properti internalnya — __x_id, dan",
+      "        // pada build WhatsApp yang baru juga id — sehingga message.id yang",
+      "        // seharusnya berisi newMsgKey (sebuah MsgKey) tertimpa id milik",
+      "        // model media.",
+      "        //",
+      "        // Akibatnya getValidatedSender() gagal saat Msg diinisialisasi, dan",
+      "        // yang muncul ke permukaan hanya pesan yang tidak menjelaskan apa",
+      "        // pun: 'Data passed to getter must include an id property",
+      "        // (it's how we memoize) but got undefined'.",
+      "        //",
+      "        // Hanya pesan bermedia yang kena — foto absensi, PDF laporan WFH,",
+      "        // PDF serah terima barang. Pesan teks tidak menyebar mediaOptions",
+      "        // sama sekali, itu sebabnya balasan bot tetap normal.",
+      "        //",
+      "        // Sumber: wwebjs/whatsapp-web.js#201922, PR #201923 dan #201924.",
+      "        // Keduanya masih TERBUKA — belum ada rilis npm yang memuatnya,",
+      "        // jadi tambalan ini masih dibutuhkan. Hapus begitu versi barunya",
+      "        // rilis.",
+      "        delete message.__x_id;",
+      "        message.id = newMsgKey;",
+      "",
+      "        // Bot's won't reply if canonicalUrl is set (linking)",
+    ].join("\n"),
+    penanda: "delete message.__x_id;",
   },
 ];
+
+// Mencabut tambalan yang terbukti salah. Dijalankan lebih dulu supaya
+// berkas pustaka kembali ke bentuk yang dikenali tambalan berikutnya.
+function jalankanPembatalan() {
+  for (const p of PEMBATALAN) {
+    if (!fs.existsSync(p.berkas)) continue;
+
+    const isi = fs.readFileSync(p.berkas, "utf8");
+
+    if (!isi.includes(p.penanda)) continue;
+
+    const mulai = isi.indexOf(p.awal);
+    const habis = mulai === -1 ? -1 : isi.indexOf(p.akhir, mulai);
+
+    if (mulai === -1 || habis === -1) {
+      console.warn(
+        `[TAMBAL] DILEWATI pembatalan: ${p.nama}\n` +
+          "         Penandanya ada tapi bloknya tidak utuh. Periksa manual.",
+      );
+      continue;
+    }
+
+    fs.writeFileSync(
+      p.berkas,
+      isi.slice(0, mulai) + p.ganti + isi.slice(habis + p.akhir.length),
+    );
+
+    console.log(`[TAMBAL] Dibatalkan: ${p.nama}`);
+  }
+}
 
 function main() {
   if (!fs.existsSync(AKAR)) {
     console.warn("[TAMBAL] whatsapp-web.js belum terpasang, dilewati.");
     return;
   }
+
+  jalankanPembatalan();
 
   for (const t of TAMBALAN) {
     if (!fs.existsSync(t.berkas)) {

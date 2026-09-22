@@ -20,6 +20,7 @@ const {
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
 const profilWA = require("./features/profilWA");
+const diagnosaMedia = require("./features/diagnosaMedia");
 const {
   HELPDESK_GROUP_ID,
   FORM_CUTI_URL,
@@ -1839,144 +1840,6 @@ const BATAS_FOTO_BASE64 = 9 * 1024 * 1024;
 const KINERJA_MIN = 10;
 const KINERJA_MAX = 100;
 
-// Menanyai WhatsApp Web langsung kenapa fotonya ditolak.
-//
-// Pesan yang sampai ke Node ("Data passed to getter must include
-// an id property") menyesatkan: itu error memoize milik WhatsApp
-// yang muncul karena prepRawMedia mengembalikan data tanpa
-// filehash, lalu getOrCreateMediaObject(undefined) dipanggil satu
-// baris SEBELUM pustakanya sempat memeriksa filehash itu sendiri.
-//
-// Fungsi ini mengulang langkah-langkah yang sama di dalam halaman
-// dan melaporkan apa adanya, supaya kejadian berikutnya tidak
-// perlu ditebak lagi.
-// Uji kirim ke diri sendiri hanya sekali per proses. Sekali saja sudah
-// menjawab pertanyaannya, dan kalau banyak pegawai absen bersamaan
-// jangan sampai chat bot sendiri dibanjiri gambar uji.
-let ujiMediaSudahJalan = false;
-
-async function diagnosaJalurMedia(fotoBase64) {
-  const waSendiri = client.info?.wid?._serialized || "";
-
-  const bolehUji = Boolean(waSendiri) && !ujiMediaSudahJalan;
-
-  if (bolehUji) ujiMediaSudahJalan = true;
-
-  try {
-    return await client.pupPage.evaluate(
-      async (b64, tujuanUji, jalankanUji) => {
-        const langkah = [];
-
-        const mediaInfo = {
-          data: b64,
-          mimetype: "image/jpeg",
-          filename: "uji-geotag.jpg",
-        };
-
-        // ---- Tahap 1: siapkan dan hitung hash ----
-        try {
-          const file = window.WWebJS.mediaInfoToFile(mediaInfo);
-
-          const OpaqueData = window.require("WAWebMediaOpaqueData");
-
-          const opaque = await OpaqueData.createFromData(file, "image/jpeg");
-
-          const data = await window
-            .require("WAWebPrepRawMedia")
-            .prepRawMedia(opaque, {})
-            .waitForPrep();
-
-          langkah.push(
-            `1. siapkan+hash: OK (${file?.size ?? "?"} byte, ` +
-              `${data?.fullWidth}x${data?.fullHeight}, ` +
-              `filehash ${data?.filehash ? "ada" : "KOSONG"})`,
-          );
-        } catch (e) {
-          langkah.push(`1. siapkan+hash: GAGAL — ${String(e?.message || e)}`);
-
-          return { gagalDi: "penyiapan media", langkah };
-        }
-
-        // ---- Tahap 2: proses penuh, termasuk unggah ke server WhatsApp ----
-        try {
-          const hasil = await window.WWebJS.processMediaData(mediaInfo, {});
-
-          langkah.push(
-            `2. proses+unggah: OK (clientUrl ${
-              hasil?.clientUrl ? "ada" : "KOSONG"
-            }, mediaKey ${hasil?.mediaKey ? "ada" : "KOSONG"})`,
-          );
-
-          // Diisi oleh tambalan di scripts/tambal-wwebjs.js. Inilah
-          // nama-nama medan yang benar-benar dikirim WhatsApp pada
-          // jawaban unggahnya — kalau clientUrl masih kosong, daftar
-          // ini yang menunjukkan nama barunya.
-          if (window.__wwebjsMediaEntryKeys) {
-            langkah.push(
-              `   medan jawaban unggah: ${window.__wwebjsMediaEntryKeys}`,
-            );
-          }
-        } catch (e) {
-          langkah.push(`2. proses+unggah: GAGAL — ${String(e?.message || e)}`);
-
-          return { gagalDi: "unggah media ke server WhatsApp", langkah };
-        }
-
-        // ---- Tahap 3: benarkah SEMUA media gagal? ----
-        //
-        // Gambar 1x1 yang dibuat sendiri dikirim ke chat bot sendiri.
-        // Kalau yang ini pun gagal, masalahnya bukan pada foto absensi
-        // melainkan pada seluruh jalur pengiriman media.
-        if (!jalankanUji) {
-          langkah.push("3. uji kirim: dilewati (sudah pernah dijalankan)");
-        } else {
-          try {
-            const kanvas = document.createElement("canvas");
-
-            kanvas.width = 1;
-            kanvas.height = 1;
-            kanvas.getContext("2d").fillRect(0, 0, 1, 1);
-
-            const chat = await window.WWebJS.getChat(tujuanUji, {
-              getAsModel: false,
-            });
-
-            if (!chat) {
-              langkah.push("3. uji kirim: chat bot sendiri tidak ditemukan");
-            } else {
-              await window.WWebJS.sendMessage(chat, "", {
-                media: {
-                  mimetype: "image/jpeg",
-                  data: kanvas.toDataURL("image/jpeg").split(",")[1],
-                  filename: "uji.jpg",
-                },
-                caption: "uji kirim media (otomatis)",
-              });
-
-              langkah.push(
-                "3. uji kirim gambar 1x1 ke diri sendiri: BERHASIL — " +
-                  "jalur medianya sehat, yang ditolak foto absensinya",
-              );
-            }
-          } catch (e) {
-            langkah.push(
-              "3. uji kirim gambar 1x1 ke diri sendiri: GAGAL — " +
-                `${String(e?.message || e)} — SELURUH pengiriman media sedang rusak`,
-            );
-          }
-        }
-
-        return { gagalDi: "pengiriman pesannya, sesudah media terunggah", langkah };
-      },
-      fotoBase64,
-      waSendiri,
-      bolehUji,
-    );
-  } catch (e) {
-    return { gagalDi: "tidak bisa diperiksa", pesan: String(e?.message || e) };
-  }
-}
-
 // =========================================================
 // KIRIM FOTO BERCAP GEOTAG
 // =========================================================
@@ -2071,17 +1934,7 @@ async function kirimFotoGeotag(chatId, fotoBase64, caption) {
     }
   }
 
-  const diagnosa = await diagnosaJalurMedia(fotoBase64);
-
-  console.error(`[FOTO GEOTAG] Diagnosa — gagal di: ${diagnosa.gagalDi}`);
-
-  for (const baris of diagnosa.langkah || []) {
-    console.error(`[FOTO GEOTAG]   ${baris}`);
-  }
-
-  if (diagnosa.pesan) {
-    console.error(`[FOTO GEOTAG]   ${diagnosa.pesan}`);
-  }
+  await diagnosaMedia.diagnosaDanCetak(client, "[FOTO GEOTAG]", fotoBase64);
 
   throw galatTerakhir;
 }
@@ -3401,6 +3254,12 @@ async function startClient(alasan = "startup") {
   } catch (err) {
     console.error("[PROFIL WA] Perawatan profil dilewati:", err?.message || err);
   }
+
+  // Tambalan pustaka ada di dalam node_modules, dan `git pull` tidak
+  // pernah menyentuh folder itu. Statusnya dicetak di sini supaya
+  // ketinggalan menjalankannya langsung kelihatan di log, bukan baru
+  // ketahuan lewat foto dan PDF yang diam-diam tidak pernah sampai.
+  diagnosaMedia.periksaTambalanPustaka();
 
   console.log(`[WA] Menyalakan client (${alasan})...`);
   try {

@@ -5,6 +5,7 @@ const fsPromises = require("fs").promises;
 const path = require("path");
 const { imageSize } = require("image-size");
 const axios = require("axios");
+const diagnosaMedia = require("./diagnosaMedia");
 
 const REPORTS_DIR = path.join(__dirname, "..", "reports");
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
@@ -627,6 +628,11 @@ async function buatLaporanWFAAsync(data, chatId, client) {
             });
           } catch(e) {
              console.error("❌ Gagal kirim WFH ke user:", e);
+
+             // Laporkan tahap mana yang sebenarnya gagal. Tanpa ini,
+             // jalur PDF hanya meninggalkan pesan memoize yang tidak
+             // menjelaskan apa pun.
+             await diagnosaMedia.diagnosaDanCetak(client, "[PDF WFH]");
 
              // Jangan diam saja. Tanpa kabar, pegawai menyangka
              // laporannya sudah terkirim dan baru sadar berhari-hari
@@ -1504,6 +1510,8 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
             });
           } catch(e) {
              console.error("❌ Gagal kirim PDF Permintaan Barang ke user:", e);
+
+             await diagnosaMedia.diagnosaDanCetak(client, "[PDF BARANG]");
 
              try {
                await client.sendMessage(
