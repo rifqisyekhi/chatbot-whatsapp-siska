@@ -21,6 +21,7 @@ const {
 const absensiNonASN = require("./features/absensi");
 const profilWA = require("./features/profilWA");
 const diagnosaMedia = require("./features/diagnosaMedia");
+const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
 const {
   HELPDESK_GROUP_ID,
   FORM_CUTI_URL,
@@ -1827,6 +1828,44 @@ async function downloadMediaWithRetry(message, maxRetries = 1, delayMs = 2000) {
       }
       if (hasil && hasil.err) lastErr = new Error(hasil.err);
     } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  // Jalur terakhir: ambil sendiri dari CDN, dekripsi di Node.
+  //
+  // Dipakai ketika WhatsApp Web-lah yang menolak, bukan medianya
+  // yang rusak — misalnya "Unexpected mimetype application/
+  // octet-stream for media type image", penolakan validator yang
+  // membuat semua jalur di atas gagal sekaligus karena semuanya
+  // memanggil downloadAndMaybeDecrypt yang sama.
+  //
+  // Ditaruh paling akhir, bukan paling depan: jalur di atas
+  // memakai media yang mungkin sudah ada di memori halaman,
+  // sedangkan jalur ini selalu mengunduh ulang dari jaringan.
+  if (msgId) {
+    try {
+      const hasil = await unduhMediaLangsung(waClient, msgId);
+
+      if (hasil && hasil.data) {
+        console.log(
+          `[MEDIA] Berhasil via "${hasil.via}" ` +
+            `(${hasil.filesize} byte, ${hasil.mimetype})`,
+        );
+
+        return new MessageMedia(
+          hasil.mimetype || "image/jpeg",
+          hasil.data,
+          hasil.filename,
+          hasil.filesize,
+        );
+      }
+    } catch (err) {
+      console.error(
+        "[MEDIA] Jalur CDN langsung gagal:",
+        err?.message || err,
+      );
+
       lastErr = err;
     }
   }
