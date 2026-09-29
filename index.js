@@ -19,6 +19,7 @@ const {
   calculateDuration,
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
+const pengingatGajihub = require("./features/pengingatGajihub");
 const profilWA = require("./features/profilWA");
 const diagnosaMedia = require("./features/diagnosaMedia");
 const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
@@ -3672,6 +3673,13 @@ client.on("ready", async () => {
   // Aman dipanggil berulang — penjaga di dalamnya mencegah
   // timer kedua saat sesi WhatsApp pulih dan READY terpicu lagi.
   mulaiPengingatPulang();
+
+  // Pengingat absen ASN ke grup unit, bahannya dari Gajihub.
+  // Fungsi kirimnya DISUNTIKKAN, bukan di-require dari sana: modul di
+  // features/ tidak boleh me-require index.js (melingkar).
+  pengingatGajihub.mulaiPengingatGajihub({
+    kirim: (chatId, teks) => kirimDenganTyping(client, chatId, teks),
+  });
 
   try {
     const version = await client.getWWebVersion();
