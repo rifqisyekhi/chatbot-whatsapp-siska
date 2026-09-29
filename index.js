@@ -22,6 +22,7 @@ const absensiNonASN = require("./features/absensi");
 const profilWA = require("./features/profilWA");
 const diagnosaMedia = require("./features/diagnosaMedia");
 const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
+const penyimpananLaporan = require("./features/penyimpananLaporan");
 const {
   HELPDESK_GROUP_ID,
   FORM_CUTI_URL,
@@ -1488,9 +1489,11 @@ const NOMOR_UJI = String(process.env.NOMOR_UJI || "6285156417757").replace(
 // Kalau tidak diisi, fotonya dilewati dan dilaporkan apa adanya.
 const PRESENSI_UPLOAD_DIR = process.env.PRESENSI_UPLOAD_DIR || "";
 
-// Folder PDF laporan lembur — sama dengan REPORTS_DIR di
-// features/pdf_generator.js, yang tidak diekspor.
-const REPORTS_DIR = path.join(__dirname, "reports");
+// Akar folder laporan. PDF baru tidak lagi mendarat di sini
+// langsung — penyimpananLaporan menaruhnya di reports/<jenis>/
+// <nama pegawai>/ — tapi berkas yang dibuat sebelum struktur itu
+// ada masih tergeletak datar di sini.
+const REPORTS_DIR = penyimpananLaporan.AKAR_LAPORAN;
 
 // Menyalin aturan nama folder di backend (utils/simpanFoto.js).
 function amankanNamaFolder(value) {
@@ -1507,10 +1510,16 @@ async function hapusBerkasBerawalan(dir, cocok) {
   let jumlah = 0;
 
   try {
-    for (const nama of await fsPromises.readdir(dir)) {
-      if (!cocok(nama)) continue;
+    // withFileTypes supaya FOLDER dilewati. Sejak PDF laporan
+    // disusun per jenis, isi reports/ tidak lagi hanya berkas —
+    // ada lembur/, kendaraan/, laporan-wfh/, dan seterusnya. Tanpa
+    // penjagaan ini, satu nama folder yang kebetulan cocok akan
+    // membuat fs.rm melempar EISDIR dan menggagalkan seluruh
+    // pembersihan.
+    for (const isi of await fsPromises.readdir(dir, { withFileTypes: true })) {
+      if (!isi.isFile() || !cocok(isi.name)) continue;
 
-      await fsPromises.rm(path.join(dir, nama), { force: true });
+      await fsPromises.rm(path.join(dir, isi.name), { force: true });
       jumlah++;
     }
   } catch (err) {
@@ -1569,8 +1578,21 @@ async function resetDataUji(chatId) {
   const sisaFoto = await hapusBerkasBerawalan(UPLOADS_DIR, (n) =>
     n.startsWith(`foto_${noWa}_`),
   );
+  // PDF laporan sekarang tersimpan per jenis lalu per pegawai
+  // (reports/laporan-wfh/Budi_Santoso/...), jadi cukup membuang
+  // folder orangnya di setiap jenis.
+  //
+  // Cara lama menyisir satu folder datar dan mencocokkan nama
+  // pegawai di dalam nama berkas — itu ikut menghapus laporan
+  // milik "Budi" saat yang dimaksud "Budi Santoso". Pencocokan
+  // nama itu tidak lagi dibutuhkan sama sekali.
+  //
+  // Folder datarnya tetap disisir untuk PDF yang dibuat SEBELUM
+  // struktur ini ada. Berkas lama tidak dipindahkan ke mana pun,
+  // jadi tanpa ini ia akan tertinggal selamanya.
   const pdf = nama
-    ? await hapusBerkasBerawalan(REPORTS_DIR, (n) => n.includes(nama))
+    ? (await penyimpananLaporan.hapusMilik(nama)) +
+      (await hapusBerkasBerawalan(REPORTS_DIR, (n) => n.includes(nama)))
     : 0;
   hasil.push(`${sisaFoto + pdf} berkas di bot`);
 
@@ -1874,24 +1896,27 @@ async function downloadMediaWithRetry(message, maxRetries = 1, delayMs = 2000) {
 }
 
 // VI-D. AMBIL MEDIA TANPA MERUSAK ALUR
+// =========================================================
+// PESAN SAAT FOTO TIDAK BISA MASUK KE SISTEM
+// =========================================================
+
+function pesanFotoMaintenance(keterangan = "") {
+  return (
+    "⚠️ *Sedang maintenance.*\n\n" +
+    "Mohon gunakan *aplikasi photo timestamp biasa*." +
+    (keterangan ? `\n\n${keterangan}` : "")
+  );
+}
+
 async function ambilMediaAman(message, chatId, pesanGagal) {
   try {
     return await downloadMediaWithRetry(message);
   } catch (err) {
-    // Satu kali cetak saja. Sebelumnya objek error DAN stack-nya dicetak
-    // terpisah, jadi satu kegagalan unduh menghasilkan dua tembok jejak
-    // puppeteer yang identik di log. Alurnya sendiri tidak rusak: user
-    // langsung diminta mengirim ulang fotonya.
     console.error(
       "[MEDIA] Gagal total mengunduh media:",
       err?.stack || err?.message || err,
     );
-    await kirimDenganTyping(
-      client,
-      chatId,
-      pesanGagal ||
-        "⚠️ Maaf, foto gagal diunduh dari WhatsApp (koneksi/sinkronisasi bermasalah).\n\nData Anda *tidak hilang*. Silakan *kirim ulang foto tersebut*.",
-    );
+    await kirimDenganTyping(client, chatId, pesanGagal || pesanFotoMaintenance());
     return null;
   }
 }
@@ -5295,7 +5320,7 @@ client.on("message", async (message) => {
         const media = await ambilMediaAman(
           message,
           chatId,
-          `⚠️ Maaf, foto gagal diunduh dari WhatsApp (koneksi/sinkronisasi bermasalah).\n\nData laporan Anda *tidak hilang*. Silakan *kirim ulang Foto Bukti* untuk kegiatan ke-${flow.wfaList.length + 1}.`,
+          pesanFotoMaintenance(),
         );
         await ensureDirAsync(UPLOADS_DIR);
 
@@ -5319,7 +5344,7 @@ client.on("message", async (message) => {
           await kirimDenganTyping(
             client,
             chatId,
-            "⚠️ Bukti foto belum bisa disimpan otomatis saat ini. Silakan kirim ulang foto nanti.",
+            pesanFotoMaintenance(),
           );
           return;
         }
@@ -5349,7 +5374,10 @@ client.on("message", async (message) => {
         const media = await ambilMediaAman(
           message,
           chatId,
-          "⚠️ Maaf, foto tambahan gagal diunduh dari WhatsApp.\n\nSilakan *kirim ulang foto tersebut*, atau ketik *lanjut* untuk melewatinya.",
+          // Satu-satunya langkah yang punya jalan keluar lain.
+          // Tanpa disebut, pegawainya berhenti di sini padahal
+          // laporannya masih bisa diselesaikan.
+          pesanFotoMaintenance("Ketik *lanjut* untuk melewati foto ini."),
         );
         await ensureDirAsync(UPLOADS_DIR);
 

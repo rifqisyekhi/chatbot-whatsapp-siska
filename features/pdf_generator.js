@@ -6,8 +6,8 @@ const path = require("path");
 const { imageSize } = require("image-size");
 const axios = require("axios");
 const diagnosaMedia = require("./diagnosaMedia");
+const penyimpanan = require("./penyimpananLaporan");
 
-const REPORTS_DIR = path.join(__dirname, "..", "reports");
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
 
 async function ensureDirAsync(p) {
@@ -18,13 +18,9 @@ async function ensureDirAsync(p) {
   }
 }
 
-function ensureDir(p) {
-  try {
-    fs.mkdirSync(p, { recursive: true });
-  } catch (err) {
-    if (err.code !== "EEXIST") {}
-  }
-}
+// Versi sinkronnya dibuang bersama pemanggilan terakhirnya: sejak
+// folder laporan disiapkan penyimpananLaporan.siapkanTujuan(),
+// tidak ada lagi yang membuat folder secara sinkron di sini.
 
 function calculateDuration(startStr, endStr) {
   if (!startStr || !endStr || !startStr.includes(":") || !endStr.includes(":"))
@@ -65,7 +61,6 @@ async function getDummySignature(nip) {
 // PDF LEMBUR (Sistem Paksa 1 Halaman & Grup TTD)
 // ==========================================
 async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetAtasan, client) {
-  await ensureDirAsync(REPORTS_DIR);
   await ensureDirAsync(UPLOADS_DIR);
 
   // Tanggal LEMBUR yang dikirim pemanggil, bukan tanggal PDF ini dibuat.
@@ -84,8 +79,15 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
   const labelIdentitas = data.label_identitas || "NIP";
   const nomorIdentitas = data.nip || "-";
 
+  // Tanggal laporan sudah ada di namanya, tapi satu orang bisa
+  // mengajukan lembur dua kali untuk tanggal yang sama — cap waktu
+  // pembuatannya yang memisahkan keduanya.
   const namaFile = `Laporan Lembur_${data.nama}_${nomorIdentitas}_${safeSubstansi}_${tanggalLaporan}.pdf`;
-  const filePath = path.join(REPORTS_DIR, namaFile);
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: "lembur",
+    pemilik: data.nama,
+    namaFile,
+  });
 
   const doc = new PDFDocument({
     margins: { top: 57, bottom: 57, left: 57, right: 57 },
@@ -346,7 +348,6 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
 // PDF WFA / KINERJA HARIAN
 // ==========================================
 async function buatLaporanWFAAsync(data, chatId, client) {
-  await ensureDirAsync(REPORTS_DIR);
   
   const inputTanggal = data.tanggalWFA || "";
   const tanggalId = inputTanggal;
@@ -358,8 +359,17 @@ async function buatLaporanWFAAsync(data, chatId, client) {
   const tanggalTtd = `Jakarta, ${ttdDate}`;
 
   const safeSubstansi = (data.substansi || "TU").replace(/[\/\\]/g, "_");
+
+  // Nama berkas lama sama sekali tidak memuat tanggal, jadi satu
+  // pegawai hanya pernah punya SATU laporan yang tersimpan —
+  // laporan hari ini menimpa laporan kemarin. Inilah kehilangan
+  // yang paling banyak terjadi sebelum ini.
   const namaFile = `${data.nama}_${data.nip}_${safeSubstansi}.pdf`;
-  const filePath = path.join(REPORTS_DIR, namaFile);
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: penyimpanan.jenisLaporanKinerja(data.jenisLaporan),
+    pemilik: data.nama,
+    namaFile,
+  });
 
   const doc = new PDFDocument({ margins: { top: 50, bottom: 50, left: 50, right: 50 } });
   const stream = fs.createWriteStream(filePath);
@@ -673,139 +683,6 @@ async function buatLaporanWFAAsync(data, chatId, client) {
   }
 }
 
-// ==========================================
-// PDF REKAP BULANAN
-// ==========================================
-async function buatPDFRekapBulanan(dataRekap, bulanTahun, chatId, client) {
-  ensureDir(REPORTS_DIR);
-  const timestamp = Date.now();
-  const outputFilename = path.join(REPORTS_DIR, `REKAP_SPK_${bulanTahun.replace(/\s/g, "_")}_${timestamp}.pdf`);
-
-  const doc = new PDFDocument({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 30, right: 30 } });
-  const stream = fs.createWriteStream(outputFilename);
-  doc.pipe(stream);
-
-  const fontDir = path.join(__dirname, "..", "assets", "fonts");
-  try {
-    doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
-    doc.registerFont("TMR-Bold", path.join(fontDir, "times-bold.ttf"));
-    doc.font("TMR");
-  } catch (e) {
-    doc.font("Helvetica");
-  }
-
-  const startY = 30;
-  const leftMargin = 30;
-  doc.fontSize(10);
-  doc.text("Lampiran", leftMargin, startY);
-  doc.text(":", 90, startY);
-  doc.text("Surat Perintah Kerja Lembur Pejabat Pembuat Komitmen", 100, startY);
-  doc.text("Biro Keuangan dan BMN, Biro Keuangan dan BMN Sekretariat Jenderal", 100, startY + 12);
-  doc.text(`Kemnaker Bulan ${bulanTahun}`, 100, startY + 24);
-  doc.text("Nomor", leftMargin, startY + 40);
-  doc.text(": _________________________", 90, startY + 40);
-  doc.text("Tanggal", leftMargin, startY + 54);
-  const tglStr = new Date().toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
-  doc.text(`: ${tglStr}`, 90, startY + 54);
-  doc.moveDown(3);
-  doc.font("TMR-Bold").fontSize(11);
-  doc.text("PEJABAT/PEGAWAI YANG MELAKSANAKAN PERINTAH KERJA LEMBUR", { align: "center" });
-  doc.moveDown(1.5);
-
-  const startX = 30;
-  const colWidths = [30, 180, 40, 140, 110, 240];
-  const headers = ["NO", "NAMA / NIP", "GOL", "JABATAN", `TANGGAL`, "KETERANGAN"];
-
-  function drawHeader(y) {
-    let x = startX;
-    doc.font("TMR-Bold").fontSize(9);
-    headers.forEach((h, i) => {
-      doc.rect(x, y, colWidths[i], 25).stroke();
-      doc.text(h, x, y + 8, { width: colWidths[i], align: "center" });
-      x += colWidths[i];
-    });
-    return y + 25;
-  }
-
-  let currentY = drawHeader(doc.y);
-  doc.font("TMR").fontSize(9);
-
-  for (let i = 0; i < dataRekap.length; i++) {
-    const p = dataRekap[i];
-    const strTanggal = p.tanggal.join(", ");
-    const strKegiatan = p.kegiatan.map((k, idx) => `${idx + 1}. ${k}`).join("\n");
-    const hNama = doc.heightOfString(p.nama, { width: colWidths[1] - 6 });
-    const hNip = doc.heightOfString(`NIP. ${p.nip}`, { width: colWidths[1] - 6 });
-    const hJabatan = doc.heightOfString(p.jabatan, { width: colWidths[3] - 6 });
-    const hKegiatan = doc.heightOfString(strKegiatan, { width: colWidths[5] - 6 });
-    const hTanggal = doc.heightOfString(strTanggal, { width: colWidths[4] - 6 });
-
-    const hColNamaReal = hNama + hNip + 11;
-
-    let rowHeight = Math.max(hColNamaReal, hJabatan, hKegiatan, hTanggal) + 10;
-    if (rowHeight < 40) rowHeight = 40;
-
-    if (currentY + rowHeight > doc.page.height - 50) {
-      doc.addPage({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 30, right: 30 } });
-      currentY = 30;
-      currentY = drawHeader(currentY);
-    }
-
-    let currentX = startX;
-    
-    doc.rect(currentX, currentY, colWidths[0], rowHeight).stroke();
-    const hNo = doc.heightOfString((i + 1).toString(), { width: colWidths[0] });
-    doc.text((i + 1).toString(), currentX, currentY + (rowHeight - hNo) / 2, { width: colWidths[0], align: "center" });
-    currentX += colWidths[0];
-
-    doc.rect(currentX, currentY, colWidths[1], rowHeight).stroke();
-    const startY_Col2 = currentY + (rowHeight - hColNamaReal) / 2;
-    doc.font("TMR-Bold").text(p.nama.toUpperCase(), currentX + 3, startY_Col2, { width: colWidths[1] - 6, align: "left" });
-    const lineY = startY_Col2 + hNama + 8;
-    doc.moveTo(currentX, lineY).lineTo(currentX + colWidths[1], lineY).stroke();
-    doc.font("TMR").text(p.nip, currentX + 3, lineY + 3, { width: colWidths[1] - 6, align: "left" });
-    currentX += colWidths[1];
-
-    doc.rect(currentX, currentY, colWidths[2], rowHeight).stroke();
-    const hGol = doc.heightOfString(p.gol, { width: colWidths[2] });
-    doc.text(p.gol, currentX, currentY + (rowHeight - hGol) / 2, { width: colWidths[2], align: "center" });
-    currentX += colWidths[2];
-
-    doc.rect(currentX, currentY, colWidths[3], rowHeight).stroke();
-    doc.text(p.jabatan, currentX + 3, currentY + (rowHeight - hJabatan) / 2, { width: colWidths[3] - 6, align: "center" });
-    currentX += colWidths[3];
-
-    doc.rect(currentX, currentY, colWidths[4], rowHeight).stroke();
-    doc.text(strTanggal, currentX + 3, currentY + (rowHeight - hTanggal) / 2, { width: colWidths[4] - 6, align: "center" });
-    currentX += colWidths[4];
-
-    doc.rect(currentX, currentY, colWidths[5], rowHeight).stroke();
-    doc.text(strKegiatan, currentX + 3, currentY + (rowHeight - hKegiatan) / 2, { width: colWidths[5] - 6, align: "left" });
-    currentX += colWidths[5];
-
-    currentY += rowHeight;
-  }
-
-  doc.end();
-
-  return new Promise((resolve, reject) => {
-    stream.on("finish", async () => {
-      try {
-        const media = MessageMedia.fromFilePath(outputFilename);
-        
-        try {
-          await client.sendMessage(chatId, media, { caption: `Berikut Rekap SPK Lembur (Format Dinas) bulan ${bulanTahun}` });
-        } catch(e) { console.error("Gagal kirim rekap bulanan:", e); }
-        
-        resolve();
-      } catch (e) {
-        reject(e);
-      }
-    });
-    stream.on("error", reject);
-  });
-}
-
 function extractDateTime(dateStr) {
   if (!dateStr) return { tgl: "-", jam: "-" };
   
@@ -829,11 +706,16 @@ function extractDateTime(dateStr) {
 // PDF SURAT IZIN MOBIL (AWAL / PINJAM)
 // ==========================================
 async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
-  await ensureDirAsync(REPORTS_DIR);
 
   const tanggalPembuatan = new Date().toISOString().split("T")[0];
+  // Satu orang bisa memakai kendaraan dua kali dalam sehari, dan
+  // tanggalPembuatan hanya sampai tanggal.
   const namaFile = `${data.pemakai.nama}_${data.pemakai.nip}_Surat Izin Pemakaian Kendaraan_${tanggalPembuatan}.pdf`;
-  const filePath = path.join(REPORTS_DIR, namaFile);
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: "kendaraan",
+    pemilik: data.pemakai.nama,
+    namaFile,
+  });
 
   const cm = 28.3465;
 
@@ -1039,11 +921,14 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
 // PDF SURAT IZIN MOBIL (AKHIR / KEMBALI)
 // ==========================================
 async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
-  await ensureDirAsync(REPORTS_DIR);
 
   const tanggalPembuatan = new Date().toISOString().split("T")[0];
   const namaFile = `${data.pemakai.nama}_${data.pemakai.nip}_Log Pengembalian Kendaraan_${tanggalPembuatan}.pdf`;
-  const filePath = path.join(REPORTS_DIR, namaFile);
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: "kendaraan",
+    pemilik: data.pemakai.nama,
+    namaFile,
+  });
 
   const cm = 28.3465;
 
@@ -1305,13 +1190,25 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
 // PDF SERAH TERIMA BARANG PERSEDIAAN
 // ==========================================
 async function buatSuratPermintaanBarangAsync(data, chatId, client) {
-  await ensureDirAsync(REPORTS_DIR);
 
   // Bikin format file name
   const tanggalPembuatan = new Date().toISOString().split("T")[0];
   const safeBidang = (data.bidang || "UMUM").replace(/[\/\\]/g, "_");
+
+  // Disimpan atas nama PEMOHON, bukan bidangnya: surat ini yang
+  // dipegang orang itu sebagai bukti peminjaman, dan yang mencari
+  // berkasnya nanti mencari dengan namanya sendiri. Nama bidang
+  // tetap ada di dalam nama berkas.
+  //
+  // Satu orang bisa meminta barang beberapa kali sehari, sementara
+  // tanggalPembuatan hanya sampai tanggal — cap waktu dari
+  // siapkanTujuan yang memisahkannya.
   const namaFile = `Serah_Terima_Barang_${safeBidang}_${tanggalPembuatan}.pdf`;
-  const filePath = path.join(REPORTS_DIR, namaFile);
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: "barang",
+    pemilik: data.pemohon?.nama,
+    namaFile,
+  });
 
   const cm = 28.3465;
 
@@ -1539,7 +1436,6 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
-  buatPDFRekapBulanan,
   buatSuratIzinMobilAwalAsync,
   buatSuratIzinMobilAkhirAsync,
   buatSuratPermintaanBarangAsync,
