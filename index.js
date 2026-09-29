@@ -1627,10 +1627,30 @@ async function downloadMediaViaStore(waClient, msgId) {
       return blob && blob.size > 0 ? blob : null;
     };
 
+    // Sejak 1.34.x pustaka TIDAK LAGI membangun window.Store —
+    // seluruh src-nya memakai window.require(...) langsung. Kode
+    // ini dulu memanggil window.Store.Msg, jadi baris pertamanya
+    // selalu melempar TypeError dan ketiga jalur di bawahnya tidak
+    // pernah sempat dijalankan. Yang tampak dari luar: fallback
+    // ada di kode tapi tidak pernah menolong satu pun kegagalan.
+    const ambilModul = (nama) => {
+      try {
+        return window.require(nama);
+      } catch (e) {
+        return null;
+      }
+    };
+
+    const Koleksi = ambilModul("WAWebCollections");
+
+    if (!Koleksi || !Koleksi.Msg) {
+      return { err: "Modul WAWebCollections tidak tersedia di halaman" };
+    }
+
     const msg =
-      window.Store.Msg.get(id) ||
-      (await window.Store.Msg.getMessagesById([id]))?.messages?.[0];
-    if (!msg) return { err: "Pesan tidak ditemukan di Store" };
+      Koleksi.Msg.get(id) ||
+      (await Koleksi.Msg.getMessagesById([id]))?.messages?.[0];
+    if (!msg) return { err: "Pesan tidak ditemukan di koleksi WhatsApp Web" };
 
     // --- Jalur 1: blob yang sudah ada di memori ---
     try {
@@ -1687,14 +1707,23 @@ async function downloadMediaViaStore(waClient, msgId) {
         return this;
       },
     };
+    const unduh = (ambilModul("WAWebDownloadManager") || {}).downloadManager;
+
+    if (!unduh || typeof unduh.downloadAndMaybeDecrypt !== "function") {
+      return {
+        err:
+          "Modul WAWebDownloadManager tidak tersedia di halaman " +
+          `(stage=${msg.mediaData && msg.mediaData.mediaStage})`,
+      };
+    }
+
     const sumber = [msg, msg.mediaData || {}];
     let lastErr = null;
 
     for (const src of sumber) {
       if (!src.directPath || !src.mediaKey) continue;
       try {
-        const decrypted =
-          await window.Store.DownloadManager.downloadAndMaybeDecrypt({
+        const decrypted = await unduh.downloadAndMaybeDecrypt({
             directPath: src.directPath,
             encFilehash: src.encFilehash || msg.encFilehash,
             filehash: src.filehash || msg.filehash,
@@ -1724,26 +1753,58 @@ async function downloadMediaViaStore(waClient, msgId) {
       }
     }
 
+    // Kegagalan dekripsi WhatsApp muncul sebagai error terminifikasi
+    // — namanya dan pesannya sama-sama satu huruf, misalnya "t: t",
+    // yang tidak memberi petunjuk apa pun. Karena itu keadaan
+    // medianya ikut dilaporkan: dari sini terbaca apakah yang hilang
+    // adalah kunci dekripsinya, alamat berkasnya, atau medianya
+    // memang sudah kedaluwarsa di server WhatsApp.
+    const ada = (v) => (v ? "ada" : "KOSONG");
+
     return {
-      err: `Semua jalur download gagal (stage=${msg.mediaData && msg.mediaData.mediaStage}, lastErr=${lastErr})`,
+      err:
+        "Semua jalur download gagal " +
+        `(stage=${msg.mediaData && msg.mediaData.mediaStage}, ` +
+        `directPath=${ada(msg.directPath)}, ` +
+        `mediaKey=${ada(msg.mediaKey)}, ` +
+        `encFilehash=${ada(msg.encFilehash)}, ` +
+        `filehash=${ada(msg.filehash)}, ` +
+        `mediaKeyTimestamp=${msg.mediaKeyTimestamp || "KOSONG"}, ` +
+        `type=${msg.type || "-"}, ` +
+        `lastErr=${lastErr})`,
     };
   }, msgId);
 }
 
 // VI-C. DOWNLOAD MEDIA
+
+// Pada sebagian pesan bermedia, message.id tidak punya
+// _serialized — yang ada hanya properti hasil minifikasi
+// WhatsApp. Dibetulkan lebih dulu, lalu id-nya dikembalikan.
+//
+// Urutannya menentukan. Dulu msgId dibaca SEBELUM perbaikan ini
+// dijalankan, jadi pada pesan seperti itu msgId ikut kosong dan
+// seluruh jalur fallback di bawah dilewati tanpa pernah dicoba
+// sekali pun — padahal jalur bawaannya sudah gagal. Yang terlihat
+// di log hanya satu error dari jalur pertama, seolah tidak ada
+// cadangan apa pun.
+function betulkanIdPesan(message) {
+  const id = message?.id;
+
+  if (id && !id._serialized && id["$1"]) {
+    id._serialized = id["$1"];
+  }
+
+  return id?._serialized || "";
+}
+
 async function downloadMediaWithRetry(message, maxRetries = 1, delayMs = 2000) {
   const waClient = message.client || client;
-  const msgId = message.id?._serialized;
+  const msgId = betulkanIdPesan(message);
   let lastErr = null;
 
   // Jalur bawaan whatsapp-web.js (satu kali percobaan)
   try {
-    // 1. TAMBAHKAN PENAMBAL INI SEBELUM DOWNLOAD
-    if (message.id && !message.id._serialized && message.id.$1) {
-      message.id._serialized = message.id.$1;
-    }
-
-    // 2. BARU LAKUKAN DOWNLOAD
     const media = await message.downloadMedia();
     if (media && media.data) return media;
     lastErr = new Error("Media kosong / null dari WhatsApp Web");
