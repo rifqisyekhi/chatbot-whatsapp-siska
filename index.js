@@ -1962,6 +1962,46 @@ const KINERJA_MAX = 100;
 //      rusak adalah jalur gambarnya, cara ini tetap jalan — foto
 //      tetap utuh dan tetap bisa dibuka, hanya tampil sebagai
 //      lampiran berkas.
+// Halaman WhatsApp Web bisa dimuat ulang kapan saja, dan selama
+// penyuntikan ulang belum selesai `window.WWebJS` tidak ada.
+// Setiap pengiriman pada jendela itu gagal dengan pesan yang
+// menyesatkan — "Cannot read properties of undefined (reading
+// 'getChat')" — seolah chat tujuannya yang bermasalah, padahal
+// yang hilang seluruh lapisan penyuntikannya. Baik
+// client.sendMessage maupun client.getChatById memanggil
+// window.WWebJS.getChat, jadi keempat cara kirim di bawah kena
+// sekaligus.
+//
+// Terjadi 29 September 2026: keempat cara gagal berurutan dalam
+// 2,4 detik, lalu diagnosa yang berjalan beberapa detik sesudahnya
+// BERHASIL mengirim gambar uji 1x1 ke diri sendiri. Halamannya
+// memang sudah pulih — hanya belum pulih pada saat dicoba.
+const HALAMAN_BELUM_SIAP = /reading 'getChat'|WWebJS|Execution context/i;
+
+async function tungguWWebJSSiap(batasMs = 20000, jedaMs = 1000) {
+  const batas = Date.now() + batasMs;
+
+  while (Date.now() < batas) {
+    try {
+      const siap = await client.pupPage.evaluate(
+        () =>
+          typeof window.WWebJS !== "undefined" &&
+          typeof window.WWebJS.getChat === "function",
+      );
+
+      if (siap) return true;
+    } catch (err) {
+      // Halaman sedang bernavigasi, jadi konteksnya hancur di
+      // tengah evaluate. Itu justru keadaan yang sedang ditunggu
+      // selesai — bukan alasan berhenti menunggu.
+    }
+
+    await new Promise((r) => setTimeout(r, jedaMs));
+  }
+
+  return false;
+}
+
 async function kirimFotoGeotag(chatId, fotoBase64, caption) {
   const buatMedia = (b64) =>
     new MessageMedia("image/jpeg", b64, "absensi-geotag.jpg");
@@ -2003,34 +2043,63 @@ async function kirimFotoGeotag(chatId, fotoBase64, caption) {
 
   let galatTerakhir = null;
 
-  for (let i = 0; i < caraKirim.length; i++) {
-    const cara = caraKirim[i];
+  const cobaSemuaCara = async (putaran) => {
+    for (let i = 0; i < caraKirim.length; i++) {
+      const cara = caraKirim[i];
 
-    try {
-      await cara.jalankan();
+      try {
+        await cara.jalankan();
 
-      if (i > 0) {
-        console.warn(
-          `[FOTO GEOTAG] Terkirim lewat cara ke-${i + 1} (${cara.nama}).`,
+        if (i > 0 || putaran > 1) {
+          console.warn(
+            `[FOTO GEOTAG] Terkirim lewat cara ke-${i + 1} (${cara.nama})` +
+              (putaran > 1 ? `, putaran ke-${putaran}.` : "."),
+          );
+        }
+
+        // client.sendMessage tidak mencatat apa pun, padahal foto
+        // inilah bukti yang diperiksa petugas — jangan sampai
+        // pengirimannya tidak berjejak di log.
+        logOut(chatId, `[FOTO GEOTAG] ${caption}`);
+        return true;
+      } catch (err) {
+        galatTerakhir = err;
+
+        console.error(
+          `[FOTO GEOTAG] Cara ke-${i + 1} (${cara.nama}) gagal ` +
+            `[${Math.round(fotoBase64.length / 1024)} KB]: ${err?.message || err}`,
         );
+
+        if (i < caraKirim.length - 1) {
+          await new Promise((r) => setTimeout(r, 800));
+        }
       }
+    }
 
-      // client.sendMessage tidak mencatat apa pun, padahal foto
-      // inilah bukti yang diperiksa petugas — jangan sampai
-      // pengirimannya tidak berjejak di log.
-      logOut(chatId, `[FOTO GEOTAG] ${caption}`);
-      return;
-    } catch (err) {
-      galatTerakhir = err;
+    return false;
+  };
 
+  if (await cobaSemuaCara(1)) return;
+
+  // Keempat cara habis dalam hitungan detik. Kalau sebabnya
+  // halaman yang sedang disuntik ulang, mencoba lebih banyak cara
+  // tidak menolong — yang menolong hanya menunggu. Satu putaran
+  // ulang sesudah halamannya siap, tidak lebih: kalau setelah itu
+  // masih gagal, sebabnya bukan lagi soal waktu.
+  if (HALAMAN_BELUM_SIAP.test(String(galatTerakhir?.message || ""))) {
+    console.warn(
+      "[FOTO GEOTAG] window.WWebJS tidak ada — halaman WhatsApp Web " +
+        "sedang disuntik ulang. Menunggu sampai siap, maksimal 20 detik.",
+    );
+
+    if (await tungguWWebJSSiap()) {
+      console.warn("[FOTO GEOTAG] Halaman siap kembali, mencoba sekali lagi.");
+
+      if (await cobaSemuaCara(2)) return;
+    } else {
       console.error(
-        `[FOTO GEOTAG] Cara ke-${i + 1} (${cara.nama}) gagal ` +
-          `[${Math.round(fotoBase64.length / 1024)} KB]: ${err?.message || err}`,
+        "[FOTO GEOTAG] Halaman tidak pulih dalam 20 detik, berhenti mencoba.",
       );
-
-      if (i < caraKirim.length - 1) {
-        await new Promise((r) => setTimeout(r, 800));
-      }
     }
   }
 
