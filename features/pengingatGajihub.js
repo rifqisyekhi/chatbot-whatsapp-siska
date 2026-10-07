@@ -125,15 +125,25 @@ const GAJIHUB_GRUP_ID = process.env.GAJIHUB_GRUP_ID || "";
 
 // Jadwal kirim, boleh lebih dari satu, dipisah koma.
 //
-// KENAPA CHECKOUT PERLU LEBIH DARI SATU JADWAL: jam boleh pulang
-// BERGESER mengikuti jam kedatangan (masuk 07:30 boleh pulang
-// 16:00, masuk 09:10 baru 17:00). Gajihub sudah menyaring yang
-// belum boleh pulang, jadi satu kali kirim pukul 16.15 akan
-// melewatkan seluruh orang yang datang siang — bukan karena
-// mereka sudah tap, tapi karena giliran mereka belum tiba.
+// CHECKIN 08.35, LIMA MENIT SESUDAH BATASNYA — bukan tepat 08:30.
+// Daftar yang ditarik tepat pada detik batas akan memuat orang
+// yang sedang tap saat itu juga, dan menyebut namanya di grup
+// sebagai "belum checkin" padahal dia tidak terlambat.
+//
+// CHECKOUT 17.35, SATU KALI, dan angkanya diturunkan bukan dipilih:
+// jam boleh pulang paling lambat = jam pulang wajib + toleransi 60
+// menit (batasCheckoutMenit di Gajihub). Senin-Kamis 16:00 + 60 =
+// 17:00; JUMAT 16:30 + 60 = 17:30. Jadi 17.35 adalah satu-satunya
+// jam tunggal yang menjangkau semua orang di SEMUA hari kerja.
+//
+// JANGAN MEMUNDURKANNYA KE 17.15 "supaya lebih awal" — itu bawaan
+// yang pertama dipakai dan ternyata bocor: pegawai yang datang
+// pukul 08:30 pada hari Jumat baru jatuh tempo 17:30, jadi dia
+// TIDAK PERNAH diingatkan, dan tap pulang yang hilang dibaca
+// e-Presensi sebagai 23:59.
 const JADWAL_CHECKIN = uraiJadwal(process.env.GAJIHUB_JAM_CHECKIN || "08.35");
 const JADWAL_CHECKOUT = uraiJadwal(
-  process.env.GAJIHUB_JAM_CHECKOUT || "16.15,17.15",
+  process.env.GAJIHUB_JAM_CHECKOUT || "17.35",
 );
 
 const SCAN_MENIT = Number(process.env.GAJIHUB_SCAN_MENIT || 5);

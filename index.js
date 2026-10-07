@@ -8,6 +8,7 @@ const fs = require("fs");
 const fsPromises = require("fs").promises;
 const path = require("path");
 const express = require("express");
+const axios = require("axios");
 const cors = require("cors");
 const { jawabHelpdeskAI, simpanDataBaru } = require("./features/ai_helpdesk");
 const {
@@ -761,6 +762,46 @@ app.delete("/api/barang/:id_barang", async (req, res) => {
   } catch (err) {
     console.error("[API] Gagal hapus data barang:", err?.message || err);
     res.status(500).json({ error: "Gagal hapus data barang" });
+  }
+});
+
+// ==========================================
+// API KIRIM PESAN WHATSAPP (INTEGRASI MEETING ROOM / SISTEM LAIN)
+// ==========================================
+app.post("/send-message", async (req, res) => {
+  try {
+    const { to, phone, message, text } = req.body;
+    let target = to || phone;
+    const isiPesan = message || text;
+
+    if (!target || !isiPesan) {
+      return res.status(400).json({
+        success: false,
+        error: "Nomor tujuan (to/phone) dan pesan (message/text) wajib diisi",
+      });
+    }
+
+    const targetWaId = getValidWaId(target);
+    if (!targetWaId) {
+      return res.status(400).json({
+        success: false,
+        error: `Format nomor telepon tidak valid: ${target}`,
+      });
+    }
+
+    if (!botReady) {
+      return res.status(503).json({
+        success: false,
+        error: "Bot SisKA belum siap/terhubung ke WhatsApp",
+      });
+    }
+
+    await client.sendMessage(targetWaId, isiPesan);
+    console.log(`[API SisKA] Pesan notifikasi berhasil dikirim ke ${targetWaId}`);
+    res.json({ success: true, target: targetWaId });
+  } catch (err) {
+    console.error("[API SisKA] Gagal mengirim pesan:", err?.message || err);
+    res.status(500).json({ success: false, error: err?.message || String(err) });
   }
 });
 
@@ -4283,6 +4324,65 @@ client.on("message", async (message) => {
         }
       }
       return;
+    }
+
+    // ==========================================
+    // 4.9. HANDLER APPROVAL RUANG RAPAT (MEETING ROOM DISPLAY)
+    // ==========================================
+    if (message.hasQuotedMsg) {
+      const kutipan = kutipanDariPesan(message);
+      let isiKutipan = kutipan?.isi || "";
+      if (!isiKutipan) {
+        try {
+          const quoted = await message.getQuotedMessage();
+          isiKutipan = quoted?.body || "";
+        } catch (e) {}
+      }
+
+      const msgBodyTrimmed = (message.body || "").trim();
+      const isPilihanApproval =
+        msgBodyTrimmed === "1" ||
+        msgBodyTrimmed === "2" ||
+        msgBodyTrimmed.toLowerCase().startsWith("1") ||
+        msgBodyTrimmed.toLowerCase().startsWith("2");
+
+      if (isiKutipan && isiKutipan.includes("#MR-") && isPilihanApproval) {
+        console.log(`[MEETING ROOM] Mendeteksi balasan approval ruang rapat (${msgBodyTrimmed}) dari ${chatId}`);
+        try {
+          const meetingBackendUrl =
+            process.env.MEETING_ROOM_BACKEND_URL ||
+            "http://127.0.0.1:3001/api/dashboard/whatsapp/reply";
+          const senderNumber = hanyaAngka(chatId);
+
+          const response = await axios.post(
+            meetingBackendUrl,
+            {
+              sender: senderNumber,
+              message: msgBodyTrimmed,
+              quotedText: isiKutipan,
+            },
+            { timeout: 15000 }
+          );
+
+          const resData = response.data;
+          const replyText = resData.replyText || resData.message;
+          if (replyText) {
+            await kirimDenganTyping(client, chatId, replyText);
+          }
+          return;
+        } catch (err) {
+          console.error(
+            "[MEETING ROOM] Gagal menghubungi backend meeting-room-display:",
+            err?.response?.data || err.message
+          );
+          await kirimDenganTyping(
+            client,
+            chatId,
+            "⚠️ Maaf, terjadi gangguan saat menghubungkan ke sistem Kalender Ruang Rapat."
+          );
+          return;
+        }
+      }
     }
 
     // ==========================================
