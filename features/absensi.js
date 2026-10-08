@@ -245,6 +245,15 @@ async function ambilBelumPulang(tanggal) {
   return data?.data || [];
 }
 
+async function ambilBelumMasuk(tanggal) {
+  const { data } = await axios.get(`${API_URL}/api/absensi/belum-masuk`, {
+    params: { tanggal: tanggal || tanggalHariIni() },
+    timeout: TIMEOUT_API,
+  });
+
+  return data?.data || [];
+}
+
 // Rentang tanggal siap pakai, dihitung dengan zona WIB.
 
 function rentangBulanIni() {
@@ -854,6 +863,7 @@ module.exports = {
   rentangBulanLalu,
   ambilRekapExcel,
   ambilBelumPulang,
+  ambilBelumMasuk,
   tanggalHariIni,
   jamSekarang,
   tanggalPanjang,

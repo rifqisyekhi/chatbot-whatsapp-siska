@@ -21,6 +21,7 @@ const {
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
 const pengingatGajihub = require("./features/pengingatGajihub");
+const pengingatNonASN = require("./features/pengingatNonASN");
 const profilWA = require("./features/profilWA");
 const diagnosaMedia = require("./features/diagnosaMedia");
 const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
@@ -1985,64 +1986,17 @@ async function simpanMediaFallback(message, chatId, prefix) {
 }
 
 // VI-D. ALUR ABSENSI NON-ASN
-//
-// Menu ini tidak menulis ke MongoDB sendiri. Semua absensi
-// dikirim ke backend presensi lewat HTTP supaya aturan
-// "satu absensi per pegawai per hari", penyimpanan foto, dan
-// validasi jenis kehadiran hanya ada di satu tempat — sama
-// dengan yang dipakai aplikasi webnya.
-
 const PILIHAN_KEHADIRAN = {
   1: "WFO",
   2: "WFH",
   3: "DINAS",
 };
 
-// Batas aman foto cadangan (tanpa cap geotag). Backend menolak
-// foto di atas 10 MB, dan base64 membengkak sekitar 33%.
 const BATAS_FOTO_BASE64 = 9 * 1024 * 1024;
 
-// Batas kinerja harian, menyalin KINERJA_MIN dan KINERJA_MAX
-// di backend presensi. Backend tetap yang menegakkan.
 const KINERJA_MIN = 10;
 const KINERJA_MAX = 100;
 
-// =========================================================
-// KIRIM FOTO BERCAP GEOTAG
-// =========================================================
-//
-// Foto ini BUKAN pelengkap: inilah bukti kehadiran yang dipegang
-// pegawai. Karena itu pengirimannya tidak berhenti pada satu cara.
-//
-// Empat cara, dari yang paling wajar ke yang paling sederhana —
-// yang penting fotonya sampai, bukan lewat jalur mana:
-//
-//   1. Kirim biasa.
-//   2. Lewat objek chat-nya. Menyingkirkan kemungkinan chat-nya
-//      yang gagal dikenali di dalam halaman.
-//   3. Foto dirender ulang kecil dan polos. Membuang EXIF, profil
-//      warna, mode progresif, dan dimensi besar — hal-hal yang
-//      bisa membuat pipeline gambar WhatsApp gagal.
-//   4. Dikirim sebagai dokumen. Ini yang paling penting: dengan
-//      asDocument, WhatsApp TIDAK mentranskode gambarnya sama
-//      sekali, hanya menghitung hash berkasnya. Jadi kalau yang
-//      rusak adalah jalur gambarnya, cara ini tetap jalan — foto
-//      tetap utuh dan tetap bisa dibuka, hanya tampil sebagai
-//      lampiran berkas.
-// Halaman WhatsApp Web bisa dimuat ulang kapan saja, dan selama
-// penyuntikan ulang belum selesai `window.WWebJS` tidak ada.
-// Setiap pengiriman pada jendela itu gagal dengan pesan yang
-// menyesatkan — "Cannot read properties of undefined (reading
-// 'getChat')" — seolah chat tujuannya yang bermasalah, padahal
-// yang hilang seluruh lapisan penyuntikannya. Baik
-// client.sendMessage maupun client.getChatById memanggil
-// window.WWebJS.getChat, jadi keempat cara kirim di bawah kena
-// sekaligus.
-//
-// Terjadi 29 September 2026: keempat cara gagal berurutan dalam
-// 2,4 detik, lalu diagnosa yang berjalan beberapa detik sesudahnya
-// BERHASIL mengirim gambar uji 1x1 ke diri sendiri. Halamannya
-// memang sudah pulih — hanya belum pulih pada saat dicoba.
 const HALAMAN_BELUM_SIAP = /reading 'getChat'|WWebJS|Execution context/i;
 
 async function tungguWWebJSSiap(batasMs = 20000, jedaMs = 1000) {
@@ -3711,14 +3665,11 @@ client.on("ready", async () => {
       : "[READY] Bot SisKA siap!",
   );
 
-  // Aman dipanggil berulang — penjaga di dalamnya mencegah
-  // timer kedua saat sesi WhatsApp pulih dan READY terpicu lagi.
+  // Pengingat absen pulang pribadi (JAPRI) untuk Non-ASN
   mulaiPengingatPulang();
 
-  // Pengingat absen ASN ke grup unit, bahannya dari Gajihub.
-  // Fungsi kirimnya DISUNTIKKAN, bukan di-require dari sana: modul di
-  // features/ tidak boleh me-require index.js (melingkar).
-  pengingatGajihub.mulaiPengingatGajihub({
+  // Pengingat absen grup gabungan (ASN & Non-ASN digabung menjadi 1 pesan)
+  pengingatNonASN.mulaiPengingatGrup({
     kirim: (chatId, teks) => kirimDenganTyping(client, chatId, teks),
   });
 

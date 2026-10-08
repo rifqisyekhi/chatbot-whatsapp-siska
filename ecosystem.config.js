@@ -13,12 +13,8 @@ module.exports = {
       exec_mode: "fork",
       instances: 1,
 
-      // Restart terjadwal tiap hari pukul 00:00 waktu server, untuk memangkas
-      // memori Chromium yang menggelembung pelan-pelan pada proses 24 jam.
-      // PENTING: cron ini memakai zona waktu server, bukan WIB. Pastikan
-      // `timedatectl` menunjukkan Asia/Jakarta; kalau server masih UTC,
-      // ganti ke "0 17 * * *" (17:00 UTC = 00:00 WIB).
-      cron_restart: "0 0 * * *",
+      // Restart terjadwal tengah malam DIHAPUS agar bot tidak mati/gagal
+      // bangun di pagi hari saat pegawai butuh presensi.
 
       autorestart: true,
       restart_delay: 5000,
