@@ -72,7 +72,7 @@ const NON_ASN_GRUP_ID = (
 const JADWAL_CHECKIN = uraiJadwal(
   process.env.NON_ASN_JAM_CHECKIN ||
   process.env.GAJIHUB_JAM_CHECKIN ||
-  "08.35"
+  "08.20"
 );
 
 const JADWAL_CHECKOUT = uraiJadwal(
