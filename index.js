@@ -37,8 +37,6 @@ const {
   PORT_WEB,
   LINK_WEB_KATALOG,
 } = require("./config/config");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 
 // Connect Database MongoDB
 const mongoose = require("mongoose");
@@ -206,8 +204,7 @@ async function connectToDatabase() {
 function nyalakanWebServer() {
   // Mengikat ke 127.0.0.1 saja: dashboard dan katalog hanya
   // boleh dijangkau lewat nginx (port 8002), bukan langsung
-  // ke :3000 dari jaringan. Ini penting karena /api/login di
-  // berkas ini masih menerima admin/admin.
+  // ke :3000 dari jaringan.
   //
   // Diambil dari .env supaya bisa dikembalikan ke "0.0.0.0"
   // tanpa mengubah kode.
@@ -452,44 +449,6 @@ app.use("/api", (req, res, next) => {
   });
 
   next();
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const { username, password } = req.body;
-    
-    console.log(`[LOGIN] Ada yang mencoba login dengan usn: ${username} & pw: ${password}`);
-
-    // 1. JALUR ADMIN (Ketik username: admin, password: admin)
-    if (username === "admin" && password === "admin") {
-      const token = jwt.sign(
-        { username: "Admin Master", role: "admin" },
-        process.env.JWT_SECRET || "rahasia",
-        { expiresIn: "8h" }
-      );
-      console.log("[LOGIN] Admin berhasil masuk!");
-      return res.json({ token });
-    }
-
-    // 2. JALUR PEGAWAI / USER BIASA (Ketik username: user, password: user)
-    if (username === "user" && password === "user") {
-      const token = jwt.sign(
-        { username: "Pegawai SisKA", role: "pegawai", nip: "-" },
-        process.env.JWT_SECRET || "rahasia",
-        { expiresIn: "8h" }
-      );
-      console.log("[LOGIN] User/Pegawai berhasil masuk!");
-      return res.json({ token });
-    }
-
-    // 3. JIKA SALAH KETIK
-    console.log("[LOGIN] Gagal! Username atau password salah.");
-    return res.status(401).json({ message: "Username atau Password salah!" });
-
-  } catch (error) {
-    console.error("[CRASH LOGIN]:", error);
-    return res.status(500).json({ message: "Server crash saat mencoba login." });
-  }
 });
 
 // ------------------------------------------
