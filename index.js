@@ -3181,6 +3181,7 @@ const puppeteerConfig = {
   args: [
     "--no-sandbox",
     "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
     "--disable-accelerated-2d-canvas",
     "--no-first-run",
     "--no-default-browser-check",
@@ -3192,6 +3193,8 @@ const puppeteerConfig = {
     "--disable-background-timer-throttling",
     "--disable-backgrounding-occluded-windows",
     "--disable-renderer-backgrounding",
+    "--disable-features=IsolateOrigins,site-per-process",
+    "--disable-site-isolation-trials",
   ],
   timeout: 120000,
   protocolTimeout: 180000,
@@ -3758,19 +3761,54 @@ setInterval(() => {
 }, 30000); // Check setiap 30 detik
 
 async function cekNyawaClient() {
-  let timer;
-  try {
-    return await Promise.race([
-      client.getState(),
-      new Promise((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`getState tidak menjawab dalam ${LIVENESS_TIMEOUT_MS / 1000}s`)),
-          LIVENESS_TIMEOUT_MS,
+  const perbaruiPupPage = async () => {
+    if (client.pupBrowser && client.pupBrowser.isConnected()) {
+      try {
+        const pages = await client.pupBrowser.pages();
+        const activeWAPage = pages.find(
+          (p) =>
+            !p.isClosed() &&
+            (p.url().includes("whatsapp.com") || p.url().includes("web.whatsapp.com")),
         );
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
+        if (activeWAPage && activeWAPage !== client.pupPage) {
+          console.warn("[HEALTH] Mengalihkan pupPage ke tab WhatsApp yang aktif.");
+          client.pupPage = activeWAPage;
+        }
+      } catch {}
+    }
+  };
+
+  await perbaruiPupPage();
+
+  const jalankanGetState = async () => {
+    let timer;
+    try {
+      return await Promise.race([
+        client.getState(),
+        new Promise((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`getState tidak menjawab dalam ${LIVENESS_TIMEOUT_MS / 1000}s`)),
+            LIVENESS_TIMEOUT_MS,
+          );
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  try {
+    return await jalankanGetState();
+  } catch (err) {
+    // Kalau error detached Frame atau context destroyed, halaman WhatsApp Web
+    // mungkin sedang memuat ulang / re-injeksi sesaat. Perbarui tab, tunggu 3 detik,
+    // lalu coba sekali lagi sebelum mencatat kegagalan.
+    if (/detached Frame|Execution context/i.test(err?.message || "")) {
+      await perbaruiPupPage();
+      await new Promise((r) => setTimeout(r, 3000));
+      return await jalankanGetState();
+    }
+    throw err;
   }
 }
 
@@ -3790,8 +3828,9 @@ setInterval(async () => {
     console.warn(`[HEALTH] Probe gagal (${gagalProbeBeruntun}x):`, e?.message || e);
   }
 
-  // Butuh 2x gagal berturut-turut supaya gangguan sesaat tidak memicu restart.
-  if (gagalProbeBeruntun >= 2) {
+  // Butuh 5x gagal berturut-turut (5 menit) supaya gangguan sesaat atau reload/re-inject
+  // halaman saat kirim foto / broadcast grup tidak memicu restart paksa.
+  if (gagalProbeBeruntun >= 5) {
     // Sama seperti watchdog: browser yang sudah lepas ("detached Frame") tidak
     // pernah pulih lewat restart di dalam proses. Serahkan langsung ke PM2.
     console.error(
