@@ -150,12 +150,18 @@ function pesanCheckout({ tanggalTeks, daftarBaris }) {
 
 async function ambilDataASN() {
   if (!pengingatGajihub.AKTIF) {
+    console.warn(
+      "[PENGINGAT GRUP] Gajihub ASN nonaktif! Periksa GAJIHUB_SECRET, GAJIHUB_SATKER, dan GAJIHUB_GRUP_ID di .env."
+    );
     return { belumCheckin: [], belumCheckout: [] };
   }
 
   try {
     const data = await pengingatGajihub.ambilPengingat();
-    if (!data) return { belumCheckin: [], belumCheckout: [] };
+    if (!data) {
+      console.warn("[PENGINGAT GRUP] Gajihub merespons data kosong (null).");
+      return { belumCheckin: [], belumCheckout: [] };
+    }
 
     let belumCheckin = [];
     let belumCheckout = [];
@@ -285,6 +291,10 @@ async function pindaiPengingatGrup({ kirim, sekarangMenit }) {
 
       const nonAsnNamaList = (nonAsnBelum || []).map((p) => p.nama).filter(Boolean);
 
+      console.log(
+        `[PENGINGAT GRUP] ${tanggal} data check-in terkumpul: ASN = ${dataASN.belumCheckin?.length || 0} orang, Non-ASN = ${nonAsnNamaList.length} orang.`
+      );
+
       // GABUNGKAN ASN & Non-ASN ke dalam satu daftar
       const namaSet = new Set();
       const gabungCheckin = [];
@@ -367,6 +377,10 @@ async function pindaiPengingatGrup({ kirim, sekarangMenit }) {
           bolehPulang: jamBoleh,
         });
       }
+
+      console.log(
+        `[PENGINGAT GRUP] ${tanggal} data check-out terkumpul: ASN = ${dataASN.belumCheckout?.length || 0} orang, Non-ASN = ${nonAsnCheckoutList.length} orang.`
+      );
 
       // GABUNGKAN ASN & Non-ASN ke dalam satu daftar
       const checkoutMap = new Map();
