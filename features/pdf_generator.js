@@ -1452,24 +1452,36 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
 
   const doc = new PDFDocument({
     size: "A4",
-    margins: { top: 32, bottom: 32, left: 40, right: 40 },
+    margins: { top: 25, bottom: 25, left: 55, right: 55 },
   });
 
   try {
-    const fontDir = path.join(__dirname, "..", "assets", "fonts");
+    let fontRegular = "Helvetica";
+    let fontBold = "Helvetica-Bold";
+
     try {
-      doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
-      doc.registerFont("TMR-Bold", path.join(fontDir, "times-bold.ttf"));
-      doc.font("TMR");
+      const fontDir = path.join(__dirname, "..", "assets", "fonts");
+      const arialPath = path.join(fontDir, "arial.ttf");
+      const arialBoldPath = path.join(fontDir, "arialbd.ttf");
+      if (fs.existsSync(arialPath) && fs.existsSync(arialBoldPath)) {
+        doc.registerFont("Arial", arialPath);
+        doc.registerFont("Arial-Bold", arialBoldPath);
+        fontRegular = "Arial";
+        fontBold = "Arial-Bold";
+      }
     } catch (e) {
-      doc.font("Helvetica");
+      console.warn("Menggunakan Helvetica sebagai fallback:", e.message);
     }
+    doc.font(fontRegular);
 
     const stream = fs.createWriteStream(filePath);
     doc.pipe(stream);
 
-    const startX = 40;
-    const tableWidth = 515;
+    // Spesifikasi Rekonstruksi: Margin ~2 cm (55 pt), Lebar Tabel 485 pt (~17 cm)
+    const startX = 55;
+    const tableWidth = 485;
+    const tableGapSmall = 5;  // Jeda antarbagian I–VI (0.15–0.25 cm)
+    const tableGapLarge = 14; // Jeda bagian VI–VII dan VII–VIII (0.4–0.6 cm)
 
     const bulanIndo = [
       "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -1478,13 +1490,13 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     const now = new Date();
     const tglSurat = `Jakarta, ${now.getDate()} ${bulanIndo[now.getMonth()]} ${now.getFullYear()}`;
 
-    // Helper untuk menggambar cell tabel berbingkai presisi
+    // Helper untuk menggambar cell tabel berbingkai presisi (garis 0.65 pt konsisten)
     const drawCell = (x, y, w, h, text = "", options = {}) => {
-      doc.rect(x, y, w, h).stroke();
+      doc.lineWidth(0.65).rect(x, y, w, h).stroke();
       if (text) {
         const align = options.align || "left";
-        const font = options.font || "TMR";
-        const size = options.size || 8;
+        const font = options.bold ? fontBold : (options.font || fontRegular);
+        const size = options.size || 8.5;
         const paddingX = options.paddingX !== undefined ? options.paddingX : 4;
         const paddingY = options.paddingY !== undefined ? options.paddingY : 2.5;
         doc.font(font).fontSize(size).text(String(text), x + paddingX, y + paddingY, {
@@ -1500,124 +1512,121 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     };
 
     // Helper judul seksi dengan kotak nomor Romawi tersendiri di sebelah kiri
-    const wRoman = 28;
+    const wRoman = 26;
     const drawSectionHeader = (num, title, curY) => {
-      drawCell(startX, curY, wRoman, 14, num, { font: "TMR", size: 8.5, paddingX: 3, paddingY: 2.5 });
-      drawCell(startX + wRoman, curY, tableWidth - wRoman, 14, title, { font: "TMR", size: 8.5, paddingX: 4, paddingY: 2.5 });
+      drawCell(startX, curY, wRoman, 14, num, { font: fontRegular, size: 8.5, paddingX: 3, paddingY: 2.5 });
+      drawCell(startX + wRoman, curY, tableWidth - wRoman, 14, title, { font: fontRegular, size: 8.5, paddingX: 4, paddingY: 2.5 });
     };
 
     // 1. HEADER (Kanan Atas)
-    const headerX = startX + 300;
-    const headerW = 215;
-    let y = 32;
-    doc.font("TMR").fontSize(9.5).text(tglSurat, headerX, y, { width: headerW, align: "left" });
-    y += 24; // spasi 1 baris kosong sesuai template
+    const headerX = startX + 275;
+    const headerW = 210;
+    let y = 30;
+    doc.font(fontRegular).fontSize(9.5).text(tglSurat, headerX, y, { width: headerW, align: "left" });
+    y += 20; // jarak antar tanggal ke tujuan
     doc.text("Yth. Kepala Biro Keuangan dan BMN", headerX, y, { width: headerW, align: "left" });
-    y += 13;
+    y += 12;
     doc.text("di Jakarta", headerX, y, { width: headerW, align: "left" });
 
-    // 2. JUDUL
-    const tableGap = 6;
-
-    // 2. JUDUL
-    y = 84;
-    doc.font("TMR-Bold").fontSize(10).text("FORMULIR PERMINTAAN DAN PEMBERIAN CUTI", startX, y, {
+    // 2. JUDUL UTAMA
+    y = 80;
+    doc.font(fontBold).fontSize(10.5).text("FORMULIR PERMINTAAN DAN PEMBERIAN CUTI", startX, y, {
       width: tableWidth,
       align: "center",
     });
 
     // 3. I. DATA PEGAWAI
-    y = 100;
+    y = 96;
     drawSectionHeader("I.", "DATA PEGAWAI", y);
     y += 14;
 
     // Baris 1: Nama & NIP
-    drawCell(startX, y, 65, 15, "Nama", { font: "TMR", size: 8 });
-    drawCell(startX + 65, y, 195, 15, data.nama, { font: "TMR", size: 8 });
-    drawCell(startX + 260, y, 65, 15, "NIP", { font: "TMR", size: 8 });
-    drawCell(startX + 325, y, 190, 15, String(data.nip || "-"), { font: "TMR", size: 8 });
+    drawCell(startX, y, 65, 15, "Nama", { size: 8 });
+    drawCell(startX + 65, y, 180, 15, data.nama, { size: 8 });
+    drawCell(startX + 245, y, 55, 15, "NIP", { size: 8 });
+    drawCell(startX + 300, y, 185, 15, String(data.nip || "-"), { size: 8 });
     y += 15;
 
     // Baris 2: Jabatan & Masa Kerja
-    drawCell(startX, y, 65, 15, "Jabatan", { font: "TMR", size: 8 });
-    drawCell(startX + 65, y, 195, 15, data.jabatan || "-", { font: "TMR", size: 8 });
-    drawCell(startX + 260, y, 65, 15, "Masa Kerja", { font: "TMR", size: 8 });
-    drawCell(startX + 325, y, 190, 15, data.masaKerja || "-", { font: "TMR", size: 8 });
+    drawCell(startX, y, 65, 15, "Jabatan", { size: 8 });
+    drawCell(startX + 65, y, 180, 15, data.jabatan || "-", { size: 8 });
+    drawCell(startX + 245, y, 55, 15, "Masa Kerja", { size: 8 });
+    drawCell(startX + 300, y, 185, 15, data.masaKerja || "-", { size: 8 });
     y += 15;
 
     // Baris 3: Unit Kerja
-    drawCell(startX, y, 65, 15, "Unit Kerja", { font: "TMR", size: 8 });
-    drawCell(startX + 65, y, 195, 15, data.unitKerja || data.sub_unit || "Biro Keuangan dan BMN", { font: "TMR", size: 8 });
-    drawCell(startX + 260, y, 65, 15, "", {});
-    drawCell(startX + 325, y, 190, 15, "", {});
+    drawCell(startX, y, 65, 15, "Unit Kerja", { size: 8 });
+    drawCell(startX + 65, y, 180, 15, data.unitKerja || data.sub_unit || "Biro Keuangan dan BMN", { size: 8 });
+    drawCell(startX + 245, y, 55, 15, "", {});
+    drawCell(startX + 300, y, 185, 15, "", {});
     y += 15;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapSmall; // Jeda pemisah antar tabel I–VI
 
     // 4. II. JENIS CUTI YANG DIAMBIL
     drawSectionHeader("II.", "JENIS CUTI YANG DIAMBIL", y);
     y += 14;
 
-    const wCol1Text = 222.5;
-    const wCol1Box = 35;
-    const wCol2Text = 222.5;
-    const wCol2Box = 35;
+    const wCol1Text = 210;
+    const wCol1Box = 32.5;
+    const wCol2Text = 210;
+    const wCol2Box = 32.5;
 
     // Baris 1
     drawCell(startX, y, wCol1Text, 14, "1. Cuti Tahunan", { size: 8 });
-    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Tahunan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
-    drawCell(startX + 257.5, y, wCol2Text, 14, "2. Cuti Besar", { size: 8 });
-    drawCell(startX + 257.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Besar") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
+    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Tahunan") ? "V" : "", { align: "center", bold: true, size: 9 });
+    drawCell(startX + 242.5, y, wCol2Text, 14, "2. Cuti Besar", { size: 8 });
+    drawCell(startX + 242.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Besar") ? "V" : "", { align: "center", bold: true, size: 9 });
     y += 14;
 
     // Baris 2
     drawCell(startX, y, wCol1Text, 14, "3. Cuti Sakit", { size: 8 });
-    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Sakit") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
-    drawCell(startX + 257.5, y, wCol2Text, 14, "4. Cuti Melahirkan", { size: 8 });
-    drawCell(startX + 257.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Melahirkan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
+    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Sakit") ? "V" : "", { align: "center", bold: true, size: 9 });
+    drawCell(startX + 242.5, y, wCol2Text, 14, "4. Cuti Melahirkan", { size: 8 });
+    drawCell(startX + 242.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Melahirkan") ? "V" : "", { align: "center", bold: true, size: 9 });
     y += 14;
 
     // Baris 3
     drawCell(startX, y, wCol1Text, 14, "5. Cuti Alasan Penting", { size: 8 });
-    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Penting") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
-    drawCell(startX + 257.5, y, wCol2Text, 14, "6. Cuti di Luar Tanggungan Negara", { size: 8 });
-    drawCell(startX + 257.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Tanggungan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 9 });
+    drawCell(startX + wCol1Text, y, wCol1Box, 14, isCuti(data.jenisCuti, "Penting") ? "V" : "", { align: "center", bold: true, size: 9 });
+    drawCell(startX + 242.5, y, wCol2Text, 14, "6. Cuti di Luar Tanggungan Negara", { size: 8 });
+    drawCell(startX + 242.5 + wCol2Text, y, wCol2Box, 14, isCuti(data.jenisCuti, "Tanggungan") ? "V" : "", { align: "center", bold: true, size: 9 });
     y += 14;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapSmall; // Jeda pemisah antar tabel
 
     // 5. III. ALASAN CUTI
     drawSectionHeader("III.", "ALASAN CUTI", y);
     y += 14;
     drawCell(startX, y, tableWidth, 22, data.alasan || "-", { size: 8 });
     y += 22;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapSmall; // Jeda pemisah antar tabel
 
     // 6. IV. LAMANYA CUTI
     drawSectionHeader("IV.", "LAMANYA CUTI", y);
     y += 14;
     drawCell(startX, y, 55, 15, "Selama", { size: 8 });
-    drawCell(startX + 55, y, 175, 15, data.lamaCuti || "-", { size: 8 });
-    drawCell(startX + 230, y, 65, 15, "Tanggal", { size: 8 });
-    drawCell(startX + 295, y, 220, 15, data.tanggalCuti || data.tanggal || "-", { size: 8 });
+    drawCell(startX + 55, y, 160, 15, data.lamaCuti || "-", { size: 8 });
+    drawCell(startX + 215, y, 60, 15, "Tanggal", { size: 8 });
+    drawCell(startX + 275, y, 210, 15, data.tanggalCuti || data.tanggal || "-", { size: 8 });
     y += 15;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapSmall; // Jeda pemisah antar tabel
 
     // 7. V. CATATAN CUTI
     drawSectionHeader("V.", "CATATAN CUTI", y);
     y += 14;
 
-    const wLeftCatatan = 240;
-    const wRightCatatan = 275;
-    const wRightText = 240;
-    const wRightBox = 35;
+    const wLeftCatatan = 225;
+    const wRightCatatan = 260;
+    const wRightText = 227.5;
+    const wRightBox = 32.5;
 
-    drawCell(startX, y, wLeftCatatan, 12, "1. CUTI TAHUNAN", { font: "TMR", size: 7.5, paddingY: 1.5 });
+    drawCell(startX, y, wLeftCatatan, 12, "1. CUTI TAHUNAN", { size: 7.5, paddingY: 1.5 });
     drawCell(startX + wLeftCatatan, y, wRightText, 12, "2. CUTI BESAR", { size: 7.5, paddingY: 1.5 });
     drawCell(startX + wLeftCatatan + wRightText, y, wRightBox, 12, "", {});
     y += 12;
 
-    const sub1 = 45;
-    const sub2 = 45;
-    const sub3 = wLeftCatatan - sub1 - sub2; // 150
+    const sub1 = 40;
+    const sub2 = 40;
+    const sub3 = wLeftCatatan - sub1 - sub2; // 145
 
     // Baris 1
     drawCell(startX, y, sub1, 12, "Tahun", { align: "center", size: 7 });
@@ -1650,15 +1659,15 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + wLeftCatatan, y, wRightText, 12, "6. CUTI DI LUAR TANGGUNGAN NEGARA", { size: 7.5 });
     drawCell(startX + wLeftCatatan + wRightText, y, wRightBox, 12, "", {});
     y += 12;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapSmall; // Jeda pemisah antar tabel I–VI
 
     // Lebar kolom bagian persetujuan & alamat
-    const wCol1 = 95;
-    const wCol2 = 85;
-    const wCol3 = 95;
-    const wCol4 = tableWidth - (wCol1 + wCol2 + wCol3); // 240
-    const wAlamatLeft = wCol1 + wCol2 + wCol3; // 275
-    const wAlamatRight = wCol4; // 240
+    const wCol1 = 90;
+    const wCol2 = 80;
+    const wCol3 = 90;
+    const wCol4 = tableWidth - (wCol1 + wCol2 + wCol3); // 225
+    const wAlamatLeft = wCol1 + wCol2 + wCol3; // 260
+    const wAlamatRight = wCol4; // 225
     const hTtdBox = 72;
 
     // 8. VI. ALAMAT SELAMA MENJALANKAN CUTI
@@ -1667,21 +1676,21 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
 
     // Kotak Kiri: Alamat
     doc.rect(startX, y, wAlamatLeft, hTtdBox).stroke();
-    doc.font("TMR").fontSize(8).text(data.alamatCuti || "-", startX + 5, y + 6, {
+    doc.font(fontRegular).fontSize(8).text(data.alamatCuti || "-", startX + 5, y + 6, {
       width: wAlamatLeft - 10,
     });
 
     // Kotak Kanan: TTD Pemohon (dibiarkan kosong untuk ditandatangani secara fisik saat dicetak)
     doc.rect(startX + wAlamatLeft, y, wAlamatRight, hTtdBox).stroke();
-    doc.font("TMR").fontSize(7.5).text("Telp. " + (data.kontakCuti || "-"), startX + wAlamatLeft + 6, y + 4, {
+    doc.font(fontRegular).fontSize(7.5).text("Telp. " + (data.kontakCuti || "-"), startX + wAlamatLeft + 6, y + 4, {
       width: wAlamatRight - 12,
     });
     doc.text("Hormat saya,", startX + wAlamatLeft, y + 15, { width: wAlamatRight, align: "center" });
 
-    doc.font("TMR").fontSize(8).text(data.nama, startX + wAlamatLeft, y + 50, { width: wAlamatRight, align: "center" });
-    doc.font("TMR").fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + 60, { width: wAlamatRight, align: "center" });
+    doc.font(fontRegular).fontSize(8).text(data.nama, startX + wAlamatLeft, y + 50, { width: wAlamatRight, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + 60, { width: wAlamatRight, align: "center" });
     y += hTtdBox;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapLarge; // Jeda pemisah lebih besar antara VI ke VII (0.4–0.6 cm)
 
     // 9. VII. PERTIMBANGAN ATASAN LANGSUNG (Di dokumen asli tertulis "VII" tanpa titik)
     drawSectionHeader("VII", "PERTIMBANGAN ATASAN LANGSUNG", y);
@@ -1695,7 +1704,7 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
     y += 14;
 
-    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 28)
+    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 26)
     drawCell(startX, y, wRoman, hStatusBox, "", {});
     drawCell(startX + wRoman, y, wCol1 - wRoman, hStatusBox, "", {});
     drawCell(startX + wCol1, y, wCol2, hStatusBox, "", {});
@@ -1709,12 +1718,12 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     const atasanNama = data.atasan_nama || "John Pieter, S.Kom.";
     const atasanNip = data.atasan_nip || "198312302009121004";
 
-    doc.font("TMR").fontSize(7.5).text(atasanJabatan, ttdAtasanX + 4, y + 4, { width: wCol4 - 8, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(atasanJabatan, ttdAtasanX + 4, y + 4, { width: wCol4 - 8, align: "center" });
     // Ruang tanda tangan atasan dibiarkan kosong untuk fisik
-    doc.font("TMR").fontSize(7.5).text(atasanNama + " NIP", ttdAtasanX, y + 48, { width: wCol4, align: "center" });
-    doc.font("TMR").fontSize(7.5).text(atasanNip, ttdAtasanX, y + 58, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(atasanNama + " NIP", ttdAtasanX, y + 48, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(atasanNip, ttdAtasanX, y + 58, { width: wCol4, align: "center" });
     y += hStatusBox;
-    y += tableGap; // Jeda pemisah antar tabel
+    y += tableGapLarge; // Jeda pemisah lebih besar antara VII ke VIII (0.4–0.6 cm)
 
     // 10. VIII. KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI
     drawSectionHeader("VIII.", "KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI", y);
@@ -1727,7 +1736,7 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
     y += 14;
 
-    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 28)
+    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 26)
     drawCell(startX, y, wRoman, hStatusBox, "", {});
     drawCell(startX + wRoman, y, wCol1 - wRoman, hStatusBox, "", {});
     drawCell(startX + wCol1, y, wCol2, hStatusBox, "", {});
@@ -1741,10 +1750,10 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     const pejabatNama = data.pejabat_nama || "Arip Sarkowi, S.E., M.Si.";
     const pejabatNip = data.pejabat_nip || "197601091999032001";
 
-    doc.font("TMR").fontSize(7.5).text(pejabatJabatan, ttdPejabatX + 4, y + 4, { width: wCol4 - 8, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(pejabatJabatan, ttdPejabatX + 4, y + 4, { width: wCol4 - 8, align: "center" });
     // Ruang tanda tangan pejabat dibiarkan kosong untuk fisik
-    doc.font("TMR").fontSize(7.5).text(pejabatNama, ttdPejabatX, y + 48, { width: wCol4, align: "center" });
-    doc.font("TMR").fontSize(7.5).text(`NIP ${pejabatNip}`, ttdPejabatX, y + 58, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(pejabatNama, ttdPejabatX, y + 48, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(`NIP ${pejabatNip}`, ttdPejabatX, y + 58, { width: wCol4, align: "center" });
 
     doc.end();
 
