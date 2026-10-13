@@ -1696,23 +1696,33 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawSectionHeader("VII", "PERTIMBANGAN ATASAN LANGSUNG", y);
     y += 14;
 
-    const hStatusBox = 68;
-    // Row Header Status: 4 Kolom (DISETUJUI, PERUBAHAN, DITANGGUHKAN, TIDAK DISETUJUI)
-    drawCell(startX, y, wCol1, 14, "DISETUJUI", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1, y, wCol2, 14, "PERUBAHAN", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1 + wCol2, y, wCol3, 14, "DITANGGUHKAN", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
-    y += 14;
+    const hCheckRow = 14; // Baris 2: kotak ceklis
+    const hTtdRow = 56;   // Baris 3: nama & ttd serta area catatan status
 
-    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 26)
-    drawCell(startX, y, wRoman, hStatusBox, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hStatusBox, "", {});
-    drawCell(startX + wCol1, y, wCol2, hStatusBox, "", {});
-    drawCell(startX + wCol1 + wCol2, y, wCol3, hStatusBox, "", {});
+    // Baris 1: Header status pilihan (DISETUJUI, PERUBAHAN, DITANGGUHKAN, TIDAK DISETUJUI)
+    drawCell(startX, y, wCol1, 13, "DISETUJUI", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1, y, wCol2, 13, "PERUBAHAN", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1 + wCol2, y, wCol3, 13, "DITANGGUHKAN", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 13, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
+    y += 13;
 
-    // Kolom 4 (di bawah TIDAK DISETUJUI): Kotak TTD Atasan Langsung
+    // Baris 2: Kotak Ceklis (jika disetujui, diceklis 'V' di kolom DISETUJUI)
+    drawCell(startX, y, wRoman, hCheckRow, "", {});
+    drawCell(startX + wRoman, y, wCol1 - wRoman, hCheckRow, "V", { align: "center", bold: true, size: 8 });
+    drawCell(startX + wCol1, y, wCol2, hCheckRow, "", {});
+    drawCell(startX + wCol1 + wCol2, y, wCol3, hCheckRow, "", {});
+    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, hCheckRow, "", {});
+    y += hCheckRow;
+
+    // Baris 3: Kolom catatan di sebelah kiri, dan kotak Nama & TTD Atasan Langsung di sebelah kanan
+    drawCell(startX, y, wRoman, hTtdRow, "", {});
+    drawCell(startX + wRoman, y, wCol1 - wRoman, hTtdRow, "", {});
+    drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
+    drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
+
+    // Kolom 4: Kotak TTD Atasan Langsung
     const ttdAtasanX = startX + wCol1 + wCol2 + wCol3;
-    drawCell(ttdAtasanX, y, wCol4, hStatusBox, "", {});
+    drawCell(ttdAtasanX, y, wCol4, hTtdRow, "", {});
 
     const atasanJabatan = (data.atasan_jabatan || "Wakil Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
     const atasanNama = data.atasan_nama || "John Pieter, S.Kom.";
@@ -1720,31 +1730,39 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
 
     doc.font(fontRegular).fontSize(7.5).text(atasanJabatan, ttdAtasanX + 4, y + 4, { width: wCol4 - 8, align: "center" });
     // Ruang tanda tangan atasan dibiarkan kosong untuk fisik
-    doc.font(fontRegular).fontSize(7.5).text(atasanNama + " NIP", ttdAtasanX, y + 48, { width: wCol4, align: "center" });
-    doc.font(fontRegular).fontSize(7.5).text(atasanNip, ttdAtasanX, y + 58, { width: wCol4, align: "center" });
-    y += hStatusBox;
+    doc.font(fontRegular).fontSize(7.5).text(atasanNama + " NIP", ttdAtasanX, y + 36, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(atasanNip, ttdAtasanX, y + 46, { width: wCol4, align: "center" });
+    y += hTtdRow;
     y += tableGapLarge; // Jeda pemisah lebih besar antara VII ke VIII (0.4–0.6 cm)
 
     // 10. VIII. KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI
     drawSectionHeader("VIII.", "KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI", y);
     y += 14;
 
-    // Row Header Status: 4 Kolom
-    drawCell(startX, y, wCol1, 14, "DISETUJUI", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1, y, wCol2, 14, "PERUBAHAN", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1 + wCol2, y, wCol3, 14, "DITANGGUHKAN", { align: "center", size: 6.5 });
-    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
-    y += 14;
+    // Baris 1: Header status pilihan (DISETUJUI, PERUBAHAN, DITANGGUHKAN, TIDAK DISETUJUI)
+    drawCell(startX, y, wCol1, 13, "DISETUJUI", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1, y, wCol2, 13, "PERUBAHAN", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1 + wCol2, y, wCol3, 13, "DITANGGUHKAN", { align: "center", size: 6.5 });
+    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, 13, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
+    y += 13;
 
-    // Row Isi Status: Kolom 1 ada garis tembus dari kotak romawi (wRoman = 26)
-    drawCell(startX, y, wRoman, hStatusBox, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hStatusBox, "", {});
-    drawCell(startX + wCol1, y, wCol2, hStatusBox, "", {});
-    drawCell(startX + wCol1 + wCol2, y, wCol3, hStatusBox, "", {});
+    // Baris 2: Kotak Ceklis (jika disetujui, diceklis 'V' di kolom DISETUJUI)
+    drawCell(startX, y, wRoman, hCheckRow, "", {});
+    drawCell(startX + wRoman, y, wCol1 - wRoman, hCheckRow, "V", { align: "center", bold: true, size: 8 });
+    drawCell(startX + wCol1, y, wCol2, hCheckRow, "", {});
+    drawCell(startX + wCol1 + wCol2, y, wCol3, hCheckRow, "", {});
+    drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, hCheckRow, "", {});
+    y += hCheckRow;
 
-    // Kolom 4 (di bawah TIDAK DISETUJUI): Kotak TTD Pejabat Berwenang
+    // Baris 3: Kolom catatan di sebelah kiri, dan kotak Nama & TTD Pejabat di sebelah kanan
+    drawCell(startX, y, wRoman, hTtdRow, "", {});
+    drawCell(startX + wRoman, y, wCol1 - wRoman, hTtdRow, "", {});
+    drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
+    drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
+
+    // Kolom 4: Kotak TTD Pejabat Berwenang
     const ttdPejabatX = startX + wCol1 + wCol2 + wCol3;
-    drawCell(ttdPejabatX, y, wCol4, hStatusBox, "", {});
+    drawCell(ttdPejabatX, y, wCol4, hTtdRow, "", {});
 
     const pejabatJabatan = (data.pejabat_jabatan || "Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
     const pejabatNama = data.pejabat_nama || "Arip Sarkowi, S.E., M.Si.";
@@ -1752,8 +1770,9 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
 
     doc.font(fontRegular).fontSize(7.5).text(pejabatJabatan, ttdPejabatX + 4, y + 4, { width: wCol4 - 8, align: "center" });
     // Ruang tanda tangan pejabat dibiarkan kosong untuk fisik
-    doc.font(fontRegular).fontSize(7.5).text(pejabatNama, ttdPejabatX, y + 48, { width: wCol4, align: "center" });
-    doc.font(fontRegular).fontSize(7.5).text(`NIP ${pejabatNip}`, ttdPejabatX, y + 58, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(pejabatNama, ttdPejabatX, y + 36, { width: wCol4, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(`NIP ${pejabatNip}`, ttdPejabatX, y + 46, { width: wCol4, align: "center" });
+    y += hTtdRow;
 
     doc.end();
 
