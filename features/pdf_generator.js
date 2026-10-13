@@ -1511,11 +1511,10 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
       return String(jenis || "").toLowerCase().includes(keyword.toLowerCase());
     };
 
-    // Helper judul seksi dengan kotak nomor Romawi tersendiri di sebelah kiri
-    const wRoman = 26;
+    // Helper judul seksi satu sel penuh tanpa garis pemisah antara nomor dan judul tabel
     const drawSectionHeader = (num, title, curY) => {
-      drawCell(startX, curY, wRoman, 14, num, { font: fontRegular, size: 8.5, paddingX: 3, paddingY: 2.5 });
-      drawCell(startX + wRoman, curY, tableWidth - wRoman, 14, title, { font: fontRegular, size: 8.5, paddingX: 4, paddingY: 2.5 });
+      const fullText = num ? `${num}  ${title}` : title;
+      drawCell(startX, curY, tableWidth, 14, fullText, { font: fontRegular, size: 8.5, paddingX: 5, paddingY: 2.5 });
     };
 
     // 1. HEADER (Kanan Atas)
@@ -1540,25 +1539,23 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawSectionHeader("I.", "DATA PEGAWAI", y);
     y += 14;
 
-    // Baris 1: Nama & NIP
+    // Baris 1: Nama & NIP (tinggi 15)
     drawCell(startX, y, 65, 15, "Nama", { size: 8 });
     drawCell(startX + 65, y, 180, 15, data.nama, { size: 8 });
     drawCell(startX + 245, y, 55, 15, "NIP", { size: 8 });
     drawCell(startX + 300, y, 185, 15, String(data.nip || "-"), { size: 8 });
     y += 15;
 
-    // Baris 2: Jabatan & Masa Kerja
+    // Baris 2: Jabatan di kiri (15 pt), Masa Kerja & nilainya di kanan di-merge vertikal (tinggi 30 pt)
     drawCell(startX, y, 65, 15, "Jabatan", { size: 8 });
     drawCell(startX + 65, y, 180, 15, data.jabatan || "-", { size: 8 });
-    drawCell(startX + 245, y, 55, 15, "Masa Kerja", { size: 8 });
-    drawCell(startX + 300, y, 185, 15, data.masaKerja || "-", { size: 8 });
+    drawCell(startX + 245, y, 55, 30, "Masa Kerja", { size: 8, paddingY: 8 });
+    drawCell(startX + 300, y, 185, 30, data.masaKerja || "-", { size: 8, paddingY: 8 });
     y += 15;
 
-    // Baris 3: Unit Kerja
+    // Baris 3: Unit Kerja di kiri (15 pt) - sebelah kanan menyatu dengan Masa Kerja di atasnya
     drawCell(startX, y, 65, 15, "Unit Kerja", { size: 8 });
     drawCell(startX + 65, y, 180, 15, data.unitKerja || data.sub_unit || "Biro Keuangan dan BMN", { size: 8 });
-    drawCell(startX + 245, y, 55, 15, "", {});
-    drawCell(startX + 300, y, 185, 15, "", {});
     y += 15;
     y += tableGapSmall; // Jeda pemisah antar tabel I–VI
 
@@ -1674,21 +1671,25 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawSectionHeader("VI.", "ALAMAT SELAMA MENJALANKAN CUTI", y);
     y += 14;
 
-    // Kotak Kiri: Alamat
-    doc.rect(startX, y, wAlamatLeft, hTtdBox).stroke();
-    doc.font(fontRegular).fontSize(8).text(data.alamatCuti || "-", startX + 5, y + 6, {
-      width: wAlamatLeft - 10,
+    const hTelp = 15;
+    const hHormat = hTtdBox - hTelp; // 72 - 15 = 57 pt
+
+    // Kotak Kiri: Alamat (penuh setinggi hTtdBox = 72)
+    drawCell(startX, y, wAlamatLeft, hTtdBox, data.alamatCuti || "-", { size: 8, paddingX: 5, paddingY: 6 });
+
+    // Kotak Kanan Atas: Telp (diberi batas garis tabel horizontal di bawahnya)
+    drawCell(startX + wAlamatLeft, y, wAlamatRight, hTelp, "Telp. " + (data.kontakCuti || "-"), {
+      size: 7.5,
+      paddingX: 6,
+      paddingY: 3.5,
     });
 
-    // Kotak Kanan: TTD Pemohon (dibiarkan kosong untuk ditandatangani secara fisik saat dicetak)
-    doc.rect(startX + wAlamatLeft, y, wAlamatRight, hTtdBox).stroke();
-    doc.font(fontRegular).fontSize(7.5).text("Telp. " + (data.kontakCuti || "-"), startX + wAlamatLeft + 6, y + 4, {
-      width: wAlamatRight - 12,
-    });
-    doc.text("Hormat saya,", startX + wAlamatLeft, y + 15, { width: wAlamatRight, align: "center" });
+    // Kotak Kanan Bawah: Hormat saya & TTD Pemohon
+    drawCell(startX + wAlamatLeft, y + hTelp, wAlamatRight, hHormat, "", {});
+    doc.font(fontRegular).fontSize(7.5).text("Hormat saya,", startX + wAlamatLeft, y + hTelp + 5, { width: wAlamatRight, align: "center" });
 
-    doc.font(fontRegular).fontSize(8).text(data.nama, startX + wAlamatLeft, y + 50, { width: wAlamatRight, align: "center" });
-    doc.font(fontRegular).fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + 60, { width: wAlamatRight, align: "center" });
+    doc.font(fontRegular).fontSize(8).text(data.nama, startX + wAlamatLeft, y + hTelp + 36, { width: wAlamatRight, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + hTelp + 46, { width: wAlamatRight, align: "center" });
     y += hTtdBox;
     y += tableGapLarge; // Jeda pemisah lebih besar antara VI ke VII (0.4–0.6 cm)
 
@@ -1707,16 +1708,14 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     y += 13;
 
     // Baris 2: Kotak Ceklis (jika disetujui, diceklis 'V' di kolom DISETUJUI)
-    drawCell(startX, y, wRoman, hCheckRow, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hCheckRow, "V", { align: "center", bold: true, size: 8 });
+    drawCell(startX, y, wCol1, hCheckRow, "V", { align: "center", bold: true, size: 8 });
     drawCell(startX + wCol1, y, wCol2, hCheckRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hCheckRow, "", {});
     drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, hCheckRow, "", {});
     y += hCheckRow;
 
     // Baris 3: Kolom catatan di sebelah kiri, dan kotak Nama & TTD Atasan Langsung di sebelah kanan
-    drawCell(startX, y, wRoman, hTtdRow, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hTtdRow, "", {});
+    drawCell(startX, y, wCol1, hTtdRow, "", {});
     drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
 
@@ -1747,16 +1746,14 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     y += 13;
 
     // Baris 2: Kotak Ceklis (jika disetujui, diceklis 'V' di kolom DISETUJUI)
-    drawCell(startX, y, wRoman, hCheckRow, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hCheckRow, "V", { align: "center", bold: true, size: 8 });
+    drawCell(startX, y, wCol1, hCheckRow, "V", { align: "center", bold: true, size: 8 });
     drawCell(startX + wCol1, y, wCol2, hCheckRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hCheckRow, "", {});
     drawCell(startX + wCol1 + wCol2 + wCol3, y, wCol4, hCheckRow, "", {});
     y += hCheckRow;
 
     // Baris 3: Kolom catatan di sebelah kiri, dan kotak Nama & TTD Pejabat di sebelah kanan
-    drawCell(startX, y, wRoman, hTtdRow, "", {});
-    drawCell(startX + wRoman, y, wCol1 - wRoman, hTtdRow, "", {});
+    drawCell(startX, y, wCol1, hTtdRow, "", {});
     drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
 
