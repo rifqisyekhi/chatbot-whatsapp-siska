@@ -1437,61 +1437,7 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
 // FORMULIR CUTI (Sistem Standar Resmi BKN/Kemenaker)
 // ==========================================
 
-// Gambar tanda tangan dinamis realistis (tinta biru resmi)
-function drawSignaturePemohon(doc, x, y) {
-  doc.save();
-  doc.strokeColor("#163b73").lineWidth(1.3).lineCap("round").lineJoin("round");
-  doc.path(
-    `M ${x} ${y + 20} ` +
-    `C ${x + 8} ${y + 6}, ${x + 18} ${y - 4}, ${x + 28} ${y + 12} ` +
-    `C ${x + 32} ${y + 22}, ${x + 38} ${y + 25}, ${x + 48} ${y + 14} ` +
-    `C ${x + 55} ${y + 2}, ${x + 65} ${y + 6}, ${x + 75} ${y + 18} ` +
-    `C ${x + 82} ${y + 25}, ${x + 92} ${y + 23}, ${x + 105} ${y + 10} ` +
-    `M ${x + 15} ${y + 18} ` +
-    `C ${x + 45} ${y + 15}, ${x + 75} ${y + 24}, ${x + 115} ${y + 16}`
-  ).stroke();
-  doc.restore();
-}
-
-function drawSignatureAtasan(doc, x, y) {
-  doc.save();
-  doc.strokeColor("#163b73").lineWidth(1.3).lineCap("round").lineJoin("round");
-  doc.path(
-    `M ${x + 10} ${y + 24} ` +
-    `C ${x + 15} ${y - 6}, ${x + 22} ${y - 10}, ${x + 24} ${y + 15} ` +
-    `C ${x + 26} ${y + 27}, ${x + 30} ${y - 5}, ${x + 36} ${y - 2} ` +
-    `C ${x + 40} ${y + 18}, ${x + 42} ${y + 25}, ${x + 46} ${y + 3} ` +
-    `C ${x + 50} ${y - 6}, ${x + 55} ${y + 12}, ${x + 58} ${y + 22} ` +
-    `M ${x + 20} ${y + 6} ` +
-    `C ${x + 40} ${y + 4}, ${x + 60} ${y + 18}, ${x + 75} ${y + 24} ` +
-    `M ${x + 5} ${y + 28} ` +
-    `C ${x + 35} ${y + 26}, ${x + 65} ${y + 25}, ${x + 85} ${y + 27}`
-  ).stroke();
-  doc.restore();
-}
-
-function drawSignaturePejabat(doc, x, y) {
-  doc.save();
-  doc.strokeColor("#163b73").lineWidth(1.3).lineCap("round").lineJoin("round");
-  doc.path(
-    `M ${x + 15} ${y + 18} ` +
-    `C ${x + 8} ${y + 4}, ${x + 25} ${y - 8}, ${x + 38} ${y + 8} ` +
-    `C ${x + 44} ${y + 22}, ${x + 25} ${y + 26}, ${x + 18} ${y + 15} ` +
-    `C ${x + 12} ${y + 2}, ${x + 45} ${y - 4}, ${x + 52} ${y + 16} ` +
-    `C ${x + 56} ${y + 25}, ${x + 65} ${y + 6}, ${x + 72} ${y + 18} ` +
-    `M ${x + 32} ${y + 14} ` +
-    `C ${x + 55} ${y + 22}, ${x + 75} ${y + 24}, ${x + 95} ${y + 22} ` +
-    `M ${x + 98} ${y + 20} L ${x + 100} ${y + 21}`
-  ).stroke();
-  doc.restore();
-}
-
-function drawCheckmarkV(doc, x, y) {
-  doc.save();
-  doc.strokeColor("#163b73").lineWidth(1.6).lineCap("round").lineJoin("round");
-  doc.path(`M ${x} ${y + 4} L ${x + 4} ${y + 10} L ${x + 11} ${y}`).stroke();
-  doc.restore();
-}
+// Catatan: Tanda tangan dan centang pertimbangan dibiarkan kosong agar dapat diisi dan ditandatangani secara fisik setelah dicetak (print).
 
 async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
   await ensureDirAsync(UPLOADS_DIR);
@@ -1712,15 +1658,12 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
       width: wAlamatLeft - 10,
     });
 
-    // Kotak Kanan: TTD Pemohon
+    // Kotak Kanan: TTD Pemohon (dibiarkan kosong untuk ditandatangani secara fisik saat dicetak)
     doc.rect(startX + wAlamatLeft, y, wAlamatRight, hTtdBox).stroke();
     doc.font("TMR").fontSize(7.5).text("Telp. " + (data.kontakCuti || "-"), startX + wAlamatLeft + 6, y + 4, {
       width: wAlamatRight - 12,
     });
     doc.text("Hormat saya,", startX + wAlamatLeft, y + 15, { width: wAlamatRight, align: "center" });
-
-    // Goresan TTD Pemohon (tinta biru)
-    drawSignaturePemohon(doc, startX + wAlamatLeft + 70, y + 16);
 
     doc.font("TMR").fontSize(8).text(data.nama, startX + wAlamatLeft, y + 53, { width: wAlamatRight, align: "center" });
     doc.font("TMR").fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + 63, { width: wAlamatRight, align: "center" });
@@ -1731,11 +1674,9 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     y += 14;
 
     const wCheckCol = 65;
-    // 4 Kotak status di kiri (total 260 pt)
+    // 4 Kotak status di kiri (total 260 pt) - dibiarkan kosong untuk diisi saat dicetak
     drawCell(startX, y, wCheckCol, 14, "DISETUJUI", { align: "center", size: 6.5 });
     drawCell(startX, y + 14, wCheckCol, 62, "", {});
-    // Centang V di kotak DISETUJUI
-    drawCheckmarkV(doc, startX + 27, y + 26);
 
     drawCell(startX + wCheckCol, y, wCheckCol, 14, "PERUBAHAN", { align: "center", size: 6.5 });
     drawCell(startX + wCheckCol, y + 14, wCheckCol, 62, "", {});
@@ -1747,16 +1688,13 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + (wCheckCol * 3), y, wCheckCol, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
     drawCell(startX + (wCheckCol * 3), y + 14, wCheckCol, 62, "", {});
 
-    // Kotak Kanan: TTD Atasan
+    // Kotak Kanan: TTD Atasan (dibiarkan kosong untuk ditandatangani secara fisik)
     const atasanJabatan = (data.atasan_jabatan || "Wakil Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
     const atasanNama = data.atasan_nama || "John Pieter, S.Kom.";
     const atasanNip = data.atasan_nip || "198312302009121004";
 
     doc.rect(startX + wAlamatLeft, y, wAlamatRight, hTtdBox).stroke();
     doc.font("TMR").fontSize(7.5).text(atasanJabatan, startX + wAlamatLeft + 6, y + 4, { width: wAlamatRight - 12, align: "center" });
-
-    // Goresan TTD Atasan (tinta biru)
-    drawSignatureAtasan(doc, startX + wAlamatLeft + 78, y + 16);
 
     doc.font("TMR").fontSize(7.5).text(atasanNama + " NIP", startX + wAlamatLeft, y + 53, { width: wAlamatRight, align: "center" });
     doc.font("TMR").fontSize(7.5).text(atasanNip, startX + wAlamatLeft, y + 63, { width: wAlamatRight, align: "center" });
@@ -1766,10 +1704,9 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawSectionHeader("VIII.", "KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI", y);
     y += 14;
 
+    // 4 Kotak status di kiri - dibiarkan kosong untuk diisi saat dicetak
     drawCell(startX, y, wCheckCol, 14, "DISETUJUI", { align: "center", size: 6.5 });
     drawCell(startX, y + 14, wCheckCol, 62, "", {});
-    // Centang V di kotak DISETUJUI
-    drawCheckmarkV(doc, startX + 27, y + 26);
 
     drawCell(startX + wCheckCol, y, wCheckCol, 14, "PERUBAHAN", { align: "center", size: 6.5 });
     drawCell(startX + wCheckCol, y + 14, wCheckCol, 62, "", {});
@@ -1780,16 +1717,13 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + (wCheckCol * 3), y, wCheckCol, 14, "TIDAK DISETUJUI", { align: "center", size: 6.5 });
     drawCell(startX + (wCheckCol * 3), y + 14, wCheckCol, 62, "", {});
 
-    // Kotak Kanan: TTD Pejabat Berwenang
+    // Kotak Kanan: TTD Pejabat Berwenang (dibiarkan kosong untuk ditandatangani secara fisik)
     const pejabatJabatan = (data.pejabat_jabatan || "Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
     const pejabatNama = data.pejabat_nama || "Arip Sarkowi, S.E., M.Si.";
     const pejabatNip = data.pejabat_nip || "197601091999032001";
 
     doc.rect(startX + wAlamatLeft, y, wAlamatRight, hTtdBox).stroke();
     doc.font("TMR").fontSize(7.5).text(pejabatJabatan, startX + wAlamatLeft + 6, y + 4, { width: wAlamatRight - 12, align: "center" });
-
-    // Goresan TTD Pejabat (tinta biru)
-    drawSignaturePejabat(doc, startX + wAlamatLeft + 75, y + 16);
 
     doc.font("TMR").fontSize(7.5).text(pejabatNama, startX + wAlamatLeft, y + 53, { width: wAlamatRight, align: "center" });
     doc.font("TMR").fontSize(7.5).text(`NIP ${pejabatNip}`, startX + wAlamatLeft, y + 63, { width: wAlamatRight, align: "center" });
