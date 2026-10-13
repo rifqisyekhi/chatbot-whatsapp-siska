@@ -17,6 +17,7 @@ const {
   buatSuratIzinMobilAwalAsync,
   buatSuratIzinMobilAkhirAsync,
   buatSuratPermintaanBarangAsync,
+  buatFormulirCutiAsync,
   calculateDuration,
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
@@ -4706,7 +4707,7 @@ client.on("message", async (message) => {
             `• *Alasan:* ${pengajuan.alasan || "-"}\n` +
             `• *Alamat Selama Cuti:* ${pengajuan.alamatCuti || "-"}\n` +
             `• *Kontak:* ${pengajuan.kontakCuti || "-"}\n\n` +
-            `Pengajuan telah resmi tercatat di sistem SisKA. Selamat beristirahat/menjalankan cuti!`;
+            `Sedang menyiapkan *Formulir Cuti resmi (PDF)* untuk Anda dan atasan...`;
 
           try {
             await RiwayatCuti.create({
@@ -4728,6 +4729,34 @@ client.on("message", async (message) => {
           }
 
           delete pengajuanBySender[pemohonId];
+
+          // GENERATE PDF FORMULIR CUTI & KIRIM KE PEGAWAI + ATASAN (OPSI A)
+          try {
+            const dataPDFCuti = {
+              nama: p?.nama || "Pegawai",
+              nip: p?.nip || p?.NIP || "-",
+              jabatan: p?.jabatan || "-",
+              sub_unit: p?.sub_unit || p?.["Unit Kerja"] || "Biro Keuangan dan BMN",
+              unitKerja: p?.["Unit Kerja"] || p?.sub_unit || "Biro Keuangan dan BMN",
+              masaKerja: p?.masaKerja || "-",
+              jenisCuti: pengajuan.jenisCuti || "Cuti Tahunan",
+              alasan: pengajuan.alasan || "-",
+              lamaCuti: pengajuan.lamaCuti || "-",
+              alamatCuti: pengajuan.alamatCuti || "-",
+              kontakCuti: pengajuan.kontakCuti || "-",
+              atasan_nama: pengajuan.atasan?.nama || "Atasan Langsung",
+              atasan_nip: pengajuan.atasan?.nip || "-",
+              atasan_jabatan: pengajuan.atasan?.jabatan || "Atasan Langsung",
+              pejabat_nama: NAMA_KETUA_SUB_TU || "Kepala Biro Keuangan dan BMN",
+              pejabat_nip: NIP_KETUA_SUB_TU || "-",
+              isPimpinan: false,
+            };
+
+            const nomorAtasan = getValidWaId(pengajuan.atasan?.no_wa);
+            await buatFormulirCutiAsync(dataPDFCuti, pemohonId, nomorAtasan, client);
+          } catch (pdfErr) {
+            console.error("❌ Gagal membuat PDF Formulir Cuti:", pdfErr?.message || pdfErr);
+          }
         } else if (jenis === "Kendaraan") {
           const allKendaraan = await getStatusKendaraan();
           const index = allKendaraan.findIndex(
@@ -6064,7 +6093,7 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
           `• *Alasan:* ${flow.alasan}\n` +
           `• *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
           `• *Kontak:* ${flow.kontakCuti}\n\n` +
-          `Pengajuan telah resmi tercatat di sistem SisKA. Selamat beristirahat/menjalankan cuti!`;
+          `Sedang menyiapkan *Formulir Cuti resmi (PDF)* Anda...`;
 
         await kirimDenganTyping(client, chatId, pesanPegawai);
 
@@ -6085,6 +6114,33 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
           });
         } catch (dbErr) {
           console.error("[CUTI] Gagal simpan RiwayatCuti (Pimpinan):", dbErr);
+        }
+
+        // GENERATE PDF FORMULIR CUTI & KIRIM KE PIMPINAN
+        try {
+          const dataPDFCuti = {
+            nama: flow.pegawai.nama,
+            nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
+            jabatan: flow.pegawai.jabatan || "-",
+            sub_unit: flow.pegawai.sub_unit || flow.pegawai["Unit Kerja"] || "Biro Keuangan dan BMN",
+            unitKerja: flow.pegawai["Unit Kerja"] || flow.pegawai.sub_unit || "Biro Keuangan dan BMN",
+            masaKerja: flow.pegawai.masaKerja || "-",
+            jenisCuti: flow.jenisCuti,
+            alasan: flow.alasan,
+            lamaCuti: flow.lamaCuti,
+            alamatCuti: flow.alamatCuti,
+            kontakCuti: flow.kontakCuti,
+            atasan_nama: flow.pegawai.nama,
+            atasan_nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
+            atasan_jabatan: flow.pegawai.jabatan || "Pimpinan",
+            pejabat_nama: NAMA_KETUA_SUB_TU || "Kepala Biro Keuangan dan BMN",
+            pejabat_nip: NIP_KETUA_SUB_TU || "-",
+            isPimpinan: true,
+          };
+
+          await buatFormulirCutiAsync(dataPDFCuti, chatId, null, client);
+        } catch (pdfErr) {
+          console.error("❌ Gagal membuat PDF Formulir Cuti (Pimpinan):", pdfErr?.message || pdfErr);
         }
 
         delete pengajuanBySender[chatId];

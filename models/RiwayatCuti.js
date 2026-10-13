@@ -25,3 +25,4 @@ const riwayatCutiSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model("RiwayatCuti", riwayatCutiSchema, "riwayat_cuti");
+

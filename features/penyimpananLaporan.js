@@ -50,6 +50,7 @@ const JENIS = {
   // Surat serah terima barang, disimpan atas nama pemohonnya —
   // dialah yang memegang surat itu sebagai bukti peminjaman.
   barang: "barang",
+  cuti: "cuti",
 };
 
 // =========================================================

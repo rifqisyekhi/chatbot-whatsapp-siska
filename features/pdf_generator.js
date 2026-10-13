@@ -1432,12 +1432,333 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     throw err;
   }
 }
- 
+
+// ==========================================
+// FORMULIR CUTI (Sistem Standar Resmi BKN/Kemenaker)
+// ==========================================
+async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
+  await ensureDirAsync(UPLOADS_DIR);
+
+  const safeSubstansi = (data.sub_unit || data.unitKerja || "TU").replace(/[\/\\]/g, "_");
+  const namaFile = `Formulir Cuti_${data.nama}_${data.nip || "-"}_${safeSubstansi}.pdf`;
+  const filePath = await penyimpanan.siapkanTujuan({
+    jenis: "cuti",
+    pemilik: data.nama,
+    namaFile,
+  });
+
+  const doc = new PDFDocument({
+    size: "A4",
+    margins: { top: 30, bottom: 30, left: 36, right: 36 },
+  });
+
+  try {
+    const fontDir = path.join(__dirname, "..", "assets", "fonts");
+    try {
+      doc.registerFont("TMR", path.join(fontDir, "times.ttf"));
+      doc.registerFont("TMR-Bold", path.join(fontDir, "times-bold.ttf"));
+      doc.font("TMR");
+    } catch (e) {
+      doc.font("Helvetica");
+    }
+
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    const startX = 36;
+    const tableWidth = doc.page.width - 72; // 523.28 pt
+
+    const bulanIndo = [
+      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+      "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+    ];
+    const now = new Date();
+    const tglSurat = `Jakarta, ${now.getDate()} ${bulanIndo[now.getMonth()]} ${now.getFullYear()}`;
+
+    // Helper untuk menggambar cell tabel berbingkai
+    const drawCell = (x, y, w, h, text = "", options = {}) => {
+      doc.rect(x, y, w, h).stroke();
+      if (text) {
+        const align = options.align || "left";
+        const font = options.font || "TMR";
+        const size = options.size || 8;
+        const paddingX = options.paddingX !== undefined ? options.paddingX : 4;
+        const paddingY = options.paddingY !== undefined ? options.paddingY : 3;
+        doc.font(font).fontSize(size).text(String(text), x + paddingX, y + paddingY, {
+          width: w - (paddingX * 2),
+          align,
+          lineGap: 1,
+        });
+      }
+    };
+
+    const isCuti = (jenis, keyword) => {
+      return String(jenis || "").toLowerCase().includes(keyword.toLowerCase());
+    };
+
+    // 1. HEADER (Kanan Atas)
+    const headerW = 200;
+    const headerX = startX + tableWidth - headerW;
+    let y = 32;
+    doc.font("TMR").fontSize(8.5).text(tglSurat, headerX, y, { width: headerW, align: "left" });
+    y += 12;
+    doc.text("Yth. Kepala Biro Keuangan dan BMN", headerX, y, { width: headerW, align: "left" });
+    y += 12;
+    doc.text("di Jakarta", headerX, y, { width: headerW, align: "left" });
+
+    // 2. JUDUL
+    y = 74;
+    doc.font("TMR-Bold").fontSize(10.5).text("FORMULIR PERMINTAAN DAN PEMBERIAN CUTI", startX, y, {
+      width: tableWidth,
+      align: "center",
+    });
+
+    // 3. I. DATA PEGAWAI
+    y = 93;
+    drawCell(startX, y, tableWidth, 14, "I. DATA PEGAWAI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    // Baris 1: Nama & NIP
+    drawCell(startX, y, 65, 15, "Nama", { font: "TMR", size: 8 });
+    drawCell(startX + 65, y, 195, 15, data.nama, { font: "TMR-Bold", size: 8 });
+    drawCell(startX + 260, y, 65, 15, "NIP / NIK", { font: "TMR", size: 8 });
+    drawCell(startX + 325, y, tableWidth - 325, 15, data.nip || "-", { font: "TMR", size: 8 });
+    y += 15;
+
+    // Baris 2: Jabatan & Masa Kerja
+    drawCell(startX, y, 65, 15, "Jabatan", { font: "TMR", size: 8 });
+    drawCell(startX + 65, y, 195, 15, data.jabatan || "-", { font: "TMR", size: 8 });
+    drawCell(startX + 260, y, 65, 15, "Masa Kerja", { font: "TMR", size: 8 });
+    drawCell(startX + 325, y, tableWidth - 325, 15, data.masaKerja || "-", { font: "TMR", size: 8 });
+    y += 15;
+
+    // Baris 3: Unit Kerja
+    drawCell(startX, y, 65, 15, "Unit Kerja", { font: "TMR", size: 8 });
+    drawCell(startX + 65, y, tableWidth - 65, 15, data.unitKerja || data.sub_unit || "Biro Keuangan dan BMN", { font: "TMR", size: 8 });
+    y += 15;
+
+    // 4. II. JENIS CUTI YANG DIAMBIL
+    drawCell(startX, y, tableWidth, 14, "II. JENIS CUTI YANG DIAMBIL", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    const colW = tableWidth / 2; // 261.64
+    const labelW = colW - 32;
+
+    // Baris 1
+    drawCell(startX, y, labelW, 14, "1. Cuti Tahunan", { size: 8 });
+    drawCell(startX + labelW, y, 32, 14, isCuti(data.jenisCuti, "Tahunan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    drawCell(startX + colW, y, labelW, 14, "2. Cuti Besar", { size: 8 });
+    drawCell(startX + colW + labelW, y, 32, 14, isCuti(data.jenisCuti, "Besar") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    y += 14;
+
+    // Baris 2
+    drawCell(startX, y, labelW, 14, "3. Cuti Sakit", { size: 8 });
+    drawCell(startX + labelW, y, 32, 14, isCuti(data.jenisCuti, "Sakit") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    drawCell(startX + colW, y, labelW, 14, "4. Cuti Melahirkan", { size: 8 });
+    drawCell(startX + colW + labelW, y, 32, 14, isCuti(data.jenisCuti, "Melahirkan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    y += 14;
+
+    // Baris 3
+    drawCell(startX, y, labelW, 14, "5. Cuti Karena Alasan Penting", { size: 8 });
+    drawCell(startX + labelW, y, 32, 14, isCuti(data.jenisCuti, "Penting") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    drawCell(startX + colW, y, labelW, 14, "6. Cuti di Luar Tanggungan Negara", { size: 8 });
+    drawCell(startX + colW + labelW, y, 32, 14, isCuti(data.jenisCuti, "Tanggungan") ? "V" : "", { align: "center", font: "TMR-Bold", size: 8.5 });
+    y += 14;
+
+    // 5. III. ALASAN CUTI
+    drawCell(startX, y, tableWidth, 14, "III. ALASAN CUTI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+    drawCell(startX, y, tableWidth, 24, data.alasan || "-", { size: 8 });
+    y += 24;
+
+    // 6. IV. LAMANYA CUTI
+    drawCell(startX, y, tableWidth, 14, "IV. LAMANYA CUTI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+    drawCell(startX, y, 55, 15, "Selama", { size: 8 });
+    drawCell(startX + 55, y, 175, 15, data.lamaCuti || "-", { size: 8 });
+    drawCell(startX + 230, y, 65, 15, "Tanggal", { size: 8 });
+    drawCell(startX + 295, y, tableWidth - 295, 15, data.tanggalCuti || data.lamaCuti || "-", { size: 8 });
+    y += 15;
+
+    // 7. V. CATATAN CUTI
+    drawCell(startX, y, tableWidth, 14, "V. CATATAN CUTI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    drawCell(startX, y, colW, 12, "1. CUTI TAHUNAN", { font: "TMR-Bold", size: 7.5, paddingY: 1.5 });
+    drawCell(startX + colW, y, labelW, 12, "2. CUTI BESAR", { size: 7.5, paddingY: 1.5 });
+    drawCell(startX + colW + labelW, y, 32, 12, "", {});
+    y += 12;
+
+    const subCol1 = 45;
+    const subCol2 = 45;
+    const subCol3 = colW - subCol1 - subCol2;
+
+    // Row N-2
+    drawCell(startX, y, subCol1, 12, "Tahun", { align: "center", size: 7 });
+    drawCell(startX + subCol1, y, subCol2, 12, "Sisa", { align: "center", size: 7 });
+    drawCell(startX + subCol1 + subCol2, y, subCol3, 12, "Keterangan", { align: "center", size: 7 });
+    drawCell(startX + colW, y, labelW, 12, "3. CUTI SAKIT", { size: 7.5 });
+    drawCell(startX + colW + labelW, y, 32, 12, "", {});
+    y += 12;
+
+    // Row N-1
+    drawCell(startX, y, subCol1, 12, "N-2", { align: "center", size: 7 });
+    drawCell(startX + subCol1, y, subCol2, 12, "-", { align: "center", size: 7 });
+    drawCell(startX + subCol1 + subCol2, y, subCol3, 12, "-", { align: "center", size: 7 });
+    drawCell(startX + colW, y, labelW, 12, "4. CUTI MELAHIRKAN", { size: 7.5 });
+    drawCell(startX + colW + labelW, y, 32, 12, "", {});
+    y += 12;
+
+    // Row N
+    drawCell(startX, y, subCol1, 12, "N-1", { align: "center", size: 7 });
+    drawCell(startX + subCol1, y, subCol2, 12, "-", { align: "center", size: 7 });
+    drawCell(startX + subCol1 + subCol2, y, subCol3, 12, "-", { align: "center", size: 7 });
+    drawCell(startX + colW, y, labelW, 12, "5. CUTI KARENA ALASAN PENTING", { size: 7.5 });
+    drawCell(startX + colW + labelW, y, 32, 12, "", {});
+    y += 12;
+
+    // Row Current
+    drawCell(startX, y, subCol1, 12, "N", { align: "center", size: 7 });
+    drawCell(startX + subCol1, y, subCol2, 12, "-", { align: "center", size: 7 });
+    drawCell(startX + subCol1 + subCol2, y, subCol3, 12, isCuti(data.jenisCuti, "Tahunan") ? `Diambil` : "-", { align: "center", size: 7 });
+    drawCell(startX + colW, y, labelW, 12, "6. CUTI DI LUAR TANGGUNGAN NEGARA", { size: 7.5 });
+    drawCell(startX + colW + labelW, y, 32, 12, "", {});
+    y += 12;
+
+    // 8. VI. ALAMAT SELAMA MENJALANKAN CUTI
+    drawCell(startX, y, tableWidth, 14, "VI. ALAMAT SELAMA MENJALANKAN CUTI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    const boxAlamatW = 280;
+    const boxTtdW = tableWidth - boxAlamatW;
+    const boxHeight = 70;
+
+    // Kotak Kiri: Alamat
+    doc.rect(startX, y, boxAlamatW, boxHeight).stroke();
+    doc.font("TMR").fontSize(8).text(data.alamatCuti || "-", startX + 5, y + 6, {
+      width: boxAlamatW - 10,
+    });
+
+    // Kotak Kanan: TTD Pemohon
+    doc.rect(startX + boxAlamatW, y, boxTtdW, boxHeight).stroke();
+    doc.font("TMR").fontSize(7.5).text("Telp. " + (data.kontakCuti || "-"), startX + boxAlamatW + 5, y + 4, {
+      width: boxTtdW - 10,
+    });
+    doc.text("Hormat saya,", startX + boxAlamatW, y + 15, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(6.5).fillColor("#1b5e20").text("[Disetujui Elektronik via SisKA]", startX + boxAlamatW, y + 34, {
+      width: boxTtdW,
+      align: "center",
+    }).fillColor("#000000");
+    doc.font("TMR-Bold").fontSize(8).text(data.nama, startX + boxAlamatW, y + 46, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(7.5).text(`NIP. ${data.nip || "-"}`, startX + boxAlamatW, y + 57, { width: boxTtdW, align: "center" });
+    y += boxHeight;
+
+    // 9. VII. PERTIMBANGAN ATASAN LANGSUNG
+    drawCell(startX, y, tableWidth, 14, "VII. PERTIMBANGAN ATASAN LANGSUNG", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    const checkColW = 70;
+    // 4 Checkboxes di kiri (total 280 pt)
+    drawCell(startX, y, checkColW, 14, "DISETUJUI", { align: "center", size: 7, font: "TMR-Bold" });
+    drawCell(startX, y + 14, checkColW, 56, "V", { align: "center", font: "TMR-Bold", size: 12, paddingY: 18 });
+
+    drawCell(startX + checkColW, y, checkColW, 14, "PERUBAHAN", { align: "center", size: 7 });
+    drawCell(startX + checkColW, y + 14, checkColW, 56, "", {});
+
+    drawCell(startX + (checkColW * 2), y, checkColW, 14, "DITANGGUHKAN", { align: "center", size: 7 });
+    drawCell(startX + (checkColW * 2), y + 14, checkColW, 56, "", {});
+
+    drawCell(startX + (checkColW * 3), y, checkColW, 14, "TDK DISETUJUI", { align: "center", size: 7 });
+    drawCell(startX + (checkColW * 3), y + 14, checkColW, 56, "", {});
+
+    // Kotak Kanan: TTD Atasan
+    const atasanJabatan = data.atasan_jabatan || (data.isPimpinan ? "Pimpinan Unit Kerja" : "Atasan Langsung");
+    const atasanNama = data.atasan_nama || (data.isPimpinan ? data.nama : "Atasan Langsung");
+    const atasanNip = data.atasan_nip || (data.isPimpinan ? data.nip : "-");
+
+    doc.rect(startX + boxAlamatW, y, boxTtdW, boxHeight).stroke();
+    doc.font("TMR").fontSize(7.5).text(atasanJabatan, startX + boxAlamatW, y + 5, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(6.5).fillColor("#1b5e20").text("[Disetujui Elektronik via SisKA]", startX + boxAlamatW, y + 34, {
+      width: boxTtdW,
+      align: "center",
+    }).fillColor("#000000");
+    doc.font("TMR-Bold").fontSize(8).text(atasanNama, startX + boxAlamatW, y + 46, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(7.5).text(`NIP. ${atasanNip}`, startX + boxAlamatW, y + 57, { width: boxTtdW, align: "center" });
+    y += boxHeight;
+
+    // 10. VIII. KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI
+    drawCell(startX, y, tableWidth, 14, "VIII. KEPUTUSAN PEJABAT YANG BERWENANG MEMBERIKAN CUTI", { font: "TMR-Bold", size: 8.5, paddingY: 2.5 });
+    y += 14;
+
+    drawCell(startX, y, checkColW, 14, "DISETUJUI", { align: "center", size: 7, font: "TMR-Bold" });
+    drawCell(startX, y + 14, checkColW, 56, "V", { align: "center", font: "TMR-Bold", size: 12, paddingY: 18 });
+
+    drawCell(startX + checkColW, y, checkColW, 14, "PERUBAHAN", { align: "center", size: 7 });
+    drawCell(startX + checkColW, y + 14, checkColW, 56, "", {});
+
+    drawCell(startX + (checkColW * 2), y, checkColW, 14, "DITANGGUHKAN", { align: "center", size: 7 });
+    drawCell(startX + (checkColW * 2), y + 14, checkColW, 56, "", {});
+
+    drawCell(startX + (checkColW * 3), y, checkColW, 14, "TDK DISETUJUI", { align: "center", size: 7 });
+    drawCell(startX + (checkColW * 3), y + 14, checkColW, 56, "", {});
+
+    // Kotak Kanan: TTD Pejabat Berwenang
+    doc.rect(startX + boxAlamatW, y, boxTtdW, boxHeight).stroke();
+    doc.font("TMR").fontSize(7.5).text("Kepala Biro Keuangan dan BMN", startX + boxAlamatW, y + 5, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(6.5).fillColor("#1b5e20").text("[Disetujui Secara Sah]", startX + boxAlamatW, y + 34, {
+      width: boxTtdW,
+      align: "center",
+    }).fillColor("#000000");
+    doc.font("TMR-Bold").fontSize(8).text(data.pejabat_nama || "Kepala Biro Keuangan dan BMN", startX + boxAlamatW, y + 46, { width: boxTtdW, align: "center" });
+    doc.font("TMR").fontSize(7.5).text(`NIP. ${data.pejabat_nip || "-"}`, startX + boxAlamatW, y + 57, { width: boxTtdW, align: "center" });
+
+    doc.end();
+
+    return new Promise((resolve, reject) => {
+      stream.on("finish", async () => {
+        try {
+          const media = MessageMedia.fromFilePath(filePath);
+
+          // 1. Kirim ke Pegawai (Pemohon)
+          try {
+            await client.sendMessage(chatId, media, {
+              caption: "📄 Berikut adalah *Formulir Permintaan dan Pemberian Cuti* resmi Anda yang telah *DISETUJUI*.\n\nFile ini merupakan bukti sah persetujuan cuti Anda.",
+            });
+          } catch (e) {
+            console.error("❌ Gagal kirim PDF Cuti ke pegawai:", e?.message || e);
+          }
+
+          // 2. Kirim ke Atasan Langsung (Tembusan) — jika bukan orang yang sama
+          if (targetAtasan && targetAtasan !== "@c.us" && targetAtasan !== chatId) {
+            try {
+              await client.sendMessage(targetAtasan, media, {
+                caption: `📄 *Tembusan Formulir Cuti Pegawai (Disetujui)*\n\n• *Nama:* ${data.nama}\n• *NIP:* ${data.nip || "-"}\n• *Jenis Cuti:* ${data.jenisCuti}\n• *Lamanya:* ${data.lamaCuti}`,
+              });
+            } catch (e) {
+              console.error(`❌ Gagal kirim PDF Cuti ke atasan (${targetAtasan}):`, e?.message || e);
+            }
+          }
+
+          resolve(filePath);
+        } catch (err) {
+          reject(err);
+        }
+      });
+      stream.on("error", (err) => reject(err));
+    });
+  } catch (err) {
+    doc.end();
+    console.error("❌ Error fatal saat pembuatan PDF Formulir Cuti:", err);
+    throw err;
+  }
+}
+
 module.exports = {
   buatLaporanLemburDenganFotoAsync,
   buatLaporanWFAAsync,
   buatSuratIzinMobilAwalAsync,
   buatSuratIzinMobilAkhirAsync,
   buatSuratPermintaanBarangAsync,
-  calculateDuration
+  buatFormulirCutiAsync,
+  calculateDuration,
 };
