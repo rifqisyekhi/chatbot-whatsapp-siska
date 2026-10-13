@@ -28,7 +28,6 @@ const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
 const penyimpananLaporan = require("./features/penyimpananLaporan");
 const {
   HELPDESK_GROUP_ID,
-  FORM_CUTI_URL,
   NO_KETUA_SUB_TU,
   NO_ADMIN_SAKEH,
   NIP_KETUA_SUB_TU,
@@ -51,6 +50,7 @@ const Kendaraan = require("./models/Kendaraan");
 const Antrian = require("./models/Antrian");
 const RiwayatLembur = require("./models/RiwayatLembur");
 const RiwayatKendaraan = require("./models/RiwayatKendaraan");
+const RiwayatCuti = require("./models/RiwayatCuti");
 
 let dbPegawai = [];
 
@@ -1404,6 +1404,38 @@ async function kirimLemburNonASNKeAtasan(chatId, flow) {
   }
 }
 
+// =========================================================
+// PENGAJUAN CUTI (INTERAKTIF & FORMAL)
+// =========================================================
+const MAP_JENIS_CUTI = {
+  "1": "Cuti Tahunan",
+  "2": "Cuti Besar",
+  "3": "Cuti Sakit",
+  "4": "Cuti Melahirkan",
+  "5": "Cuti Karena Alasan Penting",
+  "6": "Cuti di Luar Tanggungan Negara",
+};
+
+async function mulaiPengajuanCuti(client, chatId, pegawai) {
+  const teks =
+    `🌴 *Formulir Pengajuan Cuti (1/5)*\n\n` +
+    `Halo *${pegawai.nama}*, silakan pilih *Jenis Cuti* yang ingin diajukan:\n\n` +
+    `1. Cuti Tahunan\n` +
+    `2. Cuti Besar\n` +
+    `3. Cuti Sakit\n` +
+    `4. Cuti Melahirkan\n` +
+    `5. Cuti Karena Alasan Penting\n` +
+    `6. Cuti di Luar Tanggungan Negara\n\n` +
+    `_Ketik angka 1 - 6 sesuai pilihan Anda, atau ketik *menu* untuk membatalkan._`;
+
+  await kirimDenganTyping(client, chatId, teks);
+  pengajuanBySender[chatId] = {
+    step: "cuti-jenis",
+    jenis: "Cuti",
+    pegawai,
+  };
+}
+
 // Dipanggil saat atasan membalas "1". Mengembalikan pesan untuk pegawai.
 async function lemburNonASNDisetujui(pengajuan) {
   const { sender: pemohonId, pegawai, atasan, alasan, tanggalPengajuan } = pengajuan;
@@ -2467,15 +2499,7 @@ async function tanganiAlurAbsensi({
     }
 
     if (bodyLower === "3") {
-      await kirimDenganTyping(
-        client,
-        chatId,
-        "*Pengajuan Cuti*\n\nSilakan isi formulir cuti melalui link berikut:",
-      );
-
-      await kirimDenganTyping(client, chatId, FORM_CUTI_URL);
-
-      delete pengajuanBySender[chatId];
+      await mulaiPengajuanCuti(client, chatId, pegawai);
       return;
     }
 
@@ -4673,7 +4697,36 @@ client.on("message", async (message) => {
             fotoList: [],
           };
         } else if (jenis === "Cuti") {
-          pesanPegawai = `Pengajuan *${jenis}* Anda telah *DISETUJUI* oleh atasan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
+          pesanPegawai =
+            `✅ *PENGAJUAN CUTI DISETUJUI*\n\n` +
+            `Pengajuan cuti Anda telah *DISETUJUI* oleh atasan (*${pengajuan.atasan?.nama || "Atasan"}*).\n\n` +
+            `*Rincian Cuti:*\n` +
+            `• *Jenis Cuti:* ${pengajuan.jenisCuti || "Cuti"}\n` +
+            `• *Lamanya:* ${pengajuan.lamaCuti || "-"}\n` +
+            `• *Alasan:* ${pengajuan.alasan || "-"}\n` +
+            `• *Alamat Selama Cuti:* ${pengajuan.alamatCuti || "-"}\n` +
+            `• *Kontak:* ${pengajuan.kontakCuti || "-"}\n\n` +
+            `Pengajuan telah resmi tercatat di sistem SisKA. Selamat beristirahat/menjalankan cuti!`;
+
+          try {
+            await RiwayatCuti.create({
+              nip: p?.nip || p?.NIP || "-",
+              nama: p?.nama || "-",
+              jabatan: p?.jabatan || "-",
+              sub_unit: p?.sub_unit || "-",
+              jenis_cuti: pengajuan.jenisCuti || "Cuti",
+              alasan: pengajuan.alasan || "-",
+              lama_cuti: pengajuan.lamaCuti || "-",
+              alamat_cuti: pengajuan.alamatCuti || "-",
+              kontak_cuti: pengajuan.kontakCuti || "-",
+              atasan: pengajuan.atasan?.nama || "-",
+              status: "DISETUJUI",
+              createdAt: new Date(),
+            });
+          } catch (dbErr) {
+            console.error("[CUTI] Gagal simpan RiwayatCuti:", dbErr);
+          }
+
           delete pengajuanBySender[pemohonId];
         } else if (jenis === "Kendaraan") {
           const allKendaraan = await getStatusKendaraan();
@@ -4800,10 +4853,37 @@ client.on("message", async (message) => {
           );
         }
       } else if (isApprovalNo(message.body)) {
+        let pesanTolak = `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`;
+        if (jenis === "Cuti") {
+          pesanTolak =
+            `❌ *PENGAJUAN CUTI DITOLAK*\n\n` +
+            `Mohon maaf, pengajuan cuti (*${pengajuan.jenisCuti || "Cuti"}*) Anda telah *DITOLAK* oleh atasan (*${pengajuan.atasan?.nama || "Atasan"}*).\n\n` +
+            `Silakan berkoordinasi langsung dengan atasan Anda untuk informasi lebih lanjut.`;
+
+          try {
+            await RiwayatCuti.create({
+              nip: p?.nip || p?.NIP || "-",
+              nama: p?.nama || "-",
+              jabatan: p?.jabatan || "-",
+              sub_unit: p?.sub_unit || "-",
+              jenis_cuti: pengajuan.jenisCuti || "Cuti",
+              alasan: pengajuan.alasan || "-",
+              lama_cuti: pengajuan.lamaCuti || "-",
+              alamat_cuti: pengajuan.alamatCuti || "-",
+              kontak_cuti: pengajuan.kontakCuti || "-",
+              atasan: pengajuan.atasan?.nama || "-",
+              status: "DITOLAK",
+              createdAt: new Date(),
+            });
+          } catch (dbErr) {
+            console.error("[CUTI] Gagal simpan RiwayatCuti (Ditolak):", dbErr);
+          }
+        }
+
         await kirimDenganTyping(
           client,
           pemohonId,
-          `Pengajuan *${jenis}* Anda *DITOLAK* oleh atasan/penanggung jawab.`,
+          pesanTolak,
         );
         await kirimDenganTyping(
           client,
@@ -5026,16 +5106,7 @@ client.on("message", async (message) => {
         return;
       }
       if (bodyLower === "2") {
-        await kirimDenganTyping(
-          client,
-          chatId,
-          "Silakan tuliskan *alasan pengajuan cuti* Anda.",
-        );
-        pengajuanBySender[chatId] = {
-          ...flow,
-          step: "alasan-cuti",
-          jenis: "Cuti",
-        };
+        await mulaiPengajuanCuti(client, chatId, flow.pegawai);
         return;
       }
       if (bodyLower === "3") {
@@ -5777,26 +5848,256 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
       return;
     }
 
-    // --- ALUR CUTI ---
-    if (flow.step === "alasan-cuti") {
+    // --- ALUR CUTI INTERAKTIF (FORM CUTI RESMI) ---
+    if (flow.step === "cuti-jenis") {
+      const jenisCuti = MAP_JENIS_CUTI[bodyLower];
+      if (!jenisCuti) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Pilihan tidak valid. Silakan pilih jenis cuti dengan mengetik angka *1* sampai *6*:\n\n` +
+            `1. Cuti Tahunan\n` +
+            `2. Cuti Besar\n` +
+            `3. Cuti Sakit\n` +
+            `4. Cuti Melahirkan\n` +
+            `5. Cuti Karena Alasan Penting\n` +
+            `6. Cuti di Luar Tanggungan Negara\n\n` +
+            `_Atau ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "cuti-alasan",
+        jenisCuti,
+      };
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `*Langkah 2 dari 5: Alasan Cuti*\n\n` +
+          `Jenis Cuti: *${jenisCuti}*\n\n` +
+          `Silakan tuliskan *alasan pengajuan cuti* Anda:\n` +
+          `_(Contoh: Keperluan keluarga di luar kota / Menikahkan anak / Sakit rawat jalan)_\n\n` +
+          `_Ketik *menu* untuk membatalkan._`,
+      );
+      return;
+    }
+
+    if (flow.step === "cuti-alasan") {
       const alasan = message.body.trim();
+      if (!alasan) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Mohon tuliskan alasan pengajuan cuti Anda.\n\n_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "cuti-durasi",
+        alasan,
+      };
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `*Langkah 3 dari 5: Lamanya Cuti & Tanggal*\n\n` +
+          `Berapa lama dan tanggal berapa Anda akan mengambil cuti?\n` +
+          `_(Contoh: *3 hari (20 - 22 Oktober 2026)*)_\n\n` +
+          `_Ketik *menu* untuk membatalkan._`,
+      );
+      return;
+    }
+
+    if (flow.step === "cuti-durasi") {
+      const lamaCuti = message.body.trim();
+      if (!lamaCuti) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Mohon tuliskan durasi dan tanggal cuti Anda.\n_(Contoh: *2 hari (20 - 21 Oktober 2026)*)_\n\n_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "cuti-alamat",
+        lamaCuti,
+      };
+
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `*Langkah 4 dari 5: Alamat Selama Menjalankan Cuti*\n\n` +
+          `Silakan tuliskan *alamat lengkap atau kota* Anda selama menjalankan cuti:\n` +
+          `_(Contoh: *Jl. Pemuda No. 10, Solo, Jawa Tengah*)_\n\n` +
+          `_Ketik *menu* untuk membatalkan._`,
+      );
+      return;
+    }
+
+    if (flow.step === "cuti-alamat") {
+      const alamatCuti = message.body.trim();
+      if (!alamatCuti) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Mohon tuliskan alamat Anda selama menjalankan cuti.\n\n_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "cuti-kontak",
+        alamatCuti,
+      };
+
+      const nomorIni = chatId.split("@")[0];
+      await kirimDenganTyping(
+        client,
+        chatId,
+        `*Langkah 5 dari 5: Kontak Selama Cuti*\n\n` +
+          `Nomor telepon/kontak yang dapat dihubungi selama cuti:\n` +
+          `• Ketik *1* untuk memakai nomor WhatsApp ini (*${nomorIni}*)\n` +
+          `• Atau ketik nomor telepon lain jika berbeda\n\n` +
+          `_Ketik *menu* untuk membatalkan._`,
+      );
+      return;
+    }
+
+    if (flow.step === "cuti-kontak") {
+      let kontakCuti = message.body.trim();
+      if (bodyLower === "1" || bodyLower === "ya" || bodyLower === "sama") {
+        kontakCuti = chatId.split("@")[0];
+      } else if (!kontakCuti) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Mohon ketik *1* untuk memakai nomor WA saat ini, atau ketik nomor telepon yang dapat dihubungi.\n\n_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
 
       const isPimpinan =
         !flow.pegawai.atasan_nip || flow.pegawai.atasan_nip.trim() === "";
 
-      if (isPimpinan) {
-        let pesanPegawai = `*Pengajuan Cuti OTOMATIS DISETUJU* karena Anda terdeteksi sebagai Pimpinan.\n\nSilakan lanjutkan mengisi form pengajuan cuti di link berikut:\n${FORM_CUTI_URL}`;
+      let atasan = null;
+      if (!isPimpinan) {
+        atasan = await cariAtasanPegawai(flow.pegawai);
+      }
+
+      const namaAtasan = isPimpinan
+        ? "Tidak Ada (Pimpinan)"
+        : atasan?.nama || "Belum Terdaftar";
+
+      pengajuanBySender[chatId] = {
+        ...flow,
+        step: "cuti-konfirmasi",
+        kontakCuti,
+        atasan,
+        isPimpinan,
+      };
+
+      const ringkasan =
+        `📋 *RINGKASAN PENGAJUAN CUTI*\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n` +
+        `👤 *Nama:* ${flow.pegawai.nama}\n` +
+        `🆔 *NIP/NIK:* ${flow.pegawai.nip || flow.pegawai.NIP || "-"}\n` +
+        `💼 *Jabatan:* ${flow.pegawai.jabatan || "-"}\n` +
+        `🏢 *Unit Kerja:* ${flow.pegawai.sub_unit || "-"}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n` +
+        `🌴 *Jenis Cuti:* ${flow.jenisCuti}\n` +
+        `📝 *Alasan:* ${flow.alasan}\n` +
+        `⏳ *Lamanya:* ${flow.lamaCuti}\n` +
+        `🏠 *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
+        `📞 *Kontak:* ${kontakCuti}\n` +
+        `👔 *Atasan Langsung:* ${namaAtasan}\n` +
+        `━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `Apakah data pengajuan di atas sudah benar?\n` +
+        `1. *Ya, Kirim Pengajuan*\n` +
+        `2. *Batal*\n\n` +
+        `_Ketik *1* untuk mengirim atau *2* untuk membatalkan._`;
+
+      await kirimDenganTyping(client, chatId, ringkasan);
+      return;
+    }
+
+    if (flow.step === "cuti-konfirmasi") {
+      if (bodyLower === "2" || bodyLower === "batal") {
+        delete pengajuanBySender[chatId];
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Pengajuan cuti telah dibatalkan. Ketik *menu* untuk kembali ke menu utama.",
+        );
+        return;
+      }
+
+      if (
+        bodyLower !== "1" &&
+        bodyLower !== "ya" &&
+        !adaKataUtuh(bodyLower, "kirim") &&
+        !adaKataUtuh(bodyLower, "setuju")
+      ) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          "Pilihan tidak valid. Silakan ketik *1* untuk mengirim pengajuan, atau *2* untuk membatalkan.",
+        );
+        return;
+      }
+
+      // 1. Jika pemohon adalah Pimpinan (tidak ada atasan_nip)
+      if (flow.isPimpinan) {
+        const pesanPegawai =
+          `✅ *PENGAJUAN CUTI DISETUJUI*\n\n` +
+          `Pengajuan cuti Anda otomatis *DISETUJUI* karena Anda terdaftar sebagai Pimpinan.\n\n` +
+          `*Rincian Cuti:*\n` +
+          `• *Jenis Cuti:* ${flow.jenisCuti}\n` +
+          `• *Lamanya:* ${flow.lamaCuti}\n` +
+          `• *Alasan:* ${flow.alasan}\n` +
+          `• *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
+          `• *Kontak:* ${flow.kontakCuti}\n\n` +
+          `Pengajuan telah resmi tercatat di sistem SisKA. Selamat beristirahat/menjalankan cuti!`;
+
         await kirimDenganTyping(client, chatId, pesanPegawai);
+
+        try {
+          await RiwayatCuti.create({
+            nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
+            nama: flow.pegawai.nama,
+            jabatan: flow.pegawai.jabatan || "-",
+            sub_unit: flow.pegawai.sub_unit || "-",
+            jenis_cuti: flow.jenisCuti,
+            alasan: flow.alasan,
+            lama_cuti: flow.lamaCuti,
+            alamat_cuti: flow.alamatCuti,
+            kontak_cuti: flow.kontakCuti,
+            atasan: "Pimpinan (Otomatis)",
+            status: "DISETUJUI",
+            createdAt: new Date(),
+          });
+        } catch (dbErr) {
+          console.error("[CUTI] Gagal simpan RiwayatCuti (Pimpinan):", dbErr);
+        }
+
         delete pengajuanBySender[chatId];
         return;
       }
 
-      const atasan = await cariAtasanPegawai(flow.pegawai);
+      // 2. Teruskan ke atasan untuk persetujuan
+      const atasan = flow.atasan || (await cariAtasanPegawai(flow.pegawai));
       if (!atasan || !atasan.no_wa) {
         await kirimDenganTyping(
           client,
           chatId,
-          "Maaf, data atasan Anda tidak ditemukan atau nomor WA tidak valid. Hubungi admin.",
+          "Maaf, data atasan Anda tidak ditemukan atau nomor WA atasan tidak valid di database. Mohon laporkan ke admin Biro Keuangan.",
         );
         delete pengajuanBySender[chatId];
         return;
@@ -5807,13 +6108,27 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         await kirimDenganTyping(
           client,
           chatId,
-          "Nomor atasan tidak valid di database.",
+          "Nomor atasan tidak valid di database. Mohon laporkan ke admin Biro Keuangan.",
         );
         delete pengajuanBySender[chatId];
         return;
       }
 
-      const teksAtasan = `*Pengajuan Cuti* dari ${flow.pegawai.nama}\nAlasan: ${alasan}\n\n*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`;
+      const teksAtasan =
+        `🌴 *PENGAJUAN CUTI PEGAWAI* 🌴\n\n` +
+        `Terdapat permohonan cuti dari:\n\n` +
+        `• *Nama:* ${flow.pegawai.nama}\n` +
+        `• *NIP/NIK:* ${flow.pegawai.nip || flow.pegawai.NIP || "-"}\n` +
+        `• *Jabatan:* ${flow.pegawai.jabatan || "-"}\n` +
+        `• *Unit Kerja:* ${flow.pegawai.sub_unit || "-"}\n` +
+        `• *Jenis Cuti:* ${flow.jenisCuti}\n` +
+        `• *Alasan:* ${flow.alasan}\n` +
+        `• *Lamanya Cuti:* ${flow.lamaCuti}\n` +
+        `• *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
+        `• *Kontak:* ${flow.kontakCuti}\n\n` +
+        `*Balas pesan ini (QUOTE REPLY) dengan angka:*\n` +
+        `1. Setuju\n` +
+        `2. Tidak Setuju`;
 
       try {
         const sentToAtasan = await client.sendMessage(nomorAtasan, teksAtasan);
@@ -5821,10 +6136,14 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
 
         const dataBackup = {
           sender: chatId,
-          jenis: flow.jenis,
+          jenis: "Cuti",
           pegawai: flow.pegawai,
           atasan,
-          alasan,
+          jenisCuti: flow.jenisCuti,
+          alasan: flow.alasan,
+          lamaCuti: flow.lamaCuti,
+          alamatCuti: flow.alamatCuti,
+          kontakCuti: flow.kontakCuti,
           teksPesan: teksAtasan,
         };
 
@@ -5837,18 +6156,15 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         pengajuanBySender[chatId] = {
           ...flow,
           step: "menunggu-persetujuan",
-          alasan,
           atasan,
         };
+
         await kirimDenganTyping(
           client,
           chatId,
-          `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan.`,
+          `Pengajuan Cuti Anda sudah diteruskan ke atasan (${atasan.nama}) untuk persetujuan. Mohon menunggu.`,
         );
       } catch (err) {
-        // Dulu error-nya dibuang total sehingga mustahil tahu KENAPA gagal.
-        // Nomor tujuannya ikut dicetak karena penyebab tersering adalah nomor
-        // atasan di database yang keliru atau tidak terdaftar di WhatsApp.
         console.error(
           `[ATASAN] Gagal kirim pengajuan ke ${nomorAtasan} (${atasan?.nama || "?"}):`,
           err?.message || err,
@@ -5856,12 +6172,15 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         await kirimDenganTyping(
           client,
           chatId,
-          `Gagal mengirim pesan ke atasan (${atasan?.nama || "-"}). Nomor tujuan: ${String(nomorAtasan).split("@")[0]}.
-
-Mohon laporkan ke admin agar nomor atasan diperiksa.`,
+          `Gagal mengirim pesan ke atasan (${atasan?.nama || "-"}). Nomor tujuan: ${String(nomorAtasan).split("@")[0]}.\n\nMohon laporkan ke admin agar nomor atasan diperiksa.`,
         );
         delete pengajuanBySender[chatId];
       }
+      return;
+    }
+
+    if (flow.step === "alasan-cuti") {
+      await mulaiPengajuanCuti(client, chatId, flow.pegawai);
       return;
     }
 
