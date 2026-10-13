@@ -1593,17 +1593,32 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     // 5. III. ALASAN CUTI
     drawSectionHeader("III.", "ALASAN CUTI", y);
     y += 14;
-    drawCell(startX, y, tableWidth, 22, data.alasan || "-", { size: 8 });
+    drawCell(startX, y, tableWidth, 22, data.alasan || data.alasanCuti || "-", { size: 8 });
     y += 22;
     y += tableGapSmall; // Jeda pemisah antar tabel
 
     // 6. IV. LAMANYA CUTI
     drawSectionHeader("IV.", "LAMANYA CUTI", y);
     y += 14;
+    let durasiStr = data.lamaCuti || "-";
+    let tanggalStr = data.tanggalCuti || data.tanggal || "";
+    if (!tanggalStr) {
+      if (data.tglMulai && data.tglSelesai) {
+        tanggalStr = data.tglMulai === data.tglSelesai ? data.tglMulai : `${data.tglMulai} s/d ${data.tglSelesai}`;
+      } else if (durasiStr.includes("(") && durasiStr.includes(")")) {
+        const match = durasiStr.match(/^(.*?)\((.*?)\)$/);
+        if (match) {
+          durasiStr = match[1].trim();
+          tanggalStr = match[2].trim();
+        }
+      }
+    }
+    if (!tanggalStr) tanggalStr = "-";
+
     drawCell(startX, y, 55, 15, "Selama", { size: 8 });
-    drawCell(startX + 55, y, 160, 15, data.lamaCuti || "-", { size: 8 });
+    drawCell(startX + 55, y, 160, 15, durasiStr, { size: 8 });
     drawCell(startX + 215, y, 60, 15, "Tanggal", { size: 8 });
-    drawCell(startX + 275, y, 210, 15, data.tanggalCuti || data.tanggal || "-", { size: 8 });
+    drawCell(startX + 275, y, 210, 15, tanggalStr, { size: 8 });
     y += 15;
     y += tableGapSmall; // Jeda pemisah antar tabel
 
@@ -1651,8 +1666,8 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
 
     // Baris N
     drawCell(startX, y, sub1, 12, "N", { align: "center", size: 7 });
-    drawCell(startX + sub1, y, sub2, 12, isCuti(data.jenisCuti, "Tahunan") ? "9" : "", { align: "center", size: 7 });
-    drawCell(startX + sub1 + sub2, y, sub3, 12, isCuti(data.jenisCuti, "Tahunan") ? `Diambil ${data.lamaCuti || ""}` : "", { align: "center", size: 7 });
+    drawCell(startX + sub1, y, sub2, 12, "", { align: "center", size: 7 });
+    drawCell(startX + sub1 + sub2, y, sub3, 12, "", { align: "center", size: 7 });
     drawCell(startX + wLeftCatatan, y, wRightText, 12, "6. CUTI DI LUAR TANGGUNGAN NEGARA", { size: 7.5 });
     drawCell(startX + wLeftCatatan + wRightText, y, wRightBox, 12, "", {});
     y += 12;
@@ -1678,7 +1693,7 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX, y, wAlamatLeft, hTtdBox, data.alamatCuti || "-", { size: 8, paddingX: 5, paddingY: 6 });
 
     // Kotak Kanan Atas: Telp (diberi batas garis tabel horizontal di bawahnya)
-    drawCell(startX + wAlamatLeft, y, wAlamatRight, hTelp, "Telp. " + (data.kontakCuti || "-"), {
+    drawCell(startX + wAlamatLeft, y, wAlamatRight, hTelp, "Telp. " + (data.kontakCuti || data.noTelp || data.telp || data.telepon || "-"), {
       size: 7.5,
       paddingX: 6,
       paddingY: 3.5,
