@@ -12,23 +12,30 @@ import {
   Users,
   Calendar,
   ExternalLink,
+  CheckCircle2,
+  AlertCircle,
+  PackageOpen,
 } from "lucide-react";
 import { apiTU, getUrlPresensi } from "./services/ApiTU";
+import logoKemnaker from "./assets/logo-kemnaker.png";
 
-// Diadaptasi dari dashboard proyek lain; tampilannya sengaja dipertahankan.
-// Tiga penyesuaian terhadap proyek ini:
-// 1. Impor apiTU memakai path relatif, karena alias "@/" tidak dipasang di
-//    vite.config.js proyek ini (kalau dibiarkan, build langsung gagal).
-// 2. Gerbang login dilepas, mengikuti keputusan bahwa dashboard tidak memakai
-//    login. Versi aslinya juga tidak benar-benar mengamankan apa pun: apiTU
-//    tidak pernah mengirim token, dan /api/barang di backend memang terbuka.
-//
 // Halaman ini berdiri sendiri tanpa navigasi bersama, supaya operator barang
 // tidak punya jalan ke dashboard data pegawai (lihat App.jsx).
 //
 // id barang: GET /api/barang memetakan id_barang menjadi `id` (index.js:320),
 // sedangkan route PUT/DELETE memakai :id_barang. Jadi `item.id` di sini sudah
 // tepat dan tidak perlu diubah.
+//
+// TAMPILAN mengikuti palet resmi di index.css (navy / brand / paper / mist +
+// aksen kuning, hijau, teal), dengan idiom yang sama seperti MasterDataTU.jsx:
+// kartu rounded-2xl/3xl, border-mist, shadow-2xs, tombol utama bg-brand yang
+// menggelap ke navy saat disentuh.
+//
+// Satu catatan soal keterbacaan warna: aksen kuning (#FFD52E) dan hijau
+// (#9BC264) terlalu terang untuk dipakai sebagai warna TEKS di atas putih —
+// kontrasnya di bawah ambang WCAG. Jadi aksen itu dipakai sebagai LATAR
+// beropasitas rendah, sementara teksnya memakai nuansa gelap sewarna
+// (amber-800 / green-800). Pola ini sudah dipakai lebih dulu di MasterDataTU.
 const DashboardBarang = () => {
   const [databaseBarang, setDatabaseBarang] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +55,12 @@ const DashboardBarang = () => {
     satuan: "Pcs",
     img: "",
   });
+
+  // Konfirmasi hapus. Dulu memakai window.confirm() — kotak bawaan peramban
+  // yang tidak bisa ikut palet dan tidak menyebut akibatnya. Diganti modal,
+  // bentuknya sama dengan konfirmasi hapus di MasterDataTU.
+  const [modalHapus, setModalHapus] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [toasts, setToasts] = useState([]);
 
@@ -218,18 +231,24 @@ const DashboardBarang = () => {
     }
   };
 
-  const handleDelete = async (id, nama) => {
-    if (!window.confirm(`Hapus permanen barang "${nama}"?`)) return;
+  const konfirmasiHapus = async () => {
+    if (!modalHapus) return;
+    const { id, nama } = modalHapus;
+
+    setIsDeleting(true);
     try {
       await apiTU({
         url: `api/barang/${id}`,
         method: "DELETE",
       });
       setDatabaseBarang((prev) => prev.filter((b) => b.id !== id));
+      setModalHapus(null);
       showToast(`Barang ${nama} dihapus!`, "success");
     } catch (error) {
       console.error(error);
       showToast("Gagal menghapus barang.", "error");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -284,134 +303,174 @@ const DashboardBarang = () => {
     );
   }, [databaseBarang]);
 
+  // Dipakai berulang di form modal, jadi ditaruh di satu tempat supaya
+  // bentuk kolom isian tidak pelan-pelan berbeda satu sama lain.
+  const kelasIsian =
+    "w-full px-4 py-2.5 rounded-2xl bg-paper/60 hover:bg-paper focus:bg-white " +
+    "border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 " +
+    "outline-none text-sm font-medium transition-all";
+
+  const kelasLabel =
+    "block text-xs font-bold text-navy uppercase tracking-wider mb-1.5";
+
   return (
-    <div className="flex h-screen w-full text-[#1f2937] font-sans overflow-hidden bg-gray-50">
-      <main className="flex-1 flex flex-col h-full min-h-0 overflow-hidden">
-        <header className="h-[72px] bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="text-2xl font-extrabold text-gray-800 uppercase tracking-tight">
-              Stok ATK
-            </h1>
-            <p className="text-[13px] font-medium text-gray-500 mt-0.5">
-              Persediaan Barang Kantor
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="/admin"
-              className="h-[34px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-xs"
-              title="Ke Master Data Pegawai & Kendaraan"
-            >
-              <Users size={14} className="text-blue-600" />
-              <span className="hidden sm:inline">Master Data</span>
-            </a>
-
-            <a
-              href={getUrlPresensi()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="h-[34px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-xs"
-              title="Buka Presensi Non-ASN"
-            >
-              <Calendar size={14} className="text-emerald-600" />
-              <span className="hidden sm:inline">Presensi</span>
-              <ExternalLink size={12} className="text-emerald-500 opacity-70" />
-            </a>
-
-            <button
-              onClick={() => loadData(true)}
-              className="p-2 border rounded-lg hover:bg-gray-50 text-gray-500 transition-all active:scale-95"
-              title="Refresh Data"
-            >
-              <RefreshCw
-                size={15}
-                className={loading ? "animate-spin text-blue-500" : ""}
-              />
-            </button>
-            <button
-              onClick={() => openModal(null)}
-              className="h-[34px] bg-[#2563eb] text-white px-4 rounded-lg text-[13px] font-medium flex items-center gap-1.5 hover:bg-[#1d4ed8] transition-all"
-            >
-              <Plus size={15} /> Tambah Barang
-            </button>
-          </div>
-        </header>
-
-        <section className="p-6 flex-1 flex flex-col min-h-0 overflow-hidden gap-4">
-          <div className="grid grid-cols-4 gap-3 shrink-0">
-            <StatCard
-              label="Total Jenis"
-              value={stats.total}
-              sub="produk"
-              active={activeTab === "inventaris"}
-              onClick={() => {
-                setActiveTab("inventaris");
-                setCurrentPage(1);
-              }}
-            />
-            <StatCard
-              label="Total Stok"
-              value={stats.stok}
-              sub="unit"
-              color="text-[#15803d]"
-            />
-            <StatCard
-              label="Stok Rendah"
-              value={stats.low}
-              sub="perlu cek"
-              color="text-[#b45309]"
-              active={activeTab === "stok-rendah"}
-              onClick={() => {
-                setActiveTab("stok-rendah");
-                setCurrentPage(1);
-              }}
-            />
-            <StatCard
-              label="Stok Habis"
-              value={stats.out}
-              sub="kosong"
-              color="text-[#b91c1c]"
-              active={activeTab === "habis"}
-              onClick={() => {
-                setActiveTab("habis");
-                setCurrentPage(1);
-              }}
-            />
-          </div>
-
-          <div className="flex justify-between items-center shrink-0">
-            <div className="flex gap-2">
-              <div className="relative">
-                <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-                  size={14}
-                />
-                <input
-                  type="text"
-                  placeholder="Cari SKU atau Nama..."
-                  className="h-9 w-64 pl-9 pr-3 text-[13px] border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-500 outline-none"
-                  value={searchTerm}
-                  onChange={(e) => {
-                    setSearchTerm(e.target.value);
-                    setCurrentPage(1);
-                  }}
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-paper font-sans text-navy selection:bg-brand selection:text-white">
+      {/* =====================================================
+          1. HEADER ATAS (NAVBAR)
+      ===================================================== */}
+      <header className="bg-white border-b border-mist shadow-2xs shrink-0">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex h-20 items-center justify-between gap-4">
+            {/* Logo & Judul Sistem */}
+            <div className="flex min-w-0 items-center gap-3.5">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-mist bg-paper p-1.5 shadow-2xs">
+                <img
+                  src={logoKemnaker}
+                  alt="Logo Kemnaker"
+                  className="h-full w-full object-contain"
                 />
               </div>
-              <select
-                className="h-9 px-3 text-[13px] border border-gray-200 rounded-lg outline-none bg-white cursor-pointer"
-                value={filterKategori}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-lg font-extrabold tracking-tight text-navy sm:text-xl">
+                    Stok ATK
+                  </h1>
+                  <span className="hidden items-center rounded-md bg-brand/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand sm:inline-flex">
+                    Persediaan
+                  </span>
+                </div>
+                <p className="truncate text-xs font-medium text-slate-500">
+                  Biro Keuangan dan BMN • Persediaan Barang Kantor
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Switcher, Refresh & Aksi Utama */}
+            <div className="flex shrink-0 items-center gap-2">
+              <a
+                href="/admin"
+                className="hidden items-center gap-1.5 rounded-xl border border-mist bg-paper px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-all hover:bg-mist active:scale-95 sm:inline-flex"
+                title="Ke Master Data Pegawai & Kendaraan"
+              >
+                <Users className="h-3.5 w-3.5 text-brand" />
+                <span>Master Data</span>
+              </a>
+
+              <a
+                href={getUrlPresensi()}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden items-center gap-1.5 rounded-xl border border-mist bg-paper px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-all hover:bg-mist active:scale-95 md:inline-flex"
+                title="Buka Aplikasi Presensi Non-ASN"
+              >
+                <Calendar className="h-3.5 w-3.5 text-teal" />
+                <span>Presensi</span>
+                <ExternalLink className="h-3 w-3 text-slate-400" />
+              </a>
+
+              <button
+                onClick={() => loadData(true)}
+                disabled={loading}
+                className="cursor-pointer rounded-xl border border-mist bg-white p-2.5 text-slate-600 shadow-2xs transition-all hover:bg-paper active:scale-95"
+                title="Segarkan Data (Refresh)"
+              >
+                <RefreshCw
+                  className={`h-4 w-4 text-brand ${loading ? "animate-spin" : ""}`}
+                />
+              </button>
+
+              <button
+                onClick={() => openModal(null)}
+                className="inline-flex cursor-pointer items-center gap-1.5 rounded-2xl bg-brand px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-navy hover:shadow-lg active:scale-95"
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">Tambah Barang</span>
+                <span className="sm:hidden">Tambah</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* =====================================================
+          2. KONTEN UTAMA
+      ===================================================== */}
+      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+        {/* RINGKASAN — tiga di antaranya sekaligus penyaring tabel */}
+        <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Total Jenis"
+            value={stats.total}
+            sub="produk"
+            warna="text-navy"
+            active={activeTab === "inventaris"}
+            onClick={() => {
+              setActiveTab("inventaris");
+              setCurrentPage(1);
+            }}
+          />
+          <StatCard
+            label="Total Stok"
+            value={stats.stok}
+            sub="unit"
+            warna="text-brand"
+          />
+          <StatCard
+            label="Stok Rendah"
+            value={stats.low}
+            sub="perlu cek"
+            warna="text-amber-800"
+            active={activeTab === "stok-rendah"}
+            onClick={() => {
+              setActiveTab("stok-rendah");
+              setCurrentPage(1);
+            }}
+          />
+          <StatCard
+            label="Stok Habis"
+            value={stats.out}
+            sub="kosong"
+            warna="text-rose-600"
+            active={activeTab === "habis"}
+            onClick={() => {
+              setActiveTab("habis");
+              setCurrentPage(1);
+            }}
+          />
+        </div>
+
+        {/* PENYARING & PENGURUTAN */}
+        <div className="shrink-0 rounded-3xl border border-mist bg-white p-3 shadow-2xs sm:p-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <div className="relative min-w-0 flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Cari SKU atau Nama..."
+                className="w-full rounded-2xl border border-mist bg-paper/60 py-2.5 pl-10 pr-4 text-sm font-medium outline-none transition-all hover:bg-paper focus:border-brand focus:bg-white focus:ring-4 focus:ring-brand/10"
+                value={searchTerm}
                 onChange={(e) => {
-                  setFilterKategori(e.target.value);
+                  setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-              >
-                <option value="">Semua Kategori</option>
-                <option value="ATK">ATK</option>
-                <option value="Elektronik">Elektronik</option>
-              </select>
+              />
             </div>
+
             <select
-              className="h-9 px-3 text-[13px] border border-gray-200 rounded-lg outline-none bg-white cursor-pointer"
+              className="cursor-pointer rounded-2xl border border-mist bg-paper/60 px-3 py-2.5 text-xs font-bold text-navy outline-none transition-all hover:bg-paper focus:border-brand focus:bg-white"
+              value={filterKategori}
+              onChange={(e) => {
+                setFilterKategori(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">Semua Kategori</option>
+              <option value="ATK">ATK</option>
+              <option value="Elektronik">Elektronik</option>
+            </select>
+
+            <select
+              className="cursor-pointer rounded-2xl border border-mist bg-paper/60 px-3 py-2.5 text-xs font-bold text-navy outline-none transition-all hover:bg-paper focus:border-brand focus:bg-white sm:ml-auto"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
             >
@@ -421,166 +480,211 @@ const DashboardBarang = () => {
               <option value="stok-desc">Stok: Tertinggi</option>
             </select>
           </div>
+        </div>
 
-          <div className="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              <table className="w-full text-left">
-                <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
-                  <tr className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    <th className="px-4 py-3 w-12 text-center">No</th>
-                    <th className="px-4 py-3">Barang</th>
-                    <th className="px-4 py-3">Kategori</th>
-                    <th className="px-4 py-3">Satuan</th>
-                    <th className="px-4 py-3 w-40">Stok</th>
-                    <th className="px-4 py-3 w-28">Status</th>
-                    <th className="px-4 py-3 text-center">Aksi</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {paginatedBarang.map((item, idx) => (
-                    <tr
-                      key={item.id}
-                      className="hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="px-4 py-3 text-[13px] text-gray-400 text-center">
-                        {(currentPage - 1) * itemsPerPage + idx + 1}
-                      </td>
-                      <td className="px-4 py-3 flex items-center gap-3">
+        {/* TABEL BARANG */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-mist bg-white shadow-2xs">
+          <div className="flex-1 overflow-auto">
+            <table className="w-full text-left">
+              <thead className="sticky top-0 z-10 bg-paper/95 backdrop-blur">
+                <tr className="whitespace-nowrap border-b border-mist text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                  <th className="w-12 px-4 py-3.5 text-center">No</th>
+                  <th className="px-4 py-3.5">Barang</th>
+                  <th className="px-4 py-3.5">Kategori</th>
+                  <th className="px-4 py-3.5">Satuan</th>
+                  <th className="w-40 px-4 py-3.5">Stok</th>
+                  <th className="w-28 px-4 py-3.5">Status</th>
+                  <th className="px-4 py-3.5 text-center">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-mist/60 text-sm">
+                {paginatedBarang.map((item, idx) => (
+                  <tr
+                    key={item.id}
+                    className="group transition-colors hover:bg-paper/50"
+                  >
+                    <td className="px-4 py-3.5 text-center text-xs font-medium text-slate-400">
+                      {(currentPage - 1) * itemsPerPage + idx + 1}
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-3">
                         {item.img && (
-                          <div className="w-10 h-10 bg-white border border-gray-200 rounded-lg overflow-hidden flex shrink-0">
+                          <div className="flex h-10 w-10 shrink-0 overflow-hidden rounded-xl border border-mist bg-paper shadow-2xs">
                             <img
                               src={item.img}
                               alt={item.nama}
-                              className="w-full h-full object-contain p-1"
+                              className="h-full w-full object-contain p-1"
                             />
                           </div>
                         )}
-                        <div>
-                          <div className="text-[13px] font-semibold text-gray-700">
+                        <div className="min-w-0">
+                          <p className="font-bold leading-snug text-navy">
                             {item.nama}
-                          </div>
-                          <div className="text-[10px] text-gray-400 font-mono uppercase">
+                          </p>
+                          <p className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
                             {item.id}
-                          </div>
+                          </p>
                         </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[11px] font-medium uppercase tracking-tight">
-                          {item.kategori}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-[13px] font-medium text-gray-600">
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-flex items-center rounded-lg bg-brand/10 px-2.5 py-1 text-xs font-bold text-brand">
+                        {item.kategori}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span className="inline-flex items-center rounded-lg border border-mist bg-paper px-2.5 py-1 text-xs font-semibold text-slate-700">
                         {item.satuan || "Pcs"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <button
-                            onClick={() => changeStok(item, -1)}
-                            className="w-6 h-6 border rounded flex items-center justify-center text-gray-500 hover:bg-gray-100"
-                          >
-                            <Minus size={12} />
-                          </button>
-                          <span className="text-[13px] font-bold text-gray-800 w-6 text-center">
-                            {item.stok}
-                          </span>
-                          <button
-                            onClick={() => changeStok(item, 1)}
-                            className="w-6 h-6 border rounded flex items-center justify-center text-gray-500 hover:bg-gray-100"
-                          >
-                            <Plus size={12} />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge stok={item.stok} />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex justify-center gap-1">
-                          <button
-                            onClick={() => openModal(item)}
-                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
-                          >
-                            <Edit3 size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.id, item.nama)}
-                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {paginatedBarang.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={7}
-                        className="text-center py-10 text-gray-400 text-sm"
-                      >
-                        Tidak ada data ditemukan.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          onClick={() => changeStok(item, -1)}
+                          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-mist bg-paper text-slate-600 transition-all hover:border-brand hover:bg-brand hover:text-white active:scale-95"
+                          title={`Kurangi stok ${item.nama}`}
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="w-7 text-center text-sm font-black tracking-tight text-navy">
+                          {item.stok}
+                        </span>
+                        <button
+                          onClick={() => changeStok(item, 1)}
+                          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border border-mist bg-paper text-slate-600 transition-all hover:border-brand hover:bg-brand hover:text-white active:scale-95"
+                          title={`Tambah stok ${item.nama}`}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <StatusBadge stok={item.stok} />
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <div className="flex justify-center gap-1.5">
+                        <button
+                          onClick={() => openModal(item)}
+                          className="cursor-pointer rounded-xl bg-brand/10 p-2 text-brand transition-all hover:bg-brand hover:text-white active:scale-95"
+                          title={`Edit ${item.nama}`}
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setModalHapus({ id: item.id, nama: item.nama })
+                          }
+                          className="cursor-pointer rounded-xl bg-rose-50 p-2 text-rose-600 transition-all hover:bg-rose-600 hover:text-white active:scale-95"
+                          title={`Hapus ${item.nama}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
 
-            <div className="p-4 border-t border-gray-100 flex justify-between items-center bg-gray-50/30 shrink-0">
-              <span className="text-[11px] text-gray-400 font-medium tracking-tight">
-                Menampilkan {paginatedBarang.length} dari {filteredBarang.length}{" "}
-                item
+                {paginatedBarang.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-16 text-center">
+                      {loading ? (
+                        <>
+                          <RefreshCw className="mx-auto mb-3 h-8 w-8 animate-spin text-brand" />
+                          <p className="text-sm font-bold text-navy">
+                            Menghubungkan ke Server...
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-mist bg-paper text-slate-400 shadow-2xs">
+                            <PackageOpen className="h-8 w-8" />
+                          </div>
+                          <p className="text-sm font-bold text-navy">
+                            Tidak ada data ditemukan.
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Coba ubah kata kunci, kategori, atau ringkasan yang
+                            dipilih di atas.
+                          </p>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* PAGINASI */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-mist bg-paper/40 px-4 py-3">
+            <span className="text-[11px] font-bold tracking-tight text-slate-500">
+              Menampilkan {paginatedBarang.length} dari {filteredBarang.length}{" "}
+              item
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => p - 1)}
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-mist bg-white text-slate-600 shadow-2xs transition-all hover:bg-paper active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Halaman sebelumnya"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <span className="min-w-[72px] text-center text-[11px] font-bold text-navy">
+                Hal {totalPages === 0 ? 0 : currentPage} / {totalPages}
               </span>
-              <div className="flex gap-1">
-                <button
-                  disabled={currentPage === 1}
-                  onClick={() => setCurrentPage((p) => p - 1)}
-                  className="w-8 h-8 flex items-center justify-center border rounded-md disabled:opacity-30 bg-white hover:bg-gray-50"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <button
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  onClick={() => setCurrentPage((p) => p + 1)}
-                  className="w-8 h-8 flex items-center justify-center border rounded-md disabled:opacity-30 bg-white hover:bg-gray-50"
-                >
-                  <ChevronRight size={14} />
-                </button>
-              </div>
+              <button
+                disabled={currentPage === totalPages || totalPages === 0}
+                onClick={() => setCurrentPage((p) => p + 1)}
+                className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-mist bg-white text-slate-600 shadow-2xs transition-all hover:bg-paper active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Halaman berikutnya"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
-        </section>
+        </div>
       </main>
 
+      {/* =====================================================
+          3. MODAL TAMBAH / EDIT BARANG
+      ===================================================== */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="relative bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b flex items-center justify-between bg-gray-50/50">
-              <h3 className="font-bold text-[16px] text-gray-800">
-                {currentItem ? "Edit Barang" : "Tambah Barang Baru"}
-              </h3>
+        <div className="fixed inset-0 z-50 flex animate-pudar items-center justify-center bg-navy/60 p-4 backdrop-blur-sm">
+          <form
+            onSubmit={handleSave}
+            className="flex max-h-[92vh] w-full max-w-xl animate-muncul flex-col overflow-hidden rounded-3xl border border-mist bg-white shadow-2xl"
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-mist bg-paper/40 p-6">
+              <div>
+                <h2 className="text-lg font-bold text-navy">
+                  {currentItem ? "Edit Barang" : "Tambah Barang Baru"}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Lengkapi data di bawah ini dengan teliti
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-xl bg-paper text-slate-400 transition-all hover:bg-mist hover:text-navy"
               >
-                <X size={20} />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSave} className="p-6 space-y-4">
+            {/* Modal Body */}
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
               <div>
-                <label className="text-[11px] font-bold text-gray-400 uppercase mb-1.5 block">
-                  Nama Barang <span className="text-red-500">*</span>
+                <label className={kelasLabel}>
+                  Nama Barang <span className="text-rose-600">*</span>
                 </label>
                 <input
                   name="nama-barang"
                   type="text"
                   required
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl text-[13px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className={kelasIsian}
                   placeholder="Contoh: Kertas A4 80gr"
                   value={formData.nama}
                   onChange={(e) =>
@@ -589,13 +693,13 @@ const DashboardBarang = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="text-[11px] font-bold text-gray-400 uppercase mb-1.5 block">
-                    Kategori <span className="text-red-500">*</span>
+                  <label className={kelasLabel}>
+                    Kategori <span className="text-rose-600">*</span>
                   </label>
                   <select
-                    className="w-full h-10 px-2 border border-gray-200 rounded-xl text-[13px] outline-none focus:border-blue-500 transition-all bg-white"
+                    className={`${kelasIsian} cursor-pointer`}
                     value={formData.kategori}
                     onChange={(e) =>
                       setFormData({ ...formData, kategori: e.target.value })
@@ -606,11 +710,11 @@ const DashboardBarang = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="text-[11px] font-bold text-gray-400 uppercase mb-1.5 block">
-                    Satuan <span className="text-red-500">*</span>
+                  <label className={kelasLabel}>
+                    Satuan <span className="text-rose-600">*</span>
                   </label>
                   <select
-                    className="w-full h-10 px-2 border border-gray-200 rounded-xl text-[13px] outline-none focus:border-blue-500 transition-all bg-white"
+                    className={`${kelasIsian} cursor-pointer`}
                     value={formData.satuan}
                     onChange={(e) =>
                       setFormData({ ...formData, satuan: e.target.value })
@@ -630,14 +734,14 @@ const DashboardBarang = () => {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-gray-400 uppercase mb-1.5 block">
-                  Stok Saat Ini <span className="text-red-500">*</span>
+                <label className={kelasLabel}>
+                  Stok Saat Ini <span className="text-rose-600">*</span>
                 </label>
                 <input
                   type="number"
                   required
                   min="0"
-                  className="w-full h-10 px-3 border border-gray-200 rounded-xl text-[13px] outline-none focus:border-blue-500 transition-all"
+                  className={kelasIsian}
                   value={formData.stok}
                   onChange={(e) =>
                     setFormData({ ...formData, stok: e.target.value })
@@ -646,78 +750,123 @@ const DashboardBarang = () => {
               </div>
 
               <div>
-                <label className="text-[11px] font-bold text-gray-400 uppercase mb-1.5 block">
-                  Foto Barang (Opsional)
-                </label>
-                <div className="flex items-center gap-3">
+                <label className={kelasLabel}>Foto Barang (Opsional)</label>
+                <div className="flex items-center gap-3 rounded-2xl border border-mist bg-paper/60 p-3">
                   {formData.img && (
-                    <div className="w-12 h-12 rounded-lg border border-gray-200 overflow-hidden shrink-0">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-xl border border-mist bg-white shadow-2xs">
                       <img
                         src={formData.img}
                         alt="preview"
-                        className="w-full h-full object-contain bg-gray-50"
+                        className="h-full w-full object-contain"
                       />
                     </div>
                   )}
                   <input
                     type="file"
                     accept="image/*"
-                    className="w-full text-[12px] file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-[12px] file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-all cursor-pointer"
+                    className="w-full cursor-pointer text-xs font-medium text-slate-600 transition-all file:mr-3 file:cursor-pointer file:rounded-xl file:border-0 file:bg-brand/10 file:px-4 file:py-2 file:text-xs file:font-bold file:text-brand hover:file:bg-brand hover:file:text-white"
                     onChange={handleImageChange}
                   />
                 </div>
               </div>
+            </div>
 
-              <div className="pt-4 flex gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="flex-1 h-11 border border-gray-200 rounded-xl text-[13px] font-semibold text-gray-500 hover:bg-gray-50 transition-all"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="flex-[2] h-11 bg-[#2563eb] text-white rounded-xl text-[13px] font-semibold hover:bg-[#1d4ed8] shadow-lg shadow-blue-500/20 transition-all active:scale-[0.98]"
-                >
-                  {currentItem ? "Simpan Perubahan" : "Tambah Barang"}
-                </button>
-              </div>
-            </form>
+            {/* Modal Footer */}
+            <div className="flex shrink-0 items-center gap-3 border-t border-mist bg-paper/40 p-6">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 cursor-pointer rounded-2xl bg-paper py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-mist"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                className="flex-[2] cursor-pointer rounded-2xl bg-brand py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-navy hover:shadow-lg active:scale-95"
+              >
+                {currentItem ? "Simpan Perubahan" : "Tambah Barang"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* =====================================================
+          4. MODAL KONFIRMASI HAPUS
+      ===================================================== */}
+      {modalHapus && (
+        <div className="fixed inset-0 z-50 flex animate-pudar items-center justify-center bg-navy/60 p-4 backdrop-blur-sm">
+          <div className="relative w-full max-w-md animate-muncul rounded-3xl border border-mist bg-white p-6 text-center shadow-2xl sm:p-7">
+            <button
+              onClick={() => !isDeleting && setModalHapus(null)}
+              disabled={isDeleting}
+              className="absolute right-4 top-4 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-paper text-slate-400 transition-all hover:bg-mist hover:text-navy"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-3xl border border-rose-100 bg-rose-50 text-rose-600 shadow-2xs">
+              <Trash2 className="h-8 w-8" />
+            </div>
+
+            <h3 className="mb-1.5 text-lg font-bold text-navy">Hapus Barang?</h3>
+            <p className="mx-auto mb-6 max-w-sm text-xs leading-relaxed text-slate-500">
+              Apakah Anda yakin ingin menghapus{" "}
+              <span className="font-bold text-navy">"{modalHapus.nama}"</span>?
+              Data ini akan dihapus permanen dari sistem.
+            </p>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setModalHapus(null)}
+                disabled={isDeleting}
+                className="flex-1 cursor-pointer rounded-2xl bg-paper py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-mist"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={konfirmasiHapus}
+                disabled={isDeleting}
+                className="flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl bg-rose-600 py-2.5 text-sm font-bold text-white shadow-sm transition-all hover:bg-rose-700 hover:shadow active:scale-95 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Menghapus...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Ya, Hapus</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="fixed bottom-6 right-6 z-[200] flex flex-col gap-2 pointer-events-none">
+      {/* =====================================================
+          5. TOAST NOTIFIKASI
+      ===================================================== */}
+      <div className="pointer-events-none fixed bottom-6 right-6 z-[60] flex flex-col gap-2">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-[13px] text-white transition-all duration-300 transform translate-x-0 opacity-100 ${
-              t.type === "success" ? "bg-[#15803d]" : "bg-[#b91c1c]"
-            }`}
+            className="flex animate-naik items-center gap-2.5 rounded-2xl border border-mist bg-white px-4 py-3 text-navy shadow-xl"
           >
             {t.type === "success" ? (
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                className="w-4 h-4"
-              >
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green/20 text-green-800">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
             ) : (
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                className="w-4 h-4"
-              >
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <AlertCircle className="h-4 w-4" />
+              </div>
             )}
-            {t.msg}
+            <span className="text-xs font-bold">{t.msg}</span>
           </div>
         ))}
       </div>
@@ -725,46 +874,69 @@ const DashboardBarang = () => {
   );
 };
 
-const StatCard = ({
-  label,
-  value,
-  sub,
-  color = "text-gray-800",
-  active,
-  onClick,
-}) => (
-  <div
-    onClick={onClick}
-    className={`bg-white border p-4 rounded-xl shadow-sm cursor-pointer transition-all duration-300 ${
-      active
-        ? "ring-2 ring-blue-500 border-transparent bg-blue-50/30"
-        : "border-gray-100 hover:border-blue-200"
-    }`}
-  >
-    <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-1">
-      {label}
-    </div>
-    <div className={`text-2xl font-bold tracking-tight ${color}`}>{value}</div>
-    <div className="text-[10px] text-gray-400 mt-1 font-medium">{sub}</div>
-  </div>
-);
+// Kartu ringkasan. Tiga di antaranya merangkap penyaring tabel, jadi yang
+// bisa diklik dirender sebagai <button> supaya bisa dicapai lewat Tab dan
+// Enter — bukan <div onClick> yang tidak bisa dicapai lewat papan tik.
+const StatCard = ({ label, value, sub, warna = "text-navy", active, onClick }) => {
+  const isi = (
+    <>
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </div>
+      <div className={`text-2xl font-black tracking-tight ${warna}`}>
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] font-medium text-slate-400">{sub}</div>
+    </>
+  );
 
+  const dasar = "rounded-2xl border bg-white p-4 text-left shadow-2xs transition-all";
+
+  if (!onClick) {
+    return <div className={`${dasar} border-mist`}>{isi}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`${dasar} cursor-pointer active:scale-[0.98] ${
+        active
+          ? "border-brand bg-brand/5 ring-4 ring-brand/10"
+          : "border-mist hover:border-brand/40"
+      }`}
+    >
+      {isi}
+    </button>
+  );
+};
+
+// Aksen kuning & hijau palet dipakai sebagai LATAR beropasitas rendah dengan
+// teks nuansa gelap sewarna. Kalau dipakai langsung sebagai warna teks di
+// atas putih, keduanya terlalu tipis untuk dibaca.
 const StatusBadge = ({ stok }) => {
   const s = Number(stok);
+
   if (s <= 0)
     return (
-      <span className="bg-red-50 text-red-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight">
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-tight text-rose-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
         Habis
       </span>
     );
+
   if (s <= 3)
     return (
-      <span className="bg-amber-50 text-amber-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight">
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-accent-yellow/50 bg-accent-yellow/25 px-2.5 py-1 text-[10px] font-bold uppercase tracking-tight text-amber-800">
+        <span className="h-1.5 w-1.5 rounded-full bg-accent-yellow" />
         Rendah
       </span>
     );
+
   return (
-    <span className="bg-green-50 text-green-600 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-tight">
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-green/40 bg-green/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-tight text-green-800">
+      <span className="h-1.5 w-1.5 rounded-full bg-green" />
       Tersedia
     </span>
   );

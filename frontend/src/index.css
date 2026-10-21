@@ -37,6 +37,50 @@
   --color-accent-orange: #FFCD5F;
   --color-accent-green: #9BC264;
   --color-accent-teal: #00BFA6;
+
+  /* 3. Animasi Masuk (modal, toast)
+     ---------------------------------------------------------
+     Sebelumnya halaman memakai kelas animate-in / fade-in /
+     zoom-in-95 / slide-in-from-bottom-5 gaya tailwindcss-animate.
+     Plugin itu TIDAK terpasang di proyek ini, jadi kelas-kelas
+     tersebut tidak menghasilkan CSS sama sekali — modal muncul
+     mendadak tanpa transisi. Diganti animasi asli Tailwind v4:
+     setiap --animate-* di sini otomatis menjadi utilitas
+     animate-<nama>. */
+  --animate-pudar: pudar 150ms ease-out;
+  --animate-muncul: muncul 150ms ease-out;
+  --animate-naik: naik 200ms ease-out;
+}
+
+@keyframes pudar {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes muncul {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+
+@keyframes naik {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+/* Hormati pengguna yang mematikan animasi di setelan sistemnya. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 :root {

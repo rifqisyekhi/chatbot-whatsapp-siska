@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { SendHorizontal, Loader2, PackageOpen, Plus, Minus, Info, Search, Filter } from "lucide-react";
+import { SendHorizontal, Loader2, PackageOpen, Plus, Minus, Info, Search, Filter, AlertCircle } from "lucide-react";
 import { apiTU } from "./services/ApiTU";
 
 export default function InventoryTaking() {
@@ -16,6 +16,15 @@ export default function InventoryTaking() {
 
   const [keranjang, setKeranjang] = useState({});
   const [showModal, setShowModal] = useState(false);
+
+  // Pengganti alert() bawaan peramban: kotak itu mengunci seluruh tab,
+  // tidak bisa mengikuti palet, dan di ponsel menyebut nama domain.
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((teks) => {
+    setToast({ id: Date.now(), teks });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
 
   const fetchBarang = useCallback(async () => {
     setLoading(true);
@@ -46,15 +55,18 @@ export default function InventoryTaking() {
   }, [fetchBarang]);
 
   const ubahJumlah = (id, perubahan, stok, satuanDefault) => {
+    const qtySekarang = keranjang[id]?.qty || 0;
+
+    if (qtySekarang + perubahan > stok) {
+      showToast(`Stok tidak mencukupi — tersisa ${stok}.`);
+    }
+
     setKeranjang((prev) => {
       const itemLama = prev[id] || { qty: 0, satuan: satuanDefault };
       const jumlahBaru = itemLama.qty + perubahan;
 
       if (jumlahBaru < 0) return { ...prev, [id]: { ...itemLama, qty: 0 } };
-      if (jumlahBaru > stok) {
-        alert("Stok tidak mencukupi!");
-        return { ...prev, [id]: { ...itemLama, qty: stok } };
-      }
+      if (jumlahBaru > stok) return { ...prev, [id]: { ...itemLama, qty: stok } };
       return { ...prev, [id]: { ...itemLama, qty: jumlahBaru } };
     });
   };
@@ -69,7 +81,7 @@ export default function InventoryTaking() {
   const handleCheckout = () => {
     const adaBarang = Object.values(keranjang).some((item) => item.qty > 0);
     if (!adaBarang) {
-      alert("Silahkan pilih barang terlebih dahulu!");
+      showToast("Silakan pilih barang terlebih dahulu.");
       return;
     }
     setShowModal(true);
@@ -325,6 +337,16 @@ export default function InventoryTaking() {
         </div>
       )}
 
+      {toast && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[10000] flex justify-center px-4">
+          <div className="flex animate-naik items-center gap-2.5 rounded-2xl border border-mist bg-white px-4 py-3 text-navy shadow-xl">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+              <AlertCircle className="h-4 w-4" />
+            </div>
+            <span className="text-xs font-bold">{toast.teks}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
