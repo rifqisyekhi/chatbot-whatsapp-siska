@@ -1,4 +1,19 @@
 // =========================================================
+// SKRIP ERA MONGODB - BELUM DIMIGRASI
+// =========================================================
+//
+// Masih membaca MongoDB lewat driver mentah, sementara bot
+// sudah berpindah ke PostgreSQL (lihat db/ dan
+// presensi-non-asn/backend/db/PEMETAAN.md).
+//
+// Berbeda dari dua skrip lain di folder ini, yang ini masih
+// ada gunanya: ia membetulkan data, bukan membetulkan index.
+// Akan BERHENTI BEKERJA begitu Atlas dimatikan.
+//
+// Keputusannya ada pada Anda: dimigrasi kalau masih dipakai,
+// atau dihapus kalau pembersihannya sudah selesai.
+
+// =========================================================
 // HAPUS KATEGORI "TimGudang"
 // =========================================================
 //

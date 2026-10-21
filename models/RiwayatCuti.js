@@ -17,6 +17,7 @@ const riwayatCutiSchema = new mongoose.Schema(
       enum: ["DISETUJUI", "DITOLAK", "MENUNGGU"],
       default: "DISETUJUI",
     },
+    file_pdf: { type: String, default: "" },
     createdAt: { type: Date, default: Date.now },
   },
   {

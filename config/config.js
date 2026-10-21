@@ -7,9 +7,9 @@ module.exports = {
   NO_KETUA_SUB_TU: process.env.NO_KETUA_SUB_TU ? `${process.env.NO_KETUA_SUB_TU}@c.us` : null,
   NO_ADMIN_SAKEH: process.env.NO_ADMIN_SAKEH ? `${process.env.NO_ADMIN_SAKEH}@c.us` : null,
   
-  NIP_KETUA_SUB_TU: process.env.NIP_KETUA_SUB_TU || "-",
-  NAMA_KETUA_SUB_TU: process.env.NAMA_KETUA_SUB_TU || "Penanggung Jawab",
-  JABATAN_KETUA_SUB_TU: process.env.JABATAN_KETUA_SUB_TU || "Kepala Sub Bagian",
+  NIP_KETUA_SUB_TU: process.env.NIP_KETUA_SUB_TU || "198703232015031002",
+  NAMA_KETUA_SUB_TU: process.env.NAMA_KETUA_SUB_TU || "Alpha Sandro Adithyaswara, S.Sos.",
+  JABATAN_KETUA_SUB_TU: process.env.JABATAN_KETUA_SUB_TU || "Kepala Sub Bagian Tata Usaha",
 
   PORT_WEB: process.env.PORT_WEB || 3000,
 

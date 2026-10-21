@@ -93,3 +93,24 @@ export const apiTU = async ({
     throw error;
   }
 };
+
+// =========================================================
+// URL DASHBOARD LAIN (PRESENSI NON ASN)
+// =========================================================
+
+// Web Presensi Non-ASN menyajikan:
+// - / : Dashboard Absensi & Rekapitulasi Presensi Pegawai Non ASN
+export function getUrlPresensi(path = "") {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  if (import.meta.env.VITE_PRESENSI_WEB_URL) {
+    return `${import.meta.env.VITE_PRESENSI_WEB_URL.replace(/\/$/, "")}${p}`;
+  }
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  // Jika dibuka di host server selain localhost
+  if (hostname && hostname !== "localhost" && hostname !== "127.0.0.1") {
+    return `${protocol}//${hostname}:8001${p}`;
+  }
+  // Saat dibuka di lokal laptop: hubungkan ke server Presensi
+  return `http://192.168.221.44:8001${p}`;
+}

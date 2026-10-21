@@ -1,4 +1,19 @@
 // =========================================================
+// SUDAH TIDAK DIBUTUHKAN SEJAK PINDAH KE POSTGRESQL
+// =========================================================
+//
+// Skrip ini mencari NIP kembar yang lolos masuk karena index
+// uniknya belum partial — dan memang ada satu saat migrasi
+// dijalankan: NIP 199612052018122001 dipakai dua orang.
+//
+// Di Postgres keadaan itu tidak bisa terjadi lagi: constraint
+// pegawai_nip_unik_jika_terisi menolaknya sejak pintu masuk,
+// bukan membiarkannya lalu dicari belakangan.
+//
+// Jadi skrip ini TIDAK perlu dimigrasi. Aman dihapus begitu
+// MongoDB Atlas dimatikan.
+
+// =========================================================
 // LIHAT DETAIL PEGAWAI BER-NIP KEMBAR
 // =========================================================
 //

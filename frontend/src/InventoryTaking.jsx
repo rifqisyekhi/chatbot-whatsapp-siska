@@ -41,6 +41,7 @@ export default function InventoryTaking() {
   }, []);
 
   useEffect(() => {
+    document.title = "Katalog ATK - Biro Keuangan dan BMN";
     fetchBarang();
   }, [fetchBarang]);
 
@@ -140,8 +141,8 @@ export default function InventoryTaking() {
       <div className="max-w-2xl mx-auto p-4 w-full mb-24">
         {/* HEADER */}
         <div className="bg-white rounded-2xl shadow-sm p-6 text-center mb-6 border-b-4 border-blue-500">
-          <h1 className="text-xl font-extrabold text-gray-800">Katalog Persediaan Barang</h1>
-          <p className="text-sm text-gray-500 mt-1">Biro Keuangan dan BMN - SisKA</p>
+          <h1 className="text-xl font-extrabold text-gray-800">Katalog ATK</h1>
+          <p className="text-sm text-gray-500 mt-1">Permintaan Perlengkapan Kantor - Biro Keuangan dan BMN</p>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">

@@ -57,6 +57,45 @@ async function getDummySignature(nip) {
   }
 }
 
+// =========================================================
+// HELPER LABEL IDENTITAS (NIP vs NIK)
+// =========================================================
+// Pegawai internal/ASN memakai NIP (standar 18 digit),
+// sedangkan PPNPN/non-ASN memakai NIK (standar 16 digit).
+// Fungsi ini memastikan seluruh dokumen PDF menampilkan label
+// yang tepat (NIK untuk PPNPN, NIP untuk ASN/Internal).
+function tentukanLabelIdentitas(pegawai, nomorId) {
+  // 1. Cek parameter string langsung (mis. kategori atau label)
+  if (typeof pegawai === "string") {
+    const k = pegawai.trim().toLowerCase();
+    if (k === "ppnpn" || k.includes("ppnpn") || k === "honorer" || k === "magang" || k === "nik") return "NIK";
+    if (k === "internal" || k === "pns" || k === "asn" || k === "pppk" || k === "nip") return "NIP";
+  } else if (pegawai && typeof pegawai === "object") {
+    // 2. Cek properti eksplisit dari objek
+    const k = String(
+      pegawai.kategori_pegawai || 
+      pegawai.kategori || 
+      pegawai.label_identitas || 
+      pegawai.labelIdentitas || 
+      ""
+    ).trim().toLowerCase();
+
+    if (k === "ppnpn" || k.includes("ppnpn") || k === "honorer" || k === "magang" || k === "nik") return "NIK";
+    if (k === "internal" || k === "pns" || k === "asn" || k === "pppk" || k === "nip") return "NIP";
+
+    if (!nomorId) {
+      nomorId = pegawai.nip || pegawai.nik || pegawai.nomorIdentitas || pegawai.NIP;
+    }
+  }
+
+  // 3. Deteksi dari panjang digit nomor KTP (16 digit) vs NIP (18 digit)
+  const digits = String(nomorId || "").replace(/\D/g, "");
+  if (digits.length === 16) return "NIK";
+  if (digits.length === 18) return "NIP";
+
+  return "NIP";
+}
+
 // ==========================================
 // PDF LEMBUR (Sistem Paksa 1 Halaman & Grup TTD)
 // ==========================================
@@ -73,10 +112,8 @@ async function buatLaporanLemburDenganFotoAsync(data, fotoPaths, chatId, targetA
     new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Jakarta" });
   const safeSubstansi = (data.substansi || "TU").replace(/[\/\\]/g, "_");
 
-  // ASN memakai NIP, non-ASN memakai NIK — keduanya disimpan di field
-  // `nip` yang sama. Tanpa ini, PPNPN tercetak "NIP. <NIK-nya>", dan yang
-  // nomornya belum diisi tercetak "NIP. undefined".
-  const labelIdentitas = data.label_identitas || "NIP";
+  // ASN memakai NIP, non-ASN memakai NIK — otomatis terdeteksi dari kategori/digit
+  const labelIdentitas = tentukanLabelIdentitas(data, data.nip);
   const nomorIdentitas = data.nip || "-";
 
   // Tanggal laporan sudah ada di namanya, tapi satu orang bisa
@@ -390,9 +427,10 @@ async function buatLaporanWFAAsync(data, chatId, client) {
     doc.moveDown(2);
 
     doc.font("TMR").fontSize(11);
+    const labelPegawai = tentukanLabelIdentitas(data, data.nip);
     const identitas = [
       ["NAMA", data.nama],
-      ["NIP", data.nip],
+      [labelPegawai, data.nip],
       ["JABATAN", data.jabatan],
       ["UNIT KERJA", "Sekretariat Jenderal"],
       ["UNIT ORGANISASI", "Biro Keuangan dan BMN"],
@@ -622,8 +660,9 @@ async function buatLaporanWFAAsync(data, chatId, client) {
 
     // --- KOLOM KANAN (PEGAWAI) ---
     doc.font("TMR-Bold").fontSize(12).text(`${data.nama}`, 350, yNama, { width: maxLebarKolom });
-    // NIP ditaruh persis di bawah nama pegawai
-    doc.font("TMR").fontSize(12).text(`NIP. ${data.nip}`, 350, yNama + tinggiNamaPegawai + 2);
+    // NIP/NIK ditaruh persis di bawah nama pegawai
+    const labelIdPegawai = tentukanLabelIdentitas(data, data.nip);
+    doc.font("TMR").fontSize(12).text(`${labelIdPegawai}. ${data.nip}`, 350, yNama + tinggiNamaPegawai + 2);
 
     doc.end();
 
@@ -830,8 +869,9 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
     doc.text("Memberikan izin kepada:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
+    const labelPemakai = tentukanLabelIdentitas(data.pemakai, data.pemakai?.nip);
     printRow("Nama", data.pemakai.nama);
-    printRow("NIP/NIK", data.pemakai.nip);
+    printRow(labelPemakai, data.pemakai.nip);
     printRow("Jabatan", data.pemakai.jabatan);
     doc.moveDown(0.5);
 
@@ -875,7 +915,7 @@ async function buatSuratIzinMobilAwalAsync(data, chatId, client) {
 
     doc.text(`(${data.pemakai.nama})`, rightTtdX, yNamaTtd, { align: "center", width: ttdWidth });
     const yNipKanan = doc.y;
-    doc.text(`NIP/NIK. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
+    doc.text(`${labelPemakai}. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
     const yAkhirKanan = doc.y;
 
     doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
@@ -1043,8 +1083,9 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
     doc.text("Memberikan izin kepada:", marginLeft, doc.y);
     doc.moveDown(0.2);
 
+    const labelPemakai = tentukanLabelIdentitas(data.pemakai, data.pemakai?.nip);
     printRow("Nama", data.pemakai.nama);
-    printRow("NIP/NIK", data.pemakai.nip);
+    printRow(labelPemakai, data.pemakai.nip);
     printRow("Jabatan", data.pemakai.jabatan);
     doc.moveDown(0.5);
 
@@ -1092,7 +1133,7 @@ async function buatSuratIzinMobilAkhirAsync(data, chatId, client) {
 
     doc.text(`(${data.pemakai.nama})`, rightTtdX, yNamaTtd, { align: "center", width: ttdWidth });
     const yNipKanan = doc.y;
-    doc.text(`NIP/NIK. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
+    doc.text(`${labelPemakai}. ${data.pemakai.nip}`, rightTtdX, yNipKanan, { align: "center", width: ttdWidth });
     const yAkhirKanan = doc.y;
 
     doc.y = Math.max(yAkhirKiri, yAkhirKanan) + 15;
@@ -1392,8 +1433,9 @@ async function buatSuratPermintaanBarangAsync(data, chatId, client) {
     const hNipKiri = doc.heightOfString(`NIP ${data.atasan.nip}`, { width: ttdWidth });
     const nipY = doc.y - hNipKiri - hNamaKiri;
 
+    const labelPemohonId = tentukanLabelIdentitas(data.pemohon, data.pemohon?.nip);
     doc.text(data.pemohon.nama, rightTtdX, nipY, { align: "center", width: ttdWidth });
-    doc.text(`NIP ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
+    doc.text(`${labelPemohonId} ${data.pemohon.nip}`, rightTtdX, doc.y, { align: "center", width: ttdWidth });
 
     doc.end();
 
@@ -1539,10 +1581,12 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawSectionHeader("I.", "DATA PEGAWAI", y);
     y += 14;
 
-    // Baris 1: Nama & NIP (tinggi 15)
+    const labelPemohonCuti = tentukanLabelIdentitas(data, data.nip);
+
+    // Baris 1: Nama & NIP/NIK (tinggi 15)
     drawCell(startX, y, 65, 15, "Nama", { size: 8 });
     drawCell(startX + 65, y, 180, 15, data.nama, { size: 8 });
-    drawCell(startX + 245, y, 55, 15, "NIP", { size: 8 });
+    drawCell(startX + 245, y, 55, 15, labelPemohonCuti, { size: 8 });
     drawCell(startX + 300, y, 185, 15, String(data.nip || "-"), { size: 8 });
     y += 15;
 
@@ -1704,7 +1748,7 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     doc.font(fontRegular).fontSize(7.5).text("Hormat saya,", startX + wAlamatLeft, y + hTelp + 5, { width: wAlamatRight, align: "center" });
 
     doc.font(fontRegular).fontSize(8).text(data.nama, startX + wAlamatLeft, y + hTelp + 36, { width: wAlamatRight, align: "center" });
-    doc.font(fontRegular).fontSize(7.5).text(`NIP ${data.nip || "-"}`, startX + wAlamatLeft, y + hTelp + 46, { width: wAlamatRight, align: "center" });
+    doc.font(fontRegular).fontSize(7.5).text(`${labelPemohonCuti} ${data.nip || "-"}`, startX + wAlamatLeft, y + hTelp + 46, { width: wAlamatRight, align: "center" });
     y += hTtdBox;
     y += tableGapLarge; // Jeda pemisah lebih besar antara VI ke VII (0.4–0.6 cm)
 
@@ -1734,18 +1778,19 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
 
-    // Kolom 4: Kotak TTD Atasan Langsung
+    // Kolom 4: Kotak TTD Atasan Langsung (yang wakil dikosongkan sementara)
     const ttdAtasanX = startX + wCol1 + wCol2 + wCol3;
     drawCell(ttdAtasanX, y, wCol4, hTtdRow, "", {});
 
-    const atasanJabatan = (data.atasan_jabatan || "Wakil Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
-    const atasanNama = data.atasan_nama || "John Pieter, S.Kom.";
-    const atasanNip = data.atasan_nip || "198312302009121004";
-
-    doc.font(fontRegular).fontSize(7.5).text(atasanJabatan, ttdAtasanX + 4, y + 4, { width: wCol4 - 8, align: "center" });
-    // Ruang tanda tangan atasan dibiarkan kosong untuk fisik
-    doc.font(fontRegular).fontSize(7.5).text(atasanNama + " NIP", ttdAtasanX, y + 36, { width: wCol4, align: "center" });
-    doc.font(fontRegular).fontSize(7.5).text(atasanNip, ttdAtasanX, y + 46, { width: wCol4, align: "center" });
+    const atasanNama = data.atasan_nama && !data.kosongkanWakil ? data.atasan_nama : "";
+    if (atasanNama && !atasanNama.toLowerCase().includes("wakil") && !data.atasan_jabatan?.toLowerCase().includes("wakil")) {
+      const atasanJabatan = (data.atasan_jabatan || "").replace(/,*$/, "") + ",";
+      doc.font(fontRegular).fontSize(7.5).text(atasanJabatan, ttdAtasanX + 4, y + 4, { width: wCol4 - 8, align: "center" });
+      doc.font(fontRegular).fontSize(7.5).text(atasanNama, ttdAtasanX, y + 36, { width: wCol4, align: "center" });
+      if (data.atasan_nip && data.atasan_nip !== "-") {
+        doc.font(fontRegular).fontSize(7.5).text(`NIP ${data.atasan_nip}`, ttdAtasanX, y + 46, { width: wCol4, align: "center" });
+      }
+    }
     y += hTtdRow;
     y += tableGapLarge; // Jeda pemisah lebih besar antara VII ke VIII (0.4–0.6 cm)
 
@@ -1772,13 +1817,13 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
     drawCell(startX + wCol1, y, wCol2, hTtdRow, "", {});
     drawCell(startX + wCol1 + wCol2, y, wCol3, hTtdRow, "", {});
 
-    // Kolom 4: Kotak TTD Pejabat Berwenang
+    // Kolom 4: Kotak TTD Pejabat Berwenang (Pimpinan)
     const ttdPejabatX = startX + wCol1 + wCol2 + wCol3;
     drawCell(ttdPejabatX, y, wCol4, hTtdRow, "", {});
 
-    const pejabatJabatan = (data.pejabat_jabatan || "Ketua Tim Perbendaharaan dan Tata Usaha Keuangan").replace(/,*$/, "") + ",";
-    const pejabatNama = data.pejabat_nama || "Arip Sarkowi, S.E., M.Si.";
-    const pejabatNip = data.pejabat_nip || "197601091999032001";
+    const pejabatJabatan = (data.pejabat_jabatan || "Kepala Sub Bagian Tata Usaha").replace(/,*$/, "") + ",";
+    const pejabatNama = data.pejabat_nama || "Alpha Sandro Adithyaswara, S.Sos.";
+    const pejabatNip = data.pejabat_nip || "198703232015031002";
 
     doc.font(fontRegular).fontSize(7.5).text(pejabatJabatan, ttdPejabatX + 4, y + 4, { width: wCol4 - 8, align: "center" });
     // Ruang tanda tangan pejabat dibiarkan kosong untuk fisik
@@ -1806,7 +1851,7 @@ async function buatFormulirCutiAsync(data, chatId, targetAtasan, client) {
           if (targetAtasan && targetAtasan !== "@c.us" && targetAtasan !== chatId) {
             try {
               await client.sendMessage(targetAtasan, media, {
-                caption: `📄 *Tembusan Formulir Cuti Pegawai (Disetujui)*\n\n• *Nama:* ${data.nama}\n• *NIP:* ${data.nip || "-"}\n• *Jenis Cuti:* ${data.jenisCuti}\n• *Lamanya:* ${data.lamaCuti}`,
+                caption: `📄 *Tembusan Formulir Cuti Pegawai (Disetujui)*\n\n• *Nama:* ${data.nama}\n• *${labelPemohonCuti}:* ${data.nip || "-"}\n• *Jenis Cuti:* ${data.jenisCuti}\n• *Lamanya:* ${data.lamaCuti}`,
               });
             } catch (e) {
               console.error(`❌ Gagal kirim PDF Cuti ke atasan (${targetAtasan}):`, e?.message || e);

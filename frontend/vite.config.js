@@ -39,10 +39,14 @@ export default defineConfig({
   },
   server: {
     // URL API dibuat relatif (lihat services/ApiTU.js), jadi saat `npm run dev`
-    // panggilan /api akan nyasar ke server Vite. Proxy ini meneruskannya ke
-    // Express supaya mode pengembangan tetap jalan tanpa mengubah kode.
+    // panggilan /api diteruskan ke server target (default: http://192.168.221.44:8002
+    // atau http://localhost:3000 jika diset via VITE_PROXY_TARGET)
+    // sehingga saat edit desain di lokal, data real langsung tampil tanpa perlu menyalakan bot backend.
     proxy: {
-      '/api': 'http://localhost:3000',
+      '/api': {
+        target: process.env.VITE_PROXY_TARGET || 'http://192.168.221.44:8002',
+        changeOrigin: true,
+      },
     },
   },
 })

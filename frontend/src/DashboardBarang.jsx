@@ -9,8 +9,11 @@ import {
   RefreshCw,
   X,
   Minus,
+  Users,
+  Calendar,
+  ExternalLink,
 } from "lucide-react";
-import { apiTU } from "./services/ApiTU";
+import { apiTU, getUrlPresensi } from "./services/ApiTU";
 
 // Diadaptasi dari dashboard proyek lain; tampilannya sengaja dipertahankan.
 // Tiga penyesuaian terhadap proyek ini:
@@ -74,6 +77,7 @@ const DashboardBarang = () => {
   );
 
   useEffect(() => {
+    document.title = "Stok ATK - Biro Keuangan dan BMN";
     loadData();
   }, [loadData]);
 
@@ -286,13 +290,34 @@ const DashboardBarang = () => {
         <header className="h-[72px] bg-white border-b border-gray-200 px-6 flex items-center justify-between shrink-0">
           <div>
             <h1 className="text-2xl font-extrabold text-gray-800 uppercase tracking-tight">
-              Inventaris Admin
+              Stok ATK
             </h1>
             <p className="text-[13px] font-medium text-gray-500 mt-0.5">
-              Pusat Manajemen Barang
+              Persediaan Barang Kantor
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <a
+              href="/admin"
+              className="h-[34px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-xs"
+              title="Ke Master Data Pegawai & Kendaraan"
+            >
+              <Users size={14} className="text-blue-600" />
+              <span className="hidden sm:inline">Master Data</span>
+            </a>
+
+            <a
+              href={getUrlPresensi()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="h-[34px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 transition-all shadow-xs"
+              title="Buka Presensi Non-ASN"
+            >
+              <Calendar size={14} className="text-emerald-600" />
+              <span className="hidden sm:inline">Presensi</span>
+              <ExternalLink size={12} className="text-emerald-500 opacity-70" />
+            </a>
+
             <button
               onClick={() => loadData(true)}
               className="p-2 border rounded-lg hover:bg-gray-50 text-gray-500 transition-all active:scale-95"

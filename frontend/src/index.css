@@ -1,10 +1,49 @@
 @import "tailwindcss";
 
+/* =========================================================
+   PALET WARNA RESMI
+   =========================================================
+   1. Primary Colors:
+      - Dark Blue (Navy): #123B5D
+      - Medium Blue (Brand): #3473A7
+      - Off-White / Greyish White (Paper): #F6F6F6
+   2. Secondary & Accent Colors:
+      - Yellow: #FFD52E
+      - Light Orange: #FFCD5F
+      - Green: #9BC264
+      - Teal: #00BFA6
+      - White: #FFFFFF
+   ========================================================= */
+
+@theme {
+  /* 1. Primary Colors */
+  --color-navy: #123B5D;
+  --color-brand: #3473A7;
+  --color-paper: #F6F6F6;
+  --color-mist: #E5E9EE;
+  --color-primary: #3473A7;
+  --color-greyish: #F6F6F6;
+  --color-offwhite: #F6F6F6;
+
+  /* 2. Secondary & Accent Colors */
+  --color-yellow: #FFD52E;
+  --color-orange-light: #FFCD5F;
+  --color-green: #9BC264;
+  --color-teal: #00BFA6;
+  --color-white: #FFFFFF;
+
+  /* Aliases */
+  --color-accent-yellow: #FFD52E;
+  --color-accent-orange: #FFCD5F;
+  --color-accent-green: #9BC264;
+  --color-accent-teal: #00BFA6;
+}
+
 :root {
   color-scheme: light;
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background-color: #f8fafc;
-  color: #0f172a;
+  font-family: "Poppins", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: #F6F6F6;
+  color: #123B5D;
 }
 
 * {
@@ -18,8 +57,9 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #F6F6F6;
+  color: #123B5D;
+  font-family: "Poppins", sans-serif;
 }
 
 img {

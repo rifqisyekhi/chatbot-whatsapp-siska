@@ -39,19 +39,36 @@ const {
 } = require("./config/config");
 
 // Connect Database MongoDB
-const mongoose = require("mongoose");
+// =========================================================
+// AKSES DATA POSTGRESQL
+// =========================================================
+//
+// Menggantikan Mongoose. Fungsi di db/ mengembalikan objek
+// berbentuk sama seperti dokumen Mongo dulu — termasuk `_id`,
+// `msgId`, dan pemetaan kendaraan `.id` (kode yang diketik
+// pegawai) versus `._id` (kunci baris) — jadi kode alur di
+// bawah nyaris tidak berubah.
+const kolam = require("./db/kolam");
+const dbPeg = require("./db/pegawai");
+const dbBarang = require("./db/barang");
+const dbKendaraan = require("./db/kendaraan");
+const dbAntrian = require("./db/antrian");
+const dbRiwayat = require("./db/riwayat");
+const dbAbsensi = require("./db/absensi");
 require("dotenv").config();
 
-const uri = process.env.MONGO_URI;
+// MONGO_URI tidak dipakai lagi. Koneksi database kini lewat
+// DATABASE_URL, dibaca di db/kolam.js.
 let mongoReady = false;
 
-const Barang = require("./models/Barang");
-const Pegawai = require("./models/Pegawai");
-const Kendaraan = require("./models/Kendaraan");
-const Antrian = require("./models/Antrian");
-const RiwayatLembur = require("./models/RiwayatLembur");
-const RiwayatKendaraan = require("./models/RiwayatKendaraan");
-const RiwayatCuti = require("./models/RiwayatCuti");
+// Tujuh require model Mongoose dibuang dari sini. Tidak ada lagi
+// yang memakainya — seluruh akses data lewat db/ — dan selama
+// require-nya masih ada, memuat index.js tetap menarik mongoose
+// beserta pendaftaran skemanya.
+//
+// Berkas di models/ sendiri belum dihapus: lihat catatan di
+// presensi-non-asn/backend/models/README-MIGRASI.md soal kapan
+// aman membuangnya.
 
 let dbPegawai = [];
 
@@ -112,9 +129,9 @@ const app = express();
 
 async function refreshDataPegawai() {
   try {
-    dbPegawai = await Pegawai.find({});
+    dbPegawai = await dbPeg.semua();
     console.log(
-      `[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari MongoDB Atlas.`,
+      `[INIT] Berhasil memuat ${dbPegawai.length} data pegawai dari PostgreSQL.`,
     );
 
     // Penerima notifikasi gudang kini bergantung pada teks jabatan. Kalau
@@ -133,27 +150,25 @@ async function refreshDataPegawai() {
       );
     }
   } catch (err) {
-    console.error("[CRITICAL] Gagal memuat data pegawai dari MongoDB:", err);
+    console.error("[CRITICAL] Gagal memuat data pegawai dari Postgres:", err);
   }
 }
 
 async function connectToDatabase() {
-  if (!uri) {
-    console.warn("[DB] MONGO_URI tidak ditemukan. Menjalankan bot tanpa database.");
+  if (!process.env.DATABASE_URL) {
+    console.warn(
+      "[DB] DATABASE_URL tidak ditemukan. Menjalankan bot tanpa database.",
+    );
     return false;
   }
 
   try {
-    await mongoose.connect(uri, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 20000,
-    });
+    await kolam.pastikanTersambung();
     mongoReady = true;
-    console.log("Sip! Bot SisKA udah nyambung ke MongoDB Atlas");
     await refreshDataPegawai();
 
     try {
-      const antrianLama = await Antrian.find({});
+      const antrianLama = await dbAntrian.semua();
       let jumlahAntrian = 0;
       let jumlahFlowLembur = 0;
 
@@ -384,11 +399,7 @@ async function tambahAntrian(msgId, tipe, data) {
   if (tipe === "GUDANG") orderGudangMsgId[msgId] = data;
 
   try {
-    await Antrian.findOneAndUpdate(
-      { msgId: msgId },
-      { msgId: msgId, tipe: tipe, data: data },
-      { upsert: true },
-    );
+    await dbAntrian.simpan(msgId, tipe, data);
   } catch (e) {
     console.error("Gagal backup antrian ke DB", e);
   }
@@ -399,7 +410,7 @@ async function hapusAntrian(msgId, tipe) {
   if (tipe === "GUDANG") delete orderGudangMsgId[msgId];
 
   try {
-    await Antrian.findOneAndDelete({ msgId: msgId });
+    await dbAntrian.hapus(msgId);
   } catch (e) {
     console.error("Gagal hapus antrian dari DB", e);
   }
@@ -459,7 +470,7 @@ app.use("/api", (req, res, next) => {
 // AMBIL SEMUA PEGAWAI
 app.get("/api/pegawai", async (req, res) => {
   try {
-    const data = await Pegawai.find({});
+    const data = await dbPeg.semua();
     res.json(data);
   } catch (err) {
     console.error("[API] Gagal memuat data pegawai:", err?.message || err);
@@ -490,21 +501,25 @@ function bersihkanDataPegawai(body) {
 // pegawai" tanpa keterangan, sehingga NIP kembar pun terlihat
 // seperti server rusak.
 function pesanErrorPegawai(err) {
-  if (err?.code === 11000) {
-    const field = Object.keys(err.keyPattern || { nip: 1 })[0];
+  // 23505 = pelanggaran keunikan. Postgres menyebut NAMA
+  // constraint-nya, jauh lebih pasti daripada 11000 milik Mongo
+  // yang harus ditebak dari keyPattern.
+  if (err?.code === "23505") {
+    const medan = /nip/.test(err.constraint || "") ? "NIP" : "data";
 
     return {
       status: 409,
-      error: `Nilai ${field} itu sudah dipakai pegawai lain.`,
+      error: `Nilai ${medan} itu sudah dipakai pegawai lain.`,
     };
   }
 
-  if (err?.name === "ValidationError") {
+  // 23514 = CHECK, 23502 = NOT NULL. Keduanya menggantikan
+  // ValidationError Mongoose — bedanya validasinya kini di
+  // database, jadi tidak bisa terlewat oleh jalur tulis mana pun.
+  if (err?.code === "23514" || err?.code === "23502") {
     return {
       status: 400,
-      error: Object.values(err.errors || {})
-        .map((e) => e.message)
-        .join(" "),
+      error: `Data tidak memenuhi aturan: ${err.detail || err.message}`,
     };
   }
 
@@ -514,8 +529,7 @@ function pesanErrorPegawai(err) {
 // TAMBAH PEGAWAI BARU
 app.post("/api/pegawai", async (req, res) => {
   try {
-    const baru = new Pegawai(bersihkanDataPegawai(req.body));
-    await baru.save();
+    const baru = await dbPeg.buat(bersihkanDataPegawai(req.body));
     await refreshDataPegawai();
     res.status(201).json({ message: "Pegawai berhasil ditambah!", data: baru });
   } catch (err) {
@@ -547,14 +561,17 @@ app.put("/api/pegawai/:id", async (req, res) => {
       buang.nip = "";
     }
 
-    const updated = await Pegawai.findByIdAndUpdate(
-      req.params.id,
-      Object.keys(buang).length ? { $set: data, $unset: buang } : data,
-      // returnDocument: "after" adalah pengganti resmi opsi `new` yang
-      // sudah usang di Mongoose 6+. Artinya sama: kembalikan dokumen
-      // SESUDAH diperbarui, bukan sebelumnya.
-      { returnDocument: "after", runValidators: true },
-    );
+    // $unset untuk mengosongkan nip tidak dibutuhkan lagi: lapisan
+    // db mengubah string kosong menjadi NULL, dan index unik partial
+    // di Postgres memang mengabaikan NULL — jadi beberapa pegawai
+    // ber-nip kosong tetap boleh, seperti PPNPN dan anak magang.
+    //
+    // perbaruiPerId mengembalikan baris SESUDAH diubah, sama seperti
+    // returnDocument: "after" dulu.
+    const updated = await dbPeg.perbaruiPerId(req.params.id, {
+      ...data,
+      ...(Object.keys(buang).length ? { nip: "" } : {}),
+    });
 
     if (!updated)
       return res.status(404).json({ error: "Pegawai tidak ditemukan" });
@@ -574,7 +591,7 @@ app.put("/api/pegawai/:id", async (req, res) => {
 // HAPUS PEGAWAI
 app.delete("/api/pegawai/:id", async (req, res) => {
   try {
-    const deleted = await Pegawai.findByIdAndDelete(req.params.id);
+    const deleted = await dbPeg.hapusPerId(req.params.id);
     if (!deleted)
       return res.status(404).json({ error: "Pegawai tidak ditemukan" });
     await refreshDataPegawai();
@@ -592,7 +609,7 @@ app.delete("/api/pegawai/:id", async (req, res) => {
 // AMBIL SEMUA KENDARAAN
 app.get("/api/kendaraan", async (req, res) => {
   try {
-    const data = await Kendaraan.find({});
+    const data = await dbKendaraan.semua();
     res.json(data);
   } catch (err) {
     console.error("[API] Gagal memuat data kendaraan:", err?.message || err);
@@ -603,8 +620,7 @@ app.get("/api/kendaraan", async (req, res) => {
 // TAMBAH KENDARAAN BARU
 app.post("/api/kendaraan", async (req, res) => {
   try {
-    const mobilBaru = new Kendaraan(req.body);
-    await mobilBaru.save();
+    const mobilBaru = await dbKendaraan.buat(req.body);
     res
       .status(201)
       .json({ message: "Kendaraan berhasil didaftarkan!", data: mobilBaru });
@@ -617,9 +633,7 @@ app.post("/api/kendaraan", async (req, res) => {
 // EDIT KENDARAAN
 app.put("/api/kendaraan/:id", async (req, res) => {
   try {
-    const updated = await Kendaraan.findByIdAndUpdate(req.params.id, req.body, {
-      returnDocument: "after",
-    });
+    const updated = await dbKendaraan.perbaruiPerId(req.params.id, req.body);
     if (!updated)
       return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
     res.json({ message: "Data kendaraan diperbarui!", data: updated });
@@ -632,7 +646,7 @@ app.put("/api/kendaraan/:id", async (req, res) => {
 // HAPUS KENDARAAN
 app.delete("/api/kendaraan/:id", async (req, res) => {
   try {
-    const deleted = await Kendaraan.findByIdAndDelete(req.params.id);
+    const deleted = await dbKendaraan.hapusPerId(req.params.id);
     if (!deleted)
       return res.status(404).json({ error: "Kendaraan tidak ditemukan" });
     res.json({ message: "Kendaraan berhasil dihapus!" });
@@ -648,7 +662,7 @@ app.delete("/api/kendaraan/:id", async (req, res) => {
 
 app.get("/api/barang", async (req, res) => {
   try {
-    const dataDB = await Barang.find({});
+    const dataDB = await dbBarang.semua();
     res.json(
       dataDB.map((item) => ({
         id: item.id_barang,
@@ -673,22 +687,17 @@ app.post("/api/barang", async (req, res) => {
     }
 
     let prefix = kategori === "ATK" ? "ATK-" : "ELK-";
-    const barangSejenis = await Barang.find(
-      { kategori: kategori },
-      "id_barang",
-    );
-    let angkaTertinggi = 0;
-    barangSejenis.forEach((barang) => {
-      const bagian = barang.id_barang.split("-");
-      if (bagian.length === 2) {
-        const angka = parseInt(bagian[1], 10);
-        if (!isNaN(angka) && angka > angkaTertinggi) angkaTertinggi = angka;
-      }
-    });
+    // Angka urut tertinggi dihitung di SQL, bukan dengan menarik
+    // seluruh barang lalu mengurainya di sini. Hasilnya sama, tapi
+    // id yang bentuknya tidak biasa tidak lagi bisa membuat
+    // hasilnya NaN seperti pada versi JavaScript-nya.
+    const angkaTertinggi = await dbBarang.angkaUrutTertinggi(kategori);
 
     const id_barang_baru = `${prefix}${(angkaTertinggi + 1).toString().padStart(3, "0")}`;
-    const barangBaru = new Barang({ ...req.body, id_barang: id_barang_baru });
-    await barangBaru.save();
+    const barangBaru = await dbBarang.buat({
+      ...req.body,
+      id_barang: id_barang_baru,
+    });
     res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
   } catch (err) {
     console.error("[API] Gagal menambah barang:", err?.message || err);
@@ -698,11 +707,7 @@ app.post("/api/barang", async (req, res) => {
 
 app.put("/api/barang/:id_barang", async (req, res) => {
   try {
-    const updated = await Barang.findOneAndUpdate(
-      { id_barang: req.params.id_barang },
-      { $set: req.body },
-      { returnDocument: "after" },
-    );
+    const updated = await dbBarang.perbarui(req.params.id_barang, req.body);
     if (!updated)
       return res.status(404).json({ error: "Barang tidak ditemukan" });
     res.json({ message: "Barang berhasil diperbarui!", data: updated });
@@ -714,9 +719,7 @@ app.put("/api/barang/:id_barang", async (req, res) => {
 
 app.delete("/api/barang/:id_barang", async (req, res) => {
   try {
-    const deleted = await Barang.findOneAndDelete({
-      id_barang: req.params.id_barang,
-    });
+    const deleted = await dbBarang.hapus(req.params.id_barang);
     if (!deleted)
       return res.status(404).json({ error: "Barang tidak ditemukan" });
     res.json({ message: "Barang berhasil dihapus!" });
@@ -776,7 +779,7 @@ const RIWAYAT_PATH = path.join(__dirname, "database", "riwayat_lembur.json");
 
 async function getStatusKendaraan() {
   try {
-    return await Kendaraan.find({});
+    return await dbKendaraan.semua();
   } catch (e) {
     console.error("Gagal ambil data kendaraan dari MongoDB", e);
     return [];
@@ -785,10 +788,9 @@ async function getStatusKendaraan() {
 
 async function simpanRiwayatKendaraanAsync(data) {
   try {
-    const riwayatBaru = new RiwayatKendaraan(data);
-    await riwayatBaru.save();
+    await dbRiwayat.kendaraan.buat(data);
     console.log(
-      `[DB] Riwayat kendaraan ${data.nama_pegawai} berhasil disimpan ke MongoDB.`,
+      `[DB] Riwayat kendaraan ${data.nama_pegawai} berhasil disimpan.`,
     );
   } catch (err) {
     console.error("Gagal simpan riwayat kendaraan ke MongoDB:", err);
@@ -797,11 +799,8 @@ async function simpanRiwayatKendaraanAsync(data) {
 
 async function simpanRiwayatLemburAsync(data) {
   try {
-    const lemburBaru = new RiwayatLembur(data);
-    await lemburBaru.save();
-    console.log(
-      `[DB] Riwayat lembur ${data.nama} berhasil disimpan ke MongoDB.`,
-    );
+    await dbRiwayat.lembur.buat(data);
+    console.log(`[DB] Riwayat lembur ${data.nama} berhasil disimpan.`);
   } catch (err) {
     console.error("Gagal simpan riwayat lembur ke MongoDB:", err);
   }
@@ -860,11 +859,11 @@ function simpanFlowLembur(chatId, flow) {
   // mentah-mentah ke field Mixed menyimpan bagasi internalnya sekalian.
   const bersih = JSON.parse(JSON.stringify({ ...flow, disimpanPada: Date.now() }));
 
-  Antrian.findOneAndUpdate(
-    { msgId: chatId },
-    { msgId: chatId, tipe: TIPE_FLOW_LEMBUR, data: bersih },
-    { upsert: true },
-  ).catch((e) => console.error("[LEMBUR] Gagal menyimpan alur foto:", e?.message || e));
+  dbAntrian
+    .simpan(chatId, TIPE_FLOW_LEMBUR, bersih)
+    .catch((e) =>
+      console.error("[LEMBUR] Gagal menyimpan alur foto:", e?.message || e),
+    );
 }
 
 function hapusFlowLembur(chatId) {
@@ -872,7 +871,7 @@ function hapusFlowLembur(chatId) {
 
   flowLemburTersimpan.delete(chatId);
 
-  Antrian.findOneAndDelete({ msgId: chatId, tipe: TIPE_FLOW_LEMBUR }).catch((e) =>
+  dbAntrian.hapusPerTipe(chatId, TIPE_FLOW_LEMBUR).catch((e) =>
     console.error("[LEMBUR] Gagal menghapus alur foto:", e?.message || e),
   );
 }
@@ -895,7 +894,7 @@ async function pulihkanFlowLembur(doc) {
   const buang = async (alasan) => {
     console.warn(`[LEMBUR] Alur foto ${doc.msgId} dibuang: ${alasan}.`);
 
-    await Antrian.findOneAndDelete({ msgId: doc.msgId }).catch(() => {});
+    await dbAntrian.hapus(doc.msgId).catch(() => {});
 
     return false;
   };
@@ -1093,9 +1092,7 @@ async function cariPegawaiByWa(rawId) {
   if (!digits) return null;
 
   // Cek database pakai format 62...
-  return await Pegawai.findOne({
-    $or: [{ no_wa: digits }, { no_wa: "0" + digits.slice(2) }],
-  }).lean();
+  return await dbPeg.satuPerWaAtauNol(digits);
 }
 
 // "Tidak punya atasan" hanya berarti PIMPINAN untuk pegawai ASN. Untuk
@@ -1144,7 +1141,7 @@ function alasanTolakLembur(pegawai) {
 async function cariAtasanPegawai(pegawai) {
   if (!pegawai || !pegawai.atasan_nip) return null;
   try {
-    return await Pegawai.findOne({ nip: pegawai.atasan_nip }).lean();
+    return await dbPeg.satuPerNip(pegawai.atasan_nip);
   } catch (err) {
     console.error("Gagal cari atasan:", err);
     return null;
@@ -1207,19 +1204,10 @@ function pulangMelewati(jamPulang, jamHarusCheckout) {
 // tulis di backend bisa dijangkau dari jaringan kantor lewat nginx, dan
 // pegawai tidak boleh bisa menyetujui lemburnya sendiri.
 async function catatLemburDisetujui({ noWa, tanggal, alasan, atasan }) {
-  const hasil = await mongoose.connection.db.collection("absensi").updateOne(
-    { no_wa: noWa, tanggal },
-    {
-      $set: {
-        "lembur.disetujui": true,
-        "lembur.alasan": alasan || "",
-        "lembur.atasan": atasan || "",
-        "lembur.disetujuiPada": new Date(),
-      },
-    },
-  );
-
-  return hasil.matchedCount > 0;
+  // Sub-dokumen `lembur` kini empat kolom datar, jadi $set
+  // bersarangnya jadi SET biasa. Mengembalikan true/false sama
+  // seperti pemeriksaan matchedCount > 0 dulu.
+  return dbAbsensi.catatLemburDisetujui({ noWa, tanggal, alasan, atasan });
 }
 
 // Memasang alur unggah 3 foto, lalu mengembalikan teks permintaannya
@@ -1571,16 +1559,20 @@ async function resetDataUji(chatId) {
   const hasil = [];
 
   // 1. Absensi — sumber yang dibaca bot maupun aplikasi web.
-  const absensi = await mongoose.connection.db
-    .collection("absensi")
-    .deleteMany({ no_wa: noWa });
-  hasil.push(`${absensi.deletedCount} absensi`);
+  //
+  // Riwayat perubahan status dan jam ikut terhapus lewat
+  // ON DELETE CASCADE. Di Mongo keduanya ada DI DALAM dokumen
+  // absensinya, jadi perilakunya sama — tapi sekarang jaminannya
+  // ada di database, bukan pada bentuk dokumennya.
+  const absensi = await dbAbsensi.hapusMilikPegawai(noWa);
+  hasil.push(`${absensi} absensi`);
 
   // 2. Antrian persetujuan dan alur unggah foto yang menggantung.
-  const antrian = await Antrian.deleteMany({
-    $or: [{ msgId: chatId }, { "data.sender": chatId }],
-  });
-  hasil.push(`${antrian.deletedCount} antrian`);
+  // $or dengan "data.sender" jadi data->>'sender' — jsonb bisa
+  // menggali ke dalam blob langsung, jadi tidak perlu menarik
+  // seluruh antrian ke memori untuk memeriksa satu medan.
+  const antrian = await dbAntrian.hapusMilikChat(chatId);
+  hasil.push(`${antrian} antrian`);
 
   for (const kunci of Object.keys(pengajuanByAtasanMsgId)) {
     if (pengajuanByAtasanMsgId[kunci]?.sender === chatId) {
@@ -1595,7 +1587,7 @@ async function resetDataUji(chatId) {
   //    menghapus dokumen milik orang lain.
   let riwayat = 0;
   if (nama) {
-    riwayat = (await RiwayatLembur.deleteMany({ nama })).deletedCount;
+    riwayat = await dbRiwayat.lembur.hapusPerNama(nama);
   }
   hasil.push(`${riwayat} riwayat lembur`);
 
@@ -4590,6 +4582,8 @@ client.on("message", async (message) => {
               nama: namaPemohon,
               nip: nipPemohon,
               jabatan: jabatanPemohon,
+              kategori_pegawai: pData?.kategori_pegawai || "",
+              label_identitas: pegawaiASN(pData) ? "NIP" : "NIK",
             },
           };
 
@@ -4639,10 +4633,7 @@ client.on("message", async (message) => {
           const jumlahDiambil = parseInt(hasilBedah[2], 10);
           if (idBarangTarget && !isNaN(jumlahDiambil)) {
             try {
-              await Barang.findOneAndUpdate(
-                { id_barang: idBarangTarget },
-                { $inc: { stok: +jumlahDiambil } },
-              );
+              await dbBarang.ubahStok(idBarangTarget, +jumlahDiambil);
               console.log(
                 `[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`,
               );
@@ -4709,8 +4700,9 @@ client.on("message", async (message) => {
             `• *Kontak:* ${pengajuan.kontakCuti || "-"}\n\n` +
             `Sedang menyiapkan *Formulir Cuti resmi (PDF)* untuk Anda dan atasan...`;
 
+          let riwayatBaru = null;
           try {
-            await RiwayatCuti.create({
+            riwayatBaru = await dbRiwayat.cuti.buat({
               nip: p?.nip || p?.NIP || "-",
               nama: p?.nama || "-",
               jabatan: p?.jabatan || "-",
@@ -4732,9 +4724,33 @@ client.on("message", async (message) => {
 
           // GENERATE PDF FORMULIR CUTI & KIRIM KE PEGAWAI + ATASAN (OPSI A)
           try {
+            // Ambil data pimpinan unit kerja pegawai dari database
+            let pimpinan = pengajuan.atasan;
+            if (!pimpinan || !pimpinan.nip || pimpinan.nip === "-") {
+              if (p?.atasan_nip) {
+                pimpinan = await dbPeg.satuPerNip(p.atasan_nip);
+              }
+            }
+            if (!pimpinan || !pimpinan.nip || pimpinan.nip === "-") {
+              const su = String(p?.sub_unit || p?.["Unit Kerja"] || "").trim().toUpperCase();
+              if (su === "TU" || !su) {
+                pimpinan = await dbPeg.satuPerNip("198703232015031002");
+              } else {
+                // Regex Mongo jadi operator ~* di Postgres —
+                // pencocokan pola tanpa membedakan huruf besar-kecil.
+                pimpinan = await dbPeg.pimpinanSubUnit(su);
+              }
+            }
+
+            const namaPejabat = pimpinan?.nama || NAMA_KETUA_SUB_TU || "Alpha Sandro Adithyaswara, S.Sos.";
+            const nipPejabat = pimpinan?.nip || NIP_KETUA_SUB_TU || "198703232015031002";
+            const jabatanPejabat = pimpinan?.jabatan || JABATAN_KETUA_SUB_TU || "Kepala Sub Bagian Tata Usaha";
+
             const dataPDFCuti = {
               nama: p?.nama || "Pegawai",
               nip: p?.nip || p?.NIP || "-",
+              kategori_pegawai: p?.kategori_pegawai || "",
+              label_identitas: pegawaiASN(p) ? "NIP" : "NIK",
               jabatan: p?.jabatan || "-",
               sub_unit: p?.sub_unit || p?.["Unit Kerja"] || "Biro Keuangan dan BMN",
               unitKerja: p?.["Unit Kerja"] || p?.sub_unit || "Biro Keuangan dan BMN",
@@ -4744,17 +4760,24 @@ client.on("message", async (message) => {
               lamaCuti: pengajuan.lamaCuti || "-",
               alamatCuti: pengajuan.alamatCuti || "-",
               kontakCuti: pengajuan.kontakCuti || "-",
-              atasan_nama: pengajuan.atasan?.nama || "John Pieter, S.Kom.",
-              atasan_nip: pengajuan.atasan?.nip || "198312302009121004",
-              atasan_jabatan: pengajuan.atasan?.jabatan || "Wakil Ketua Tim Perbendaharaan dan Tata Usaha Keuangan",
-              pejabat_nama: NAMA_KETUA_SUB_TU || "Arip Sarkowi, S.E., M.Si.",
-              pejabat_nip: NIP_KETUA_SUB_TU || "197601091999032001",
-              pejabat_jabatan: JABATAN_KETUA_SUB_TU || "Ketua Tim Perbendaharaan dan Tata Usaha Keuangan",
+              // Bagian VII (Wakil) untuk sementara dikosongkan
+              atasan_nama: "",
+              atasan_nip: "",
+              atasan_jabatan: "",
+              kosongkanWakil: true,
+              // Bagian VIII diisi oleh Pimpinan sesuai database unit kerja
+              pejabat_nama: namaPejabat,
+              pejabat_nip: nipPejabat,
+              pejabat_jabatan: jabatanPejabat,
               isPimpinan: false,
             };
 
             const nomorAtasan = getValidWaId(pengajuan.atasan?.no_wa);
-            await buatFormulirCutiAsync(dataPDFCuti, pemohonId, nomorAtasan, client);
+            const fullPdfPath = await buatFormulirCutiAsync(dataPDFCuti, pemohonId, nomorAtasan, client);
+            if (fullPdfPath && riwayatBaru) {
+              const relPath = path.relative(path.join(__dirname), fullPdfPath).replace(/\\/g, "/");
+              await dbRiwayat.cuti.pasangPdf(riwayatBaru._id, relPath);
+            }
           } catch (pdfErr) {
             console.error("❌ Gagal membuat PDF Formulir Cuti:", pdfErr?.message || pdfErr);
           }
@@ -4766,15 +4789,14 @@ client.on("message", async (message) => {
 
           if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
             // UPDATE MONGODB
-            await Kendaraan.findOneAndUpdate(
-              { id: pengajuan.kendaraanId },
-              {
-                status: "DIPAKAI",
-                peminjam_saat_ini: p["nip"],
-                waktu_pinjam: new Date().toISOString(),
-                tujuan_aktif: pengajuan.alasan,
-              },
-            );
+            // perbaruiPerKode, bukan per kunci baris: yang dipegang
+            // alur ini kode kendaraan yang diketik pegawai.
+            await dbKendaraan.perbaruiPerKode(pengajuan.kendaraanId, {
+              status: "DIPAKAI",
+              peminjam_saat_ini: p["nip"],
+              waktu_pinjam: new Date().toISOString(),
+              tujuan_aktif: pengajuan.alasan,
+            });
 
             pesanPegawai = `Pengajuan peminjaman kendaraan *${pengajuan.namaKendaraan}* Anda telah *DISETUJUI* oleh Penanggung Jawab.\n\nSedang menyiapkan PDF Surat Izin Kendaraan untuk syarat serah terima kunci...`;
 
@@ -4795,6 +4817,8 @@ client.on("message", async (message) => {
                 pemakai: {
                   nama: p.nama || "Nama Pemakai",
                   nip: p["nip"] || p["NIP"] || "-",
+                  kategori_pegawai: p.kategori_pegawai || "",
+                  label_identitas: pegawaiASN(p) ? "NIP" : "NIK",
                   jabatan: p.jabatan || "-",
                 },
                 kendaraan: {
@@ -4858,10 +4882,11 @@ client.on("message", async (message) => {
             const jumlahDiambil = parseInt(hasilBedah[2], 10);
             if (idBarangTarget && !isNaN(jumlahDiambil)) {
               try {
-                await Barang.findOneAndUpdate(
-                  { id_barang: idBarangTarget },
-                  { $inc: { stok: -jumlahDiambil } },
-                );
+                // Stok minus kini DITOLAK database, bukan dibiarkan
+                // seperti $inc dulu. Kegagalannya ditangkap catch di
+                // bawah dan dicatat, jadi stoknya tidak berubah dan
+                // ada jejaknya di log.
+                await dbBarang.ubahStok(idBarangTarget, -jumlahDiambil);
               } catch (dbErr) {
                 console.error(
                   `[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`,
@@ -4891,7 +4916,7 @@ client.on("message", async (message) => {
             `Silakan berkoordinasi langsung dengan atasan Anda untuk informasi lebih lanjut.`;
 
           try {
-            await RiwayatCuti.create({
+            await dbRiwayat.cuti.buat({
               nip: p?.nip || p?.NIP || "-",
               nama: p?.nama || "-",
               jabatan: p?.jabatan || "-",
@@ -5605,9 +5630,9 @@ client.on("message", async (message) => {
         if (subunitUser === "KOOR" && !jabatanUser.includes("KEPALA BIRO")) {
           try {
             // Pencarian DIPERJELAS & SPESIFIK mencari Kepala Biro sesuai text database
-            const dataKepalaBiro = await Pegawai.findOne({
-              jabatan: "Kepala Biro Keuangan dan BMN",
-            }).lean();
+            const dataKepalaBiro = await dbPeg.satuPerJabatan(
+              "Kepala Biro Keuangan dan BMN",
+            );
 
             if (dataKepalaBiro) {
               atasan = {
@@ -5639,6 +5664,8 @@ client.on("message", async (message) => {
         const dataWFA = {
           nama: flow.pegawai.nama,
           nip: flow.pegawai["nip"],
+          kategori_pegawai: flow.pegawai.kategori_pegawai || "",
+          label_identitas: pegawaiASN(flow.pegawai) ? "NIP" : "NIK",
           jabatan: flow.pegawai.jabatan || flow.pegawai.jabatan,
           unitKerja: "Sekretariat Jenderal",
           unitOrganisasi: unitKerjaAtauSubstansi,
@@ -6098,8 +6125,9 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
 
         await kirimDenganTyping(client, chatId, pesanPegawai);
 
+        let riwayatBaru = null;
         try {
-          await RiwayatCuti.create({
+          riwayatBaru = await dbRiwayat.cuti.buat({
             nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
             nama: flow.pegawai.nama,
             jabatan: flow.pegawai.jabatan || "-",
@@ -6119,9 +6147,24 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
 
         // GENERATE PDF FORMULIR CUTI & KIRIM KE PIMPINAN
         try {
+          // Jika pimpinan yang mengajukan cuti, atasan di atasnya adalah Kepala Biro (Irma Puspita)
+          let atasanPimpinan = null;
+          if (flow.pegawai?.atasan_nip) {
+            atasanPimpinan = await dbPeg.satuPerNip(flow.pegawai.atasan_nip);
+          }
+          if (!atasanPimpinan) {
+            atasanPimpinan = await dbPeg.satuPerNip("198501202008012002");
+          }
+
+          const namaPejabat = atasanPimpinan?.nama || "Irma Puspita, S.IP., S.E., M.Si.";
+          const nipPejabat = atasanPimpinan?.nip || "198501202008012002";
+          const jabatanPejabat = atasanPimpinan?.jabatan || "Kepala Biro Keuangan dan BMN";
+
           const dataPDFCuti = {
             nama: flow.pegawai.nama,
             nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
+            kategori_pegawai: flow.pegawai.kategori_pegawai || "",
+            label_identitas: pegawaiASN(flow.pegawai) ? "NIP" : "NIK",
             jabatan: flow.pegawai.jabatan || "-",
             sub_unit: flow.pegawai.sub_unit || flow.pegawai["Unit Kerja"] || "Biro Keuangan dan BMN",
             unitKerja: flow.pegawai["Unit Kerja"] || flow.pegawai.sub_unit || "Biro Keuangan dan BMN",
@@ -6131,16 +6174,21 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
             lamaCuti: flow.lamaCuti,
             alamatCuti: flow.alamatCuti,
             kontakCuti: flow.kontakCuti,
-            atasan_nama: flow.pegawai.nama,
-            atasan_nip: flow.pegawai.nip || flow.pegawai.NIP || "-",
-            atasan_jabatan: flow.pegawai.jabatan || "Pimpinan",
-            pejabat_nama: NAMA_KETUA_SUB_TU || "Arip Sarkowi, S.E., M.Si.",
-            pejabat_nip: NIP_KETUA_SUB_TU || "197601091999032001",
-            pejabat_jabatan: JABATAN_KETUA_SUB_TU || "Ketua Tim Perbendaharaan dan Tata Usaha Keuangan",
+            atasan_nama: "",
+            atasan_nip: "",
+            atasan_jabatan: "",
+            kosongkanWakil: true,
+            pejabat_nama: namaPejabat,
+            pejabat_nip: nipPejabat,
+            pejabat_jabatan: jabatanPejabat,
             isPimpinan: true,
           };
 
-          await buatFormulirCutiAsync(dataPDFCuti, chatId, null, client);
+          const fullPdfPath = await buatFormulirCutiAsync(dataPDFCuti, chatId, null, client);
+          if (fullPdfPath && riwayatBaru) {
+            const relPath = path.relative(path.join(__dirname), fullPdfPath).replace(/\\/g, "/");
+            await dbRiwayat.cuti.pasangPdf(riwayatBaru._id, relPath);
+          }
         } catch (pdfErr) {
           console.error("❌ Gagal membuat PDF Formulir Cuti (Pimpinan):", pdfErr?.message || pdfErr);
         }
@@ -6283,9 +6331,10 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
             let namaPeminjam = m.peminjam_saat_ini;
             const nipPinjam = String(m.peminjam_saat_ini || "").trim();
             if (nipPinjam) {
-              const peg = await Pegawai.findOne({
-                $or: [{ nip: nipPinjam }, { NIP: nipPinjam }],
-              }).lean();
+              // Cabang NIP huruf besar dibuang, bukan diterjemahkan:
+              // diperiksa pada seluruh 58 dokumen di Atlas, tidak
+              // satu pun punya medan bernama NIP.
+              const peg = await dbPeg.satuPerNip(nipPinjam);
               if (peg && peg.nama) namaPeminjam = peg.nama;
             }
 
@@ -6400,15 +6449,12 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
 
         if (index !== -1 && allKendaraan[index].status === "TERSEDIA") {
           // UPDATE MONGODB
-          await Kendaraan.findOneAndUpdate(
-            { id: flow.kendaraanId },
-            {
-              status: "DIPAKAI",
-              peminjam_saat_ini: pegawai.nip,
-              waktu_pinjam: new Date().toISOString(),
-              tujuan_aktif: tujuan,
-            },
-          );
+          await dbKendaraan.perbaruiPerKode(flow.kendaraanId, {
+            status: "DIPAKAI",
+            peminjam_saat_ini: pegawai.nip,
+            waktu_pinjam: new Date().toISOString(),
+            tujuan_aktif: tujuan,
+          });
 
           await kirimDenganTyping(
             client,
@@ -6426,6 +6472,8 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
               pemakai: {
                 nama: pegawai.nama || "Nama Pemakai",
                 nip: pegawai["nip"] || pegawai["NIP"] || "-",
+                kategori_pegawai: pegawai.kategori_pegawai || "",
+                label_identitas: pegawaiASN(pegawai) ? "NIP" : "NIK",
                 jabatan: pegawai.jabatan || "-",
               },
               kendaraan: {
@@ -6536,15 +6584,15 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         const tujuanAwal = mobil.tujuan_aktif;
 
         // UPDATE MONGODB
-        await Kendaraan.findOneAndUpdate(
-          { id: kendaraanId },
-          {
-            status: "TERSEDIA",
-            peminjam_saat_ini: null,
-            waktu_pinjam: null,
-            tujuan_aktif: null,
-          },
-        );
+        // null di sini BENAR-BENAR mengosongkan, bukan dianggap
+        // "tidak diisi" — ketiga medan itulah yang menandai
+        // kendaraannya tersedia lagi.
+        await dbKendaraan.perbaruiPerKode(kendaraanId, {
+          status: "TERSEDIA",
+          peminjam_saat_ini: null,
+          waktu_pinjam: null,
+          tujuan_aktif: null,
+        });
 
         const logData = {
           tanggal: new Date().toISOString(),
@@ -6576,6 +6624,8 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
             pemakai: {
               nama: pegawai.nama || "Nama Pemakai",
               nip: pegawai["nip"] || pegawai["NIP"] || "-",
+              kategori_pegawai: pegawai.kategori_pegawai || "",
+              label_identitas: pegawaiASN(pegawai) ? "NIP" : "NIK",
               jabatan: pegawai.jabatan || "-",
             },
             kendaraan: {

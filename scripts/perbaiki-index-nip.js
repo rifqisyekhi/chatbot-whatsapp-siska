@@ -1,4 +1,23 @@
 // =========================================================
+// SUDAH TIDAK DIBUTUHKAN SEJAK PINDAH KE POSTGRESQL
+// =========================================================
+//
+// Skrip ini mengganti index unik `nip_1` yang lama dengan versi
+// partial, supaya PPNPN dan anak magang yang NIP-nya kosong
+// tidak saling menolak.
+//
+// Di Postgres masalah itu tidak pernah ada: index-nya sudah
+// partial sejak dibuat —
+//
+//   CREATE UNIQUE INDEX pegawai_nip_unik_jika_terisi
+//     ON pegawai (nip) WHERE nip IS NOT NULL AND nip <> '';
+//
+// (lihat presensi-non-asn/backend/db/001-skema.sql)
+//
+// Jadi skrip ini TIDAK perlu dimigrasi. Aman dihapus begitu
+// MongoDB Atlas dimatikan.
+
+// =========================================================
 // PERBAIKI INDEX UNIK nip PADA KOLEKSI pegawai
 // =========================================================
 //
