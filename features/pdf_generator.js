@@ -60,16 +60,39 @@ async function getDummySignature(nip) {
 // =========================================================
 // HELPER LABEL IDENTITAS (NIP vs NIK)
 // =========================================================
-// Pegawai internal/ASN memakai NIP (standar 18 digit),
-// sedangkan PPNPN/non-ASN memakai NIK (standar 16 digit).
-// Fungsi ini memastikan seluruh dokumen PDF menampilkan label
-// yang tepat (NIK untuk PPNPN, NIP untuk ASN/Internal).
+// Pegawai ASN memakai NIP (standar 18 digit), sedangkan non-ASN
+// dan magang memakai NIK (standar 16 digit). Fungsi ini memastikan
+// seluruh dokumen PDF menampilkan label yang tepat.
+//
+// Nama kategori diganti 21 Oktober 2026: Internal -> ASN,
+// PPNPN -> Non ASN. Nama lama tetap dikenali supaya PDF untuk
+// baris yang belum ikut terkonversi tidak salah label.
+//
+// Perhatikan urutannya: cabang NIK harus didahulukan. "non asn"
+// bukan "asn", jadi sebenarnya tidak bertabrakan — tapi kalau
+// suatu saat cabang NIP diubah memakai includes(), "non asn"
+// akan tersambar dan seluruh non-ASN salah label.
+// Semuanya huruf kecil: nilai yang dibandingkan sudah di-lowercase.
+// "non asn" dan "non-asn" dua-duanya dicantumkan karena petugas
+// mengetik kategori secara bebas (tidak ada CHECK di kolomnya).
+const KATEGORI_NIK = [
+  "non asn", "non-asn", "nonasn",
+  "ppnpn", "honorer", "magang", "outsourcing", "tenaga ahli",
+  "nik",
+];
+
+const KATEGORI_NIP = [
+  "asn",
+  "internal", "pns", "pppk",
+  "nip",
+];
+
 function tentukanLabelIdentitas(pegawai, nomorId) {
   // 1. Cek parameter string langsung (mis. kategori atau label)
   if (typeof pegawai === "string") {
     const k = pegawai.trim().toLowerCase();
-    if (k === "ppnpn" || k.includes("ppnpn") || k === "honorer" || k === "magang" || k === "nik") return "NIK";
-    if (k === "internal" || k === "pns" || k === "asn" || k === "pppk" || k === "nip") return "NIP";
+    if (KATEGORI_NIK.includes(k) || k.includes("ppnpn")) return "NIK";
+    if (KATEGORI_NIP.includes(k)) return "NIP";
   } else if (pegawai && typeof pegawai === "object") {
     // 2. Cek properti eksplisit dari objek
     const k = String(
@@ -80,8 +103,8 @@ function tentukanLabelIdentitas(pegawai, nomorId) {
       ""
     ).trim().toLowerCase();
 
-    if (k === "ppnpn" || k.includes("ppnpn") || k === "honorer" || k === "magang" || k === "nik") return "NIK";
-    if (k === "internal" || k === "pns" || k === "asn" || k === "pppk" || k === "nip") return "NIP";
+    if (KATEGORI_NIK.includes(k) || k.includes("ppnpn")) return "NIK";
+    if (KATEGORI_NIP.includes(k)) return "NIP";
 
     if (!nomorId) {
       nomorId = pegawai.nip || pegawai.nik || pegawai.nomorIdentitas || pegawai.NIP;

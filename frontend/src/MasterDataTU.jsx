@@ -109,9 +109,9 @@ export default function AdminMasterDataTU() {
   const jenisIdentitas = (kategori) =>
     !kategori
       ? { label: "NIP / NIK", digit: null, contoh: "Pilih kategori dulu" }
-      : kategori === "Internal"
+      : kategori === "ASN"
         ? { label: "NIP", digit: 18, contoh: "18 digit (PNS / PPPK)" }
-        : { label: "NIK", digit: 16, contoh: "16 digit (PPNPN / Magang)" };
+        : { label: "NIK", digit: 16, contoh: "16 digit (Non ASN / Magang)" };
 
   const identitasForm = jenisIdentitas(formData.kategori_pegawai);
 
@@ -219,10 +219,10 @@ export default function AdminMasterDataTU() {
   // STATISTIK RINGKASAN
   const statsPegawai = useMemo(() => {
     const total = dataPegawai.length;
-    const internal = dataPegawai.filter((p) => p.kategori_pegawai === "Internal").length;
-    const ppnpn = dataPegawai.filter((p) => p.kategori_pegawai === "PPNPN").length;
+    const asn = dataPegawai.filter((p) => p.kategori_pegawai === "ASN").length;
+    const nonAsn = dataPegawai.filter((p) => p.kategori_pegawai === "Non ASN").length;
     const magang = dataPegawai.filter((p) => p.kategori_pegawai === "Magang").length;
-    return { total, internal, ppnpn, magang };
+    return { total, asn, nonAsn, magang };
   }, [dataPegawai]);
 
   const statsKendaraan = useMemo(() => {
@@ -394,19 +394,19 @@ export default function AdminMasterDataTU() {
                 </div>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-mist shadow-2xs">
-                <p className="text-xs font-semibold text-slate-500">Internal (ASN)</p>
+                <p className="text-xs font-semibold text-slate-500">ASN</p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-black text-brand">
-                    {statsPegawai.internal}
+                    {statsPegawai.asn}
                   </span>
                   <span className="text-xs font-bold text-brand/70">Pegawai</span>
                 </div>
               </div>
               <div className="bg-white p-4 rounded-2xl border border-mist shadow-2xs">
-                <p className="text-xs font-semibold text-slate-500">PPNPN</p>
+                <p className="text-xs font-semibold text-slate-500">Non ASN</p>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-black text-teal">
-                    {statsPegawai.ppnpn}
+                    {statsPegawai.nonAsn}
                   </span>
                   <span className="text-xs font-bold text-teal/70">Personil</span>
                 </div>
@@ -517,8 +517,8 @@ export default function AdminMasterDataTU() {
                       className="w-full px-3 py-2.5 bg-paper/60 hover:bg-paper focus:bg-white border border-mist focus:border-brand rounded-2xl outline-none text-xs font-bold text-navy appearance-none cursor-pointer pr-8"
                     >
                       <option value="Semua">Semua Kategori</option>
-                      <option value="Internal">Internal</option>
-                      <option value="PPNPN">PPNPN</option>
+                      <option value="ASN">ASN</option>
+                      <option value="Non ASN">Non ASN</option>
                       <option value="Magang">Magang</option>
                     </select>
                     <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -633,17 +633,21 @@ export default function AdminMasterDataTU() {
                               {item.jabatan || "-"}
                             </td>
                             <td className="py-3.5 px-4">
-                              {item.kategori_pegawai === "PPNPN" ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-teal/15 text-teal-800 border border-teal/20">
-                                  PPNPN
+                              {!item.kategori_pegawai ? (
+                                <span className="text-xs font-medium text-slate-400">
+                                  -
                                 </span>
                               ) : item.kategori_pegawai === "Magang" ? (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                   Magang
                                 </span>
-                              ) : (
+                              ) : item.kategori_pegawai === "ASN" ? (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-navy/10 text-navy border border-navy/15">
-                                  Internal
+                                  ASN
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-teal/15 text-teal-800 border border-teal/20">
+                                  {item.kategori_pegawai}
                                 </span>
                               )}
                             </td>
@@ -850,8 +854,8 @@ export default function AdminMasterDataTU() {
                         required
                       >
                         <option value="">Pilih Kategori</option>
-                        <option value="Internal">Internal (PNS / PPPK)</option>
-                        <option value="PPNPN">PPNPN</option>
+                        <option value="ASN">ASN (PNS / PPPK)</option>
+                        <option value="Non ASN">Non ASN</option>
                         <option value="Magang">Magang</option>
                       </select>
                     </div>

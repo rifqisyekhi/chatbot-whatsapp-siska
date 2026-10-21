@@ -111,15 +111,30 @@ berupa **daftar-larangan**, bukan daftar-izin:
   memblokir pegawai non-ASN yang datanya belum lengkap
   sehingga tidak bisa absen sama sekali.
 
-Jadi ketika kategori dirombak dari `Internal / PPNPN / Magang /
-TimGudang` menjadi `ASN / Non-ASN (tenaga ahli, outsourcing,
-magang, dst.)`, **tidak ada kode yang perlu diubah** — nilai
-bawaannya sudah mencakup `Internal` dan `ASN` sekaligus.
+Rombakan itu sudah dijalankan 21 Oktober 2026:
 
-Satu hal yang perlu diputuskan: `TimGudang` sekarang dianggap
-non-ASN dan bisa memakai menu 9. Kalau anggota Tim Gudang
-sebenarnya ASN, tambahkan `TimGudang` ke
-`PRESENSI_KATEGORI_ASN`.
+| Lama | Sekarang |
+| --- | --- |
+| `Internal` | `ASN` |
+| `PPNPN` | `Non ASN` |
+| `Magang` | `Magang` |
+
+Migrasinya di `presensi-non-asn/backend/db/004-kategori-pegawai.sql`.
+Seperti diperkirakan, **penyaring hak akses tidak perlu diubah**:
+nilai bawaan `PRESENSI_KATEGORI_ASN` sudah memuat `ASN`, dan
+`Internal` sengaja dibiarkan di sana sebagai jaring pengaman
+kalau ada baris yang terlewat.
+
+Yang perlu dicatat: `Non ASN` memuat potongan kata `ASN`, tapi
+itu TIDAK membuatnya terblokir, karena pencocokannya
+`Array.includes()` atas elemen yang sudah di-lowercase — persis
+per elemen, bukan substring. Kalau pencocokan itu suatu saat
+diubah menjadi `includes()` atas teks, seluruh pegawai non-ASN
+akan langsung terblokir dari absensi.
+
+`TimGudang` sudah dihapus lebih dulu lewat
+`scripts/hapus-kategori-timgudang.js`, jadi tidak ada lagi di
+data.
 
 Catatan:
 
