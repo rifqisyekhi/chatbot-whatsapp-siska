@@ -269,6 +269,21 @@ async function riwayatLog(mutasiId) {
   );
 }
 
+// Baris order WA yang disetujui milik para pemohon atau unit ini,
+// urut waktu. Dipakai features/buktiSerahTerima.js untuk menentukan
+// order mana pemilik sebuah PDF serah terima.
+async function waktuOrderWa(daftarPihak, daftarUnit = []) {
+  if (!daftarPihak.length && !daftarUnit.length) return [];
+
+  return semuaBaris(
+    `SELECT pihak, unit, tanggal FROM mutasi_barang
+      WHERE jenis = 'keluar' AND sumber = 'wa'
+        AND (pihak = ANY($1) OR unit = ANY($2))
+      ORDER BY tanggal`,
+    [daftarPihak, daftarUnit],
+  );
+}
+
 // Ringkasan per barang dalam rentang tanggal: total masuk, keluar,
 // dan yang masih di tangan peminjam. Dipakai kartu ringkasan di
 // tab rekap dan lampiran laporan PDF.
@@ -557,6 +572,7 @@ module.exports = {
   satu,
   riwayatLog,
   ringkasan,
+  waktuOrderWa,
   catat,
   perbarui,
   hapus,

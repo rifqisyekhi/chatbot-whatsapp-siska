@@ -27,6 +27,7 @@ const profilWA = require("./features/profilWA");
 const diagnosaMedia = require("./features/diagnosaMedia");
 const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
 const penyimpananLaporan = require("./features/penyimpananLaporan");
+const buktiSerahTerima = require("./features/buktiSerahTerima");
 const {
   HELPDESK_GROUP_ID,
   NO_KETUA_SUB_TU,
@@ -825,6 +826,15 @@ app.get("/api/mutasi-barang", async (req, res) => {
       dbMutasi.daftar(saring),
       dbMutasi.ringkasan(saring),
     ]);
+
+    // Tanpa tanda bukti rekap tetap berguna, jadi folder laporan
+    // yang tak terbaca tidak boleh menggagalkan seluruh daftar.
+    try {
+      await buktiSerahTerima.tandai(data, dbMutasi);
+    } catch (err) {
+      console.error("[API] Gagal mencari bukti serah terima:", err?.message || err);
+    }
+
     res.json({ data, ringkasan });
   } catch (err) {
     balasGalatMutasi(res, err, "Gagal memuat rekap barang");
@@ -870,6 +880,37 @@ app.get("/api/mutasi-barang/:id/log", async (req, res) => {
     res.json(await dbMutasi.riwayatLog(Number(req.params.id)));
   } catch (err) {
     balasGalatMutasi(res, err, "Gagal memuat riwayat perubahan");
+  }
+});
+
+// Surat serah terima PDF untuk satu baris "keluar" dari order WA.
+// Dibuka di tab baru, jadi kegagalannya dijawab halaman teks biasa,
+// bukan JSON.
+app.get("/api/mutasi-barang/:id/bukti", async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const bukti = Number.isInteger(id)
+      ? await buktiSerahTerima.cari(await dbMutasi.satu(id), dbMutasi)
+      : null;
+
+    if (!bukti) {
+      return res
+        .status(404)
+        .type("text/plain; charset=utf-8")
+        .send("Bukti serah terima untuk mutasi ini tidak ditemukan di server.");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${bukti.nama.replace(/"/g, "")}"`);
+    fs.createReadStream(bukti.berkas)
+      .on("error", (err) => {
+        console.error("[API] Gagal membaca bukti serah terima:", err?.message || err);
+        res.destroy(err);
+      })
+      .pipe(res);
+  } catch (err) {
+    console.error("[API] Gagal memuat bukti serah terima:", err?.message || err);
+    res.status(500).type("text/plain; charset=utf-8").send("Gagal memuat bukti serah terima.");
   }
 });
 
