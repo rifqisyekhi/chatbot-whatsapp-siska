@@ -550,8 +550,8 @@ const RekapBarang = ({ databaseBarang, showToast, onStokBerubah }) => {
       </div>
 
       {/* TABEL MUTASI */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-3xl border border-mist bg-white shadow-2xs">
-        <div className="flex-1 overflow-auto">
+      <div className="flex shrink-0 flex-col overflow-hidden rounded-3xl border border-mist bg-white shadow-2xs">
+        <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="sticky top-0 z-10 bg-paper/95 backdrop-blur">
               <tr className="whitespace-nowrap border-b border-mist text-[11px] font-bold uppercase tracking-wider text-slate-500">
