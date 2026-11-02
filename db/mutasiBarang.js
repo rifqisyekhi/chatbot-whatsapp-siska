@@ -42,6 +42,16 @@ function efek(jenis, jumlah) {
   return jumlah;
 }
 
+// Baris RIWAYAT — diimpor dari log bot oleh
+// scripts/impor-riwayat-log-barang.js — tidak pernah mengubah stok:
+// stok sekarang sudah mencerminkan order-order itu. Penandanya
+// stok_sesudah kosong, karena setiap baris yang ditulis lewat modul
+// ini selalu mengisinya. Mengedit atau menghapus baris riwayat
+// karenanya juga tidak boleh menggeser stok.
+function tanpaEfekStok(baris) {
+  return baris.stok_sesudah == null;
+}
+
 function teks(nilai) {
   return nilai == null ? "" : String(nilai).trim();
 }
@@ -338,39 +348,49 @@ async function perbarui(id, data, oleh = "") {
       );
     }
 
-    // Kunci keduanya dengan urutan tetap supaya dua edit yang
-    // saling menukar barang tidak saling menunggu selamanya.
-    const kodeBarang = [...new Set([lama.id_barang, isian.id_barang])].sort();
-    const terkunci = {};
+    let barangBaru;
+    let stokSesudah = null;
 
-    for (const kode of kodeBarang) {
-      terkunci[kode] = await kunciBarang(koneksi, kode).catch((err) => {
-        // Barang lama boleh sudah dihapus dari katalog; yang baru
-        // tidak.
-        if (kode === lama.id_barang && kode !== isian.id_barang) return null;
-        throw err;
-      });
-    }
-
-    const barangLama = terkunci[lama.id_barang];
-    const barangBaru = terkunci[isian.id_barang];
-
-    // Barang yang sama digeser sekali dengan selisih bersihnya.
-    // Dua langkah (batalkan lalu terapkan) bisa gagal di tengah
-    // jalan tanpa alasan: mengubah "masuk 10" jadi "masuk 12" saat
-    // stok tinggal 5 akan sempat menjadi -5.
-    let stokSesudah;
-
-    if (barangLama === barangBaru) {
-      stokSesudah = await geserStok(
-        koneksi,
-        barangBaru,
-        efek(isian.jenis, isian.jumlah) - efek(lama.jenis, lama.jumlah),
-      );
+    if (tanpaEfekStok(lama)) {
+      // Baris riwayat hanya diperbaiki isinya; stok tidak disentuh.
+      // Barang yang tidak diganti boleh sudah hilang dari katalog.
+      barangBaru =
+        isian.id_barang === lama.id_barang
+          ? { id_barang: lama.id_barang, nama: lama.nama_barang, satuan: lama.satuan }
+          : await kunciBarang(koneksi, isian.id_barang);
     } else {
-      if (barangLama) await geserStok(koneksi, barangLama, -efek(lama.jenis, lama.jumlah));
+      // Kunci keduanya dengan urutan tetap supaya dua edit yang
+      // saling menukar barang tidak saling menunggu selamanya.
+      const kodeBarang = [...new Set([lama.id_barang, isian.id_barang])].sort();
+      const terkunci = {};
 
-      stokSesudah = await geserStok(koneksi, barangBaru, efek(isian.jenis, isian.jumlah));
+      for (const kode of kodeBarang) {
+        terkunci[kode] = await kunciBarang(koneksi, kode).catch((err) => {
+          // Barang lama boleh sudah dihapus dari katalog; yang baru
+          // tidak.
+          if (kode === lama.id_barang && kode !== isian.id_barang) return null;
+          throw err;
+        });
+      }
+
+      const barangLama = terkunci[lama.id_barang];
+      barangBaru = terkunci[isian.id_barang];
+
+      // Barang yang sama digeser sekali dengan selisih bersihnya.
+      // Dua langkah (batalkan lalu terapkan) bisa gagal di tengah
+      // jalan tanpa alasan: mengubah "masuk 10" jadi "masuk 12" saat
+      // stok tinggal 5 akan sempat menjadi -5.
+      if (barangLama === barangBaru) {
+        stokSesudah = await geserStok(
+          koneksi,
+          barangBaru,
+          efek(isian.jenis, isian.jumlah) - efek(lama.jenis, lama.jumlah),
+        );
+      } else {
+        if (barangLama) await geserStok(koneksi, barangLama, -efek(lama.jenis, lama.jumlah));
+
+        stokSesudah = await geserStok(koneksi, barangBaru, efek(isian.jenis, isian.jumlah));
+      }
     }
 
     const hasil = await koneksi.query(
@@ -422,8 +442,12 @@ async function hapus(id, oleh = "") {
     }
 
     // Barang yang sudah dihapus dari katalog tidak punya stok lagi
-    // untuk dikembalikan; mutasinya tetap boleh dihapus.
-    const barang = await kunciBarang(koneksi, lama.id_barang).catch(() => null);
+    // untuk dikembalikan; mutasinya tetap boleh dihapus. Baris
+    // riwayat tidak pernah mengubah stok, jadi tidak ada yang
+    // dikembalikan.
+    const barang = tanpaEfekStok(lama)
+      ? null
+      : await kunciBarang(koneksi, lama.id_barang).catch(() => null);
 
     if (barang) await geserStok(koneksi, barang, -efek(lama.jenis, lama.jumlah));
 
