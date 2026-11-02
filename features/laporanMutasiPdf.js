@@ -23,8 +23,6 @@ const BULAN = [
 const LABEL_JENIS = {
   masuk: "Masuk",
   keluar: "Keluar",
-  pinjam: "Pinjam",
-  kembali: "Kembali",
   koreksi: "Koreksi",
 };
 
@@ -140,19 +138,7 @@ function tulisLaporanMutasi(res, { baris, ringkasan, dari, sampai, dicetakOleh }
     {
       judul: "Keterangan",
       lebar: 0,
-      ambil: (b) => {
-        const bagian = [b.keterangan];
-
-        if (b.jenis === "pinjam") {
-          bagian.push(
-            b.dikembalikan_pada
-              ? `Dikembalikan ${tglIndo(b.dikembalikan_pada)}`
-              : `BELUM KEMBALI${b.rencana_kembali ? ` (rencana ${tglIndo(b.rencana_kembali)})` : ""}`,
-          );
-        }
-
-        return bagian.filter(Boolean).join(". ") || "-";
-      },
+      ambil: (b) => b.keterangan || "-",
     },
     { judul: "Dicatat", lebar: 70, ambil: (b) => `${b.dicatat_oleh || "-"} (${b.sumber})` },
   ];
@@ -228,8 +214,6 @@ function tulisLaporanMutasi(res, { baris, ringkasan, dari, sampai, dicetakOleh }
       { judul: "Nama Barang", lebar: 220 },
       { judul: "Masuk", lebar: 70 },
       { judul: "Keluar", lebar: 70 },
-      { judul: "Pinjam", lebar: 70 },
-      { judul: "Kembali", lebar: 70 },
       { judul: "Koreksi", lebar: 70 },
       { judul: "Satuan", lebar: 0 },
     ];
@@ -255,7 +239,7 @@ function tulisLaporanMutasi(res, { baris, ringkasan, dari, sampai, dicetakOleh }
         doc.lineWidth(0.5).rect(x, y, k.lebar, h).stroke();
         doc.text(isi[i], x + pad, y + 4, {
           width: k.lebar - pad * 2,
-          align: i >= 2 && i <= 6 ? "right" : "left",
+          align: i >= 2 && i <= 4 ? "right" : "left",
           lineBreak: false,
           ellipsis: true,
         });
@@ -284,8 +268,6 @@ function tulisLaporanMutasi(res, { baris, ringkasan, dari, sampai, dicetakOleh }
           r.nama_barang,
           String(r.masuk),
           String(r.keluar),
-          String(r.pinjam),
-          String(r.kembali),
           `${r.koreksi > 0 ? "+" : ""}${r.koreksi}`,
           r.satuan || "",
         ],

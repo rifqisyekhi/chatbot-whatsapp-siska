@@ -17,13 +17,19 @@
 
 const { satuBaris, semuaBaris, dalamTransaksi } = require("./kolam");
 
-const JENIS = ["masuk", "keluar", "pinjam", "kembali", "koreksi"];
+// masuk  : barang baru datang (pembelian).
+// keluar : barang diambil pegawai, terutama lewat order WA.
+// koreksi: penyesuaian hasil stock opname, boleh plus atau minus.
+//
+// Persediaan habis pakai tidak dipinjam-kembalikan. Kolom
+// rencana_kembali, dikembalikan_pada, dan pinjam_id di tabel
+// adalah sisa rancangan awal dan tidak dipakai lagi.
+const JENIS = ["masuk", "keluar", "koreksi"];
 const SUMBER = ["wa", "dashboard", "import"];
 
 const KOLOM = `id, tanggal, id_barang, nama_barang, satuan, jenis, jumlah,
-  stok_sesudah, pihak, unit, keterangan, rencana_kembali,
-  dikembalikan_pada, pinjam_id, sumber, dicatat_oleh, dibuat_pada,
-  diubah_pada`;
+  stok_sesudah, pihak, unit, keterangan, sumber, dicatat_oleh,
+  dibuat_pada, diubah_pada`;
 
 // Kesalahan isian, bukan kerusakan server. Rute menerjemahkannya
 // jadi 400 dengan pesan apa adanya.
@@ -37,8 +43,7 @@ class GalatIsian extends Error {
 // Arah stok ditentukan jenis, bukan tanda angka. Hanya koreksi
 // yang jumlahnya bertanda.
 function efek(jenis, jumlah) {
-  if (jenis === "masuk" || jenis === "kembali") return jumlah;
-  if (jenis === "keluar" || jenis === "pinjam") return -jumlah;
+  if (jenis === "keluar") return -jumlah;
   return jumlah;
 }
 
@@ -70,18 +75,6 @@ function tanggalAtauSekarang(nilai, label = "Tanggal") {
   }
 
   return d;
-}
-
-function tanggalAtauNull(nilai) {
-  if (nilai == null || nilai === "") return null;
-
-  const d = nilai instanceof Date ? nilai : new Date(nilai);
-
-  if (Number.isNaN(d.getTime())) {
-    throw new GalatIsian(`Rencana kembali tidak terbaca: ${nilai}`);
-  }
-
-  return d.toISOString().slice(0, 10);
 }
 
 // Merapikan isian dari form / Excel / alur WA menjadi bentuk yang
@@ -124,7 +117,6 @@ function rapikan(data) {
     pihak: teks(data.pihak),
     unit: teks(data.unit),
     keterangan: teks(data.keterangan),
-    rencana_kembali: jenis === "pinjam" ? tanggalAtauNull(data.rencana_kembali) : null,
     sumber,
   };
 }
@@ -170,12 +162,12 @@ async function tulisLog(koneksi, mutasiId, aksi, lama, baru, oleh) {
   );
 }
 
-async function sisipkan(koneksi, isian, barang, stokSesudah, oleh, tambahan = {}) {
+async function sisipkan(koneksi, isian, barang, stokSesudah, oleh) {
   const { rows } = await koneksi.query(
     `INSERT INTO mutasi_barang
        (tanggal, id_barang, nama_barang, satuan, jenis, jumlah, stok_sesudah,
-        pihak, unit, keterangan, rencana_kembali, pinjam_id, sumber, dicatat_oleh)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        pihak, unit, keterangan, sumber, dicatat_oleh)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING ${KOLOM}`,
     [
       isian.tanggal,
@@ -188,8 +180,6 @@ async function sisipkan(koneksi, isian, barang, stokSesudah, oleh, tambahan = {}
       isian.pihak,
       isian.unit,
       isian.keterangan,
-      isian.rencana_kembali,
-      tambahan.pinjam_id ?? null,
       isian.sumber,
       teks(oleh),
     ],
@@ -242,10 +232,6 @@ async function daftar(saring = {}) {
       `(nama_barang ILIKE ${n} OR id_barang ILIKE ${n} OR pihak ILIKE ${n}
         OR unit ILIKE ${n} OR keterangan ILIKE ${n})`,
     );
-  }
-
-  if (saring.status === "dipinjam") {
-    syarat.push("jenis = 'pinjam' AND dikembalikan_pada IS NULL");
   }
 
   const where = syarat.length ? `WHERE ${syarat.join(" AND ")}` : "";
@@ -309,8 +295,6 @@ async function ringkasan(saring = {}) {
             max(satuan) AS satuan,
             COALESCE(sum(jumlah) FILTER (WHERE jenis = 'masuk'), 0)::int   AS masuk,
             COALESCE(sum(jumlah) FILTER (WHERE jenis = 'keluar'), 0)::int  AS keluar,
-            COALESCE(sum(jumlah) FILTER (WHERE jenis = 'pinjam'), 0)::int  AS pinjam,
-            COALESCE(sum(jumlah) FILTER (WHERE jenis = 'kembali'), 0)::int AS kembali,
             COALESCE(sum(jumlah) FILTER (WHERE jenis = 'koreksi'), 0)::int AS koreksi
        FROM mutasi_barang ${where}
       GROUP BY id_barang
@@ -342,26 +326,6 @@ async function perbarui(id, data, oleh = "") {
     if (!lama) return null;
 
     const isian = rapikan({ ...lama, ...data, sumber: lama.sumber });
-
-    if (lama.jenis === "kembali" && isian.jenis !== "kembali") {
-      throw new GalatIsian(
-        "Baris pengembalian tidak bisa diubah jenisnya. Hapus barisnya bila salah catat.",
-      );
-    }
-
-    // Pinjaman yang sudah kembali terikat pada baris `kembali`-nya:
-    // mengubah barang atau jumlahnya membuat keduanya tidak cocok.
-    if (
-      lama.jenis === "pinjam" &&
-      lama.dikembalikan_pada &&
-      (isian.jenis !== "pinjam" ||
-        isian.jumlah !== lama.jumlah ||
-        isian.id_barang !== lama.id_barang)
-    ) {
-      throw new GalatIsian(
-        "Pinjaman ini sudah dikembalikan. Hapus dulu baris pengembaliannya bila ingin mengubah barang atau jumlahnya.",
-      );
-    }
 
     let barangBaru;
     let stokSesudah = null;
@@ -412,8 +376,7 @@ async function perbarui(id, data, oleh = "") {
       `UPDATE mutasi_barang SET
           tanggal = $2, id_barang = $3, nama_barang = $4, satuan = $5,
           jenis = $6, jumlah = $7, stok_sesudah = $8, pihak = $9, unit = $10,
-          keterangan = $11, rencana_kembali = $12,
-          dikembalikan_pada = CASE WHEN $6 = 'pinjam' THEN dikembalikan_pada END
+          keterangan = $11
         WHERE id = $1 RETURNING ${KOLOM}`,
       [
         id,
@@ -427,7 +390,6 @@ async function perbarui(id, data, oleh = "") {
         isian.pihak,
         isian.unit,
         isian.keterangan,
-        isian.rencana_kembali,
       ],
     );
 
@@ -450,12 +412,6 @@ async function hapus(id, oleh = "") {
 
     if (!lama) return null;
 
-    if (lama.jenis === "pinjam" && lama.dikembalikan_pada) {
-      throw new GalatIsian(
-        "Pinjaman ini sudah dikembalikan. Hapus dulu baris pengembaliannya.",
-      );
-    }
-
     // Barang yang sudah dihapus dari katalog tidak punya stok lagi
     // untuk dikembalikan; mutasinya tetap boleh dihapus. Baris
     // riwayat tidak pernah mengubah stok, jadi tidak ada yang
@@ -466,65 +422,10 @@ async function hapus(id, oleh = "") {
 
     if (barang) await geserStok(koneksi, barang, -efek(lama.jenis, lama.jumlah));
 
-    // Pengembalian yang dihapus membuat pinjamannya terbuka lagi.
-    if (lama.jenis === "kembali" && lama.pinjam_id) {
-      await koneksi.query(
-        `UPDATE mutasi_barang SET dikembalikan_pada = NULL WHERE id = $1`,
-        [lama.pinjam_id],
-      );
-    }
-
     await koneksi.query(`DELETE FROM mutasi_barang WHERE id = $1`, [id]);
     await tulisLog(koneksi, id, "hapus", lama, null, oleh);
 
     return lama;
-  });
-}
-
-// Menutup satu pinjaman: mencatat baris `kembali` sejumlah yang
-// dipinjam dan menandai pinjamannya selesai.
-async function kembalikan(pinjamId, data = {}, oleh = "") {
-  return dalamTransaksi(async (koneksi) => {
-    const { rows } = await koneksi.query(
-      `SELECT ${KOLOM} FROM mutasi_barang WHERE id = $1 FOR UPDATE`,
-      [pinjamId],
-    );
-
-    const pinjam = rows[0];
-
-    if (!pinjam) return null;
-
-    if (pinjam.jenis !== "pinjam") throw new GalatIsian("Baris ini bukan peminjaman.");
-
-    if (pinjam.dikembalikan_pada) throw new GalatIsian("Pinjaman ini sudah dikembalikan.");
-
-    const isian = rapikan({
-      tanggal: data.tanggal,
-      id_barang: pinjam.id_barang,
-      jenis: "kembali",
-      jumlah: pinjam.jumlah,
-      pihak: pinjam.pihak,
-      unit: pinjam.unit,
-      keterangan: teks(data.keterangan) || `Pengembalian pinjaman #${pinjam.id}`,
-      sumber: "dashboard",
-    });
-
-    const barang = await kunciBarang(koneksi, pinjam.id_barang);
-    const stokSesudah = await geserStok(koneksi, barang, isian.jumlah);
-    const baris = await sisipkan(koneksi, isian, barang, stokSesudah, oleh, {
-      pinjam_id: pinjam.id,
-    });
-
-    await tulisLog(koneksi, baris.id, "buat", null, baris, oleh);
-
-    const tutup = await koneksi.query(
-      `UPDATE mutasi_barang SET dikembalikan_pada = $2 WHERE id = $1 RETURNING ${KOLOM}`,
-      [pinjam.id, isian.tanggal],
-    );
-
-    await tulisLog(koneksi, pinjam.id, "ubah", pinjam, tutup.rows[0], oleh);
-
-    return baris;
   });
 }
 
@@ -576,6 +477,5 @@ module.exports = {
   catat,
   perbarui,
   hapus,
-  kembalikan,
   imporBanyak,
 };
