@@ -355,32 +355,32 @@ const DashboardBarang = () => {
               </div>
             </div>
 
-            {/* PILIHAN TAMPILAN */}
-            <nav className="flex shrink-0 gap-1 rounded-2xl border border-mist bg-paper p-1">
-              {[
-                { kunci: "inventaris", label: "Inventaris", Ikon: Boxes },
-                { kunci: "rekap", label: "Rekap & Audit", Ikon: ClipboardList },
-              ].map(({ kunci, label, Ikon }) => (
-                <button
-                  key={kunci}
-                  type="button"
-                  onClick={() => setTampilan(kunci)}
-                  aria-pressed={tampilan === kunci}
-                  title={label}
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
-                    tampilan === kunci
-                      ? "bg-brand text-white shadow-sm"
-                      : "text-slate-600 hover:bg-white"
-                  }`}
-                >
-                  <Ikon className="h-3.5 w-3.5" />
-                  <span className="hidden md:inline">{label}</span>
-                </button>
-              ))}
-            </nav>
-
-            {/* Pintasan, Refresh & Aksi Utama */}
+            {/* Pilihan tampilan, Pintasan, Refresh & Aksi Utama */}
             <div className="flex shrink-0 items-center gap-2">
+              {/* PILIHAN TAMPILAN */}
+              <nav className="flex shrink-0 gap-1 rounded-2xl border border-mist bg-paper p-1">
+                {[
+                  { kunci: "inventaris", label: "Inventaris", Ikon: Boxes },
+                  { kunci: "rekap", label: "Rekap & Audit", Ikon: ClipboardList },
+                ].map(({ kunci, label, Ikon }) => (
+                  <button
+                    key={kunci}
+                    type="button"
+                    onClick={() => setTampilan(kunci)}
+                    aria-pressed={tampilan === kunci}
+                    title={label}
+                    className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all sm:px-4 ${
+                      tampilan === kunci
+                        ? "bg-brand text-white shadow-sm"
+                        : "text-slate-600 hover:bg-white"
+                    }`}
+                  >
+                    <Ikon className="h-3.5 w-3.5" />
+                    <span className="hidden md:inline">{label}</span>
+                  </button>
+                ))}
+              </nav>
+
               <MenuPintasan />
 
               <button
