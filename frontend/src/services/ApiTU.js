@@ -83,7 +83,12 @@ export const apiTU = async ({
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `Error: ${response.status}`);
+      // Server Express di repo ini membalas { error }, bukan { message };
+      // keduanya dibaca supaya pesan seperti "stok tidak cukup" sampai ke
+      // operator, bukan sekadar "Error: 400".
+      throw new Error(
+        errorData.error || errorData.message || `Error: ${response.status}`,
+      );
     }
 
     return await response.json();

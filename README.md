@@ -145,6 +145,36 @@ Catatan:
 * Jam memakai zona `Asia/Jakarta`, bukan jam VPS, supaya
   seragam dengan absensi yang masuk dari aplikasi web.
 
+## Dashboard Barang — Rekap & Audit
+
+Tab **Rekap & Audit** di `/barang` mencatat setiap mutasi
+persediaan: masuk, keluar, pinjam, kembali, dan koreksi stock
+opname. Barisnya bisa ditambah, diedit, dihapus, diimpor dari
+Excel/CSV, dan diekspor ke Excel atau PDF.
+
+**Wajib dijalankan sekali sebelum deploy** — tanpa tabelnya,
+order WhatsApp yang disetujui akan gagal mengurangi stok:
+
+```
+psql -h 127.0.0.1 -U siska -d db_siska -w -v ON_ERROR_STOP=1 \
+     -f db/005-mutasi-barang.sql
+```
+
+Yang perlu diketahui:
+
+* Semua perubahan stok kini lewat `db/mutasiBarang.js`: order
+  WA (keluar / koreksi saat dibatalkan), tombol +/− dan edit
+  stok di Inventaris (koreksi), dan stok awal barang baru (masuk).
+  Stok tidak lagi ditimpa tanpa jejak.
+* Mengedit atau menghapus mutasi langsung menyesuaikan stok.
+  Isi lama dan barunya tersimpan di `mutasi_barang_log`, dan
+  bisa dilihat lewat tombol riwayat di tiap baris.
+* "Nama pencatat" hanya nama yang diketik operator (belum ada
+  login), bukan bukti identitas.
+* Import bersifat semua-atau-tidak: satu baris salah, tidak ada
+  yang tersimpan. Import PDF sengaja tidak didukung — tabel PDF
+  tidak bisa dibaca dengan andal.
+
 ## Help
 Jika bingung dan ingin ditanyakan bisa hubungi kontak author
 

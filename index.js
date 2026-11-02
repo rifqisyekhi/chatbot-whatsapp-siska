@@ -51,6 +51,8 @@ const {
 const kolam = require("./db/kolam");
 const dbPeg = require("./db/pegawai");
 const dbBarang = require("./db/barang");
+const dbMutasi = require("./db/mutasiBarang");
+const { tulisLaporanMutasi } = require("./features/laporanMutasiPdf");
 const dbKendaraan = require("./db/kendaraan");
 const dbAntrian = require("./db/antrian");
 const dbRiwayat = require("./db/riwayat");
@@ -694,10 +696,31 @@ app.post("/api/barang", async (req, res) => {
     const angkaTertinggi = await dbBarang.angkaUrutTertinggi(kategori);
 
     const id_barang_baru = `${prefix}${(angkaTertinggi + 1).toString().padStart(3, "0")}`;
-    const barangBaru = await dbBarang.buat({
+
+    // Barang dibuat dengan stok 0, lalu stok awalnya dicatat sebagai
+    // mutasi "masuk". Begitu saja rekapnya bisa menjawab dari mana
+    // stok pertama itu datang.
+    let barangBaru = await dbBarang.buat({
       ...req.body,
+      stok: 0,
       id_barang: id_barang_baru,
     });
+
+    const stokAwal = Math.trunc(Number(stok));
+
+    if (stokAwal > 0) {
+      await dbMutasi.catat(
+        {
+          id_barang: id_barang_baru,
+          jenis: "masuk",
+          jumlah: stokAwal,
+          keterangan: "Stok awal saat barang ditambahkan",
+        },
+        operatorDari(req),
+      );
+      barangBaru = await dbBarang.satu(id_barang_baru);
+    }
+
     res.status(201).json({ message: "Barang ditambah!", data: barangBaru });
   } catch (err) {
     console.error("[API] Gagal menambah barang:", err?.message || err);
@@ -707,12 +730,38 @@ app.post("/api/barang", async (req, res) => {
 
 app.put("/api/barang/:id_barang", async (req, res) => {
   try {
-    const updated = await dbBarang.perbarui(req.params.id_barang, req.body);
+    const { stok, ...lainnya } = req.body;
+
+    const lama = await dbBarang.satu(req.params.id_barang);
+    if (!lama)
+      return res.status(404).json({ error: "Barang tidak ditemukan" });
+
+    // Stok tidak lagi ditimpa langsung. Selisihnya dicatat sebagai
+    // mutasi koreksi, supaya angka yang diubah dari dashboard tetap
+    // meninggalkan jejak siapa, kapan, dan dari berapa ke berapa.
+    const stokBaru = stok == null || stok === "" ? null : Math.trunc(Number(stok));
+
+    if (stokBaru != null && Number.isFinite(stokBaru) && stokBaru !== lama.stok) {
+      await dbMutasi.catat(
+        {
+          id_barang: lama.id_barang,
+          jenis: "koreksi",
+          jumlah: stokBaru - lama.stok,
+          keterangan:
+            String(req.body.alasan_koreksi || "").trim() ||
+            `Edit stok di dashboard: ${lama.stok} → ${stokBaru}`,
+        },
+        operatorDari(req),
+      );
+    }
+
+    const updated = await dbBarang.perbarui(req.params.id_barang, lainnya);
     if (!updated)
       return res.status(404).json({ error: "Barang tidak ditemukan" });
     res.json({ message: "Barang berhasil diperbarui!", data: updated });
   } catch (err) {
     console.error("[API] Gagal update data barang:", err?.message || err);
+    if (err?.status === 400) return res.status(400).json({ error: err.message });
     res.status(500).json({ error: "Gagal update data barang" });
   }
 });
@@ -726,6 +775,163 @@ app.delete("/api/barang/:id_barang", async (req, res) => {
   } catch (err) {
     console.error("[API] Gagal hapus data barang:", err?.message || err);
     res.status(500).json({ error: "Gagal hapus data barang" });
+  }
+});
+
+// ------------------------------------------
+// --- RUTE API REKAP MUTASI BARANG ---
+// ------------------------------------------
+//
+// Setiap tulis di sini juga mengubah stok barang (lihat
+// db/mutasiBarang.js). Galat isian membawa status 400 dan pesannya
+// dikirim apa adanya ke operator — "stok ATK-003 tidak cukup:
+// tersisa 2" jauh lebih berguna daripada "gagal menyimpan".
+
+// Nama operator dashboard. Belum ada login, jadi ini sekadar nama
+// yang diketik operator dan dikirim browser di header — dicatat ke
+// log audit, tapi bukan bukti identitas.
+function operatorDari(req) {
+  try {
+    return decodeURIComponent(req.get("x-operator") || "").trim().slice(0, 80);
+  } catch {
+    return "";
+  }
+}
+
+function balasGalatMutasi(res, err, pesanUmum) {
+  if (err?.status === 400) return res.status(400).json({ error: err.message });
+
+  console.error(`[API] ${pesanUmum}:`, err?.message || err);
+  res.status(500).json({ error: pesanUmum });
+}
+
+function saringMutasi(query) {
+  const tgl = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || "")) ? v : undefined);
+
+  return {
+    dari: tgl(query.dari),
+    sampai: tgl(query.sampai),
+    id_barang: query.id_barang || undefined,
+    jenis: query.jenis || undefined,
+    cari: String(query.cari || "").trim() || undefined,
+    status: query.status || undefined,
+  };
+}
+
+app.get("/api/mutasi-barang", async (req, res) => {
+  try {
+    const saring = saringMutasi(req.query);
+    const [data, ringkasan] = await Promise.all([
+      dbMutasi.daftar(saring),
+      dbMutasi.ringkasan(saring),
+    ]);
+    res.json({ data, ringkasan });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal memuat rekap barang");
+  }
+});
+
+// Laporan PDF untuk audit. Didaftarkan sebelum /:id supaya "pdf"
+// tidak terbaca sebagai id.
+app.get("/api/mutasi-barang/pdf", async (req, res) => {
+  try {
+    const saring = saringMutasi(req.query);
+    const [baris, ringkasan] = await Promise.all([
+      dbMutasi.daftar(saring),
+      dbMutasi.ringkasan(saring),
+    ]);
+
+    // Tabel PDF dibaca dari atas ke bawah sesuai waktu, berbeda
+    // dengan layar yang menampilkan yang terbaru dulu.
+    baris.reverse();
+
+    const nama = `rekap-barang_${saring.dari || "awal"}_${saring.sampai || "kini"}.pdf`;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${nama}"`);
+
+    tulisLaporanMutasi(res, {
+      baris,
+      ringkasan,
+      dari: saring.dari,
+      sampai: saring.sampai,
+      dicetakOleh: String(req.query.oleh || "").trim().slice(0, 80),
+    });
+  } catch (err) {
+    if (res.headersSent) {
+      console.error("[API] Gagal membuat PDF rekap:", err?.message || err);
+      return res.end();
+    }
+    balasGalatMutasi(res, err, "Gagal membuat PDF rekap");
+  }
+});
+
+app.get("/api/mutasi-barang/:id/log", async (req, res) => {
+  try {
+    res.json(await dbMutasi.riwayatLog(Number(req.params.id)));
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal memuat riwayat perubahan");
+  }
+});
+
+app.post("/api/mutasi-barang", async (req, res) => {
+  try {
+    const baru = await dbMutasi.catat(
+      { ...req.body, sumber: "dashboard" },
+      operatorDari(req),
+    );
+    res.status(201).json({ message: "Mutasi dicatat!", data: baru });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal mencatat mutasi");
+  }
+});
+
+app.post("/api/mutasi-barang/import", async (req, res) => {
+  try {
+    const hasil = await dbMutasi.imporBanyak(req.body?.baris, operatorDari(req));
+    res.status(201).json({
+      message: `${hasil.length} baris berhasil diimpor.`,
+      jumlah: hasil.length,
+    });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal mengimpor rekap");
+  }
+});
+
+app.post("/api/mutasi-barang/:id/kembali", async (req, res) => {
+  try {
+    const baris = await dbMutasi.kembalikan(
+      Number(req.params.id),
+      req.body || {},
+      operatorDari(req),
+    );
+    if (!baris) return res.status(404).json({ error: "Pinjaman tidak ditemukan" });
+    res.status(201).json({ message: "Pengembalian dicatat!", data: baris });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal mencatat pengembalian");
+  }
+});
+
+app.put("/api/mutasi-barang/:id", async (req, res) => {
+  try {
+    const baru = await dbMutasi.perbarui(
+      Number(req.params.id),
+      req.body,
+      operatorDari(req),
+    );
+    if (!baru) return res.status(404).json({ error: "Mutasi tidak ditemukan" });
+    res.json({ message: "Mutasi diperbarui!", data: baru });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal memperbarui mutasi");
+  }
+});
+
+app.delete("/api/mutasi-barang/:id", async (req, res) => {
+  try {
+    const lama = await dbMutasi.hapus(Number(req.params.id), operatorDari(req));
+    if (!lama) return res.status(404).json({ error: "Mutasi tidak ditemukan" });
+    res.json({ message: "Mutasi dihapus, stok disesuaikan." });
+  } catch (err) {
+    balasGalatMutasi(res, err, "Gagal menghapus mutasi");
   }
 });
 
@@ -4633,7 +4839,21 @@ client.on("message", async (message) => {
           const jumlahDiambil = parseInt(hasilBedah[2], 10);
           if (idBarangTarget && !isNaN(jumlahDiambil)) {
             try {
-              await dbBarang.ubahStok(idBarangTarget, +jumlahDiambil);
+              // Dicatat sebagai koreksi, bukan "masuk": barangnya tidak
+              // pernah benar-benar keluar, jadi tidak boleh ikut
+              // menggelembungkan total barang masuk di rekap.
+              await dbMutasi.catat(
+                {
+                  id_barang: idBarangTarget,
+                  jenis: "koreksi",
+                  jumlah: jumlahDiambil,
+                  pihak: namaPemohon,
+                  unit: pData?.["Unit Kerja"] || pData?.sub_unit || "",
+                  keterangan: `Order WA dibatalkan, fisik kosong/kendala (oleh ${namaStaf})`,
+                  sumber: "wa",
+                },
+                "Bot WA",
+              );
               console.log(
                 `[STOK ROLLBACK] ${idBarangTarget} dikembalikan ${jumlahDiambil}`,
               );
@@ -4886,7 +5106,22 @@ client.on("message", async (message) => {
                 // seperti $inc dulu. Kegagalannya ditangkap catch di
                 // bawah dan dicatat, jadi stoknya tidak berubah dan
                 // ada jejaknya di log.
-                await dbBarang.ubahStok(idBarangTarget, -jumlahDiambil);
+                //
+                // Lewat dbMutasi, bukan dbBarang.ubahStok, supaya
+                // setiap order WA muncul di rekap barang keluar
+                // lengkap dengan nama pemohonnya.
+                await dbMutasi.catat(
+                  {
+                    id_barang: idBarangTarget,
+                    jenis: "keluar",
+                    jumlah: jumlahDiambil,
+                    pihak: p ? p.nama : "",
+                    unit: p ? p["Unit Kerja"] || p.sub_unit || "" : "",
+                    keterangan: "Order WA disetujui atasan",
+                    sumber: "wa",
+                  },
+                  "Bot WA",
+                );
               } catch (dbErr) {
                 console.error(
                   `[STOK ERROR] Gagal ngurangin stok ${idBarangTarget}`,

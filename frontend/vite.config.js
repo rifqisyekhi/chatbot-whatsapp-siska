@@ -13,14 +13,16 @@ const ASSET_DIR = path.join(OUT_DIR, 'assets')
 // `emptyOutDir` sengaja dimatikan: public/ juga berisi aset yang bukan hasil build
 // (logo-kemnaker.png dan puluhan PNG katalog barang di public/assets), dan itu akan
 // terhapus kalau Vite mengosongkan outDir. Konsekuensinya bundle lama menumpuk tiap
-// build, jadi kita sapu sendiri — HANYA file bernama pola index-<hash>.js/css.
+// build, jadi kita sapu sendiri — HANYA file bundle hasil Vite (lihat polaBundle).
 function bersihkanBundleLama() {
   return {
     name: 'bersihkan-bundle-lama',
     apply: 'build',
     buildStart() {
       if (!fs.existsSync(ASSET_DIR)) return
-      const polaBundle = /^index-[A-Za-z0-9_-]+\.(js|css)(\.map)?$/
+      // exceljs.min-<hash>.js: potongan ExcelJS yang dimuat dinamis oleh tab
+      // Rekap barang (services/excelRekap.js).
+      const polaBundle = /^(index|exceljs\.min)-[A-Za-z0-9_-]+\.(js|css)(\.map)?$/
       for (const nama of fs.readdirSync(ASSET_DIR)) {
         if (!polaBundle.test(nama)) continue
         fs.rmSync(path.join(ASSET_DIR, nama))

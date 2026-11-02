@@ -15,8 +15,12 @@ import {
   CheckCircle2,
   AlertCircle,
   PackageOpen,
+  Boxes,
+  ClipboardList,
 } from "lucide-react";
 import { apiTU, getUrlPresensi } from "./services/ApiTU";
+import { headerOperator } from "./services/operatorBarang";
+import RekapBarang from "./RekapBarang";
 import logoKemnaker from "./assets/logo-kemnaker.png";
 
 // Halaman ini berdiri sendiri tanpa navigasi bersama, supaya operator barang
@@ -43,6 +47,8 @@ const DashboardBarang = () => {
   const [filterKategori, setFilterKategori] = useState("");
   const [sortBy, setSortBy] = useState("nama");
   const [activeTab, setActiveTab] = useState("inventaris");
+  // "inventaris" = tabel barang & stok, "rekap" = mutasi untuk audit.
+  const [tampilan, setTampilan] = useState("inventaris");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
@@ -178,10 +184,12 @@ const DashboardBarang = () => {
       const method = currentItem ? "PUT" : "POST";
       const url = currentItem ? `api/barang/${currentItem.id}` : `api/barang`;
 
+      // Perubahan stok dicatat server sebagai mutasi koreksi atas nama
+      // operator yang diisi di tab Rekap.
       await apiTU({
         url,
         method,
-        options: { body: payload },
+        options: { body: payload, headers: headerOperator() },
       });
 
       setIsModalOpen(false);
@@ -192,7 +200,7 @@ const DashboardBarang = () => {
       loadData();
     } catch (error) {
       console.error(error);
-      showToast("Terjadi kesalahan saat menyimpan data.", "error");
+      showToast(error.message || "Terjadi kesalahan saat menyimpan data.", "error");
     }
   };
 
@@ -221,7 +229,7 @@ const DashboardBarang = () => {
       await apiTU({
         url: `api/barang/${item.id}`,
         method: "PUT",
-        options: { body: payload },
+        options: { body: payload, headers: headerOperator() },
       });
       showToast(`Stok ${item.nama} diupdate!`, "success");
     } catch (error) {
@@ -379,14 +387,16 @@ const DashboardBarang = () => {
                 />
               </button>
 
-              <button
-                onClick={() => openModal(null)}
-                className="inline-flex cursor-pointer items-center gap-1.5 rounded-2xl bg-brand px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-navy hover:shadow-lg active:scale-95"
-              >
-                <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">Tambah Barang</span>
-                <span className="sm:hidden">Tambah</span>
-              </button>
+              {tampilan === "inventaris" && (
+                <button
+                  onClick={() => openModal(null)}
+                  className="inline-flex cursor-pointer items-center gap-1.5 rounded-2xl bg-brand px-4 py-2.5 text-xs font-bold text-white shadow-md transition-all hover:bg-navy hover:shadow-lg active:scale-95"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">Tambah Barang</span>
+                  <span className="sm:hidden">Tambah</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -396,6 +406,37 @@ const DashboardBarang = () => {
           2. KONTEN UTAMA
       ===================================================== */}
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+        {/* PILIHAN TAMPILAN */}
+        <div className="flex shrink-0 gap-1 self-start rounded-2xl border border-mist bg-white p-1 shadow-2xs">
+          {[
+            { kunci: "inventaris", label: "Inventaris", Ikon: Boxes },
+            { kunci: "rekap", label: "Rekap & Audit", Ikon: ClipboardList },
+          ].map(({ kunci, label, Ikon }) => (
+            <button
+              key={kunci}
+              type="button"
+              onClick={() => setTampilan(kunci)}
+              aria-pressed={tampilan === kunci}
+              className={`inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+                tampilan === kunci
+                  ? "bg-brand text-white shadow-sm"
+                  : "text-slate-600 hover:bg-paper"
+              }`}
+            >
+              <Ikon className="h-3.5 w-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tampilan === "rekap" ? (
+          <RekapBarang
+            databaseBarang={databaseBarang}
+            showToast={showToast}
+            onStokBerubah={loadData}
+          />
+        ) : (
+        <>
         {/* RINGKASAN — tiga di antaranya sekaligus penyaring tabel */}
         <div className="grid shrink-0 grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
@@ -644,6 +685,8 @@ const DashboardBarang = () => {
             </div>
           </div>
         </div>
+        </>
+        )}
       </main>
 
       {/* =====================================================
