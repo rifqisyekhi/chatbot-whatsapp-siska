@@ -22,8 +22,6 @@ const muatExcel = async () => (await import("exceljs")).default;
 export const LABEL_JENIS = {
   masuk: "Masuk",
   keluar: "Keluar",
-  pinjam: "Pinjam",
-  kembali: "Kembali",
   koreksi: "Koreksi",
 };
 
@@ -35,12 +33,7 @@ const ALIAS_JENIS = {
   keluar: "keluar",
   "barang keluar": "keluar",
   pengambilan: "keluar",
-  pinjam: "pinjam",
-  peminjaman: "pinjam",
-  dipinjam: "pinjam",
-  kembali: "kembali",
-  pengembalian: "kembali",
-  dikembalikan: "kembali",
+  permintaan: "keluar",
   koreksi: "koreksi",
   penyesuaian: "koreksi",
   opname: "koreksi",
@@ -56,10 +49,9 @@ const ALIAS_KOLOM = {
   nama_barang: ["nama barang", "barang", "nama"],
   jenis: ["jenis", "jenis mutasi", "tipe", "transaksi"],
   jumlah: ["jumlah", "qty", "kuantitas", "banyak"],
-  pihak: ["pegawai", "nama pegawai", "pihak", "peminjam", "pengambil", "penerima"],
+  pihak: ["pegawai", "nama pegawai", "pihak", "pemohon", "pengambil", "penerima"],
   unit: ["unit", "unit kerja", "bagian"],
   keterangan: ["keterangan", "catatan", "ket"],
-  rencana_kembali: ["rencana kembali", "tanggal kembali", "batas kembali"],
 };
 
 const TEMPLATE_KOLOM = [
@@ -71,7 +63,6 @@ const TEMPLATE_KOLOM = [
   { header: "Pegawai", key: "pihak", width: 24 },
   { header: "Unit", key: "unit", width: 22 },
   { header: "Keterangan", key: "keterangan", width: 36 },
-  { header: "Rencana Kembali", key: "rencana_kembali", width: 16 },
 ];
 
 const normal = (t) => String(t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
@@ -176,11 +167,11 @@ export async function unduhTemplate(daftarBarang) {
     tanggal: "03/11/2026",
     id_barang: daftarBarang[1]?.id || "ELK-001",
     nama_barang: daftarBarang[1]?.nama || "",
-    jenis: "Pinjam",
-    jumlah: 1,
+    jenis: "Keluar",
+    jumlah: 2,
     pihak: "Nama Pegawai",
     unit: "Bagian Umum",
-    rencana_kembali: "10/11/2026",
+    keterangan: "Contoh: diambil pegawai — hapus baris ini",
   });
 
   // Daftar pilihan jenis, supaya isian tidak salah eja sejak awal.
@@ -188,7 +179,7 @@ export async function unduhTemplate(daftarBarang) {
     ws.getCell(`D${r}`).dataValidation = {
       type: "list",
       allowBlank: true,
-      formulae: ['"Masuk,Keluar,Pinjam,Kembali,Koreksi"'],
+      formulae: ['"Masuk,Keluar,Koreksi"'],
     };
   }
 
@@ -199,11 +190,10 @@ export async function unduhTemplate(daftarBarang) {
     "",
     "• Satu baris = satu kejadian. Kolom wajib: Tanggal, Kode Barang (atau Nama Barang persis), Jenis, Jumlah.",
     "• Tanggal ditulis hari/bulan/tahun, boleh dengan jam: 02/11/2026 atau 02/11/2026 09:30. Jam dibaca sebagai WIB.",
-    "• Jenis: Masuk, Keluar, Pinjam, Kembali, atau Koreksi.",
+    "• Jenis: Masuk (barang baru dibeli), Keluar (diambil pegawai), atau Koreksi (hasil stock opname).",
     "• Jumlah selalu positif. Hanya Koreksi (hasil stock opname) yang boleh minus, mis. -2 bila fisik kurang 2.",
-    "• Setiap baris LANGSUNG mengubah stok barang. Keluar/Pinjam yang melebihi stok akan ditolak.",
+    "• Setiap baris LANGSUNG mengubah stok barang. Keluar yang melebihi stok akan ditolak.",
     "• Import bersifat semua-atau-tidak: bila satu baris salah, tidak ada yang tersimpan. Perbaiki lalu import ulang.",
-    "• Baris Kembali dari import tidak menutup pinjaman tertentu. Untuk menutup pinjaman, pakai tombol Kembalikan di dashboard.",
     "",
     "DAFTAR KODE BARANG",
     ...daftarBarang.map((b) => `${b.id}    ${b.nama}    (${b.satuan || "Pcs"}, stok ${b.stok})`),
@@ -310,9 +300,6 @@ export async function bacaBerkasImpor(berkas, daftarBarang) {
     if (tgl.galat) galat.push(tgl.galat);
     else if (!tgl.nilai) galat.push("tanggal kosong");
 
-    const rencana = keIsoWib(mentah.rencana_kembali);
-    if (rencana.galat) galat.push(`rencana kembali: ${rencana.galat}`);
-
     hasil.push({
       baris_excel: r,
       tanggal: tgl.nilai || "",
@@ -324,7 +311,6 @@ export async function bacaBerkasImpor(berkas, daftarBarang) {
       pihak: String(mentah.pihak || "").trim(),
       unit: String(mentah.unit || "").trim(),
       keterangan: String(mentah.keterangan || "").trim(),
-      rencana_kembali: rencana.nilai ? rencana.nilai.slice(0, 10) : "",
       galat,
     });
   }
@@ -406,8 +392,6 @@ export async function exportRekapExcel(baris, ringkasan, { dari, sampai } = {}) 
     { header: "Pegawai", key: "pihak", width: 24 },
     { header: "Unit", key: "unit", width: 22 },
     { header: "Keterangan", key: "keterangan", width: 36 },
-    { header: "Rencana Kembali", key: "rencana_kembali", width: 15, style: { numFmt: "dd/mm/yyyy" } },
-    { header: "Dikembalikan", key: "dikembalikan_pada", width: 18, style: { numFmt: "dd/mm/yyyy hh:mm" } },
     { header: "Sumber", key: "sumber", width: 11 },
     { header: "Dicatat Oleh", key: "dicatat_oleh", width: 18 },
   ];
@@ -421,12 +405,9 @@ export async function exportRekapExcel(baris, ringkasan, { dari, sampai } = {}) 
       no: i + 1,
       tanggal: keSelWib(b.tanggal),
       jenis: LABEL_JENIS[b.jenis] || b.jenis,
-      // rencana_kembali bertipe date: datang sebagai tanggal tanpa jam.
-      rencana_kembali: b.rencana_kembali ? new Date(`${String(b.rencana_kembali).slice(0, 10)}T00:00:00Z`) : null,
-      dikembalikan_pada: keSelWib(b.dikembalikan_pada),
     });
   });
-  ws.autoFilter = { from: "A1", to: "O1" };
+  ws.autoFilter = { from: "A1", to: "M1" };
 
   const wr = wb.addWorksheet("Ringkasan");
   wr.columns = [
@@ -435,8 +416,6 @@ export async function exportRekapExcel(baris, ringkasan, { dari, sampai } = {}) 
     { header: "Satuan", key: "satuan", width: 9 },
     { header: "Masuk", key: "masuk", width: 9 },
     { header: "Keluar", key: "keluar", width: 9 },
-    { header: "Pinjam", key: "pinjam", width: 9 },
-    { header: "Kembali", key: "kembali", width: 9 },
     { header: "Koreksi", key: "koreksi", width: 9 },
   ];
   gayaJudul(wr.getRow(1));

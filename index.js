@@ -815,7 +815,6 @@ function saringMutasi(query) {
     id_barang: query.id_barang || undefined,
     jenis: query.jenis || undefined,
     cari: String(query.cari || "").trim() || undefined,
-    status: query.status || undefined,
   };
 }
 
@@ -935,20 +934,6 @@ app.post("/api/mutasi-barang/import", async (req, res) => {
     });
   } catch (err) {
     balasGalatMutasi(res, err, "Gagal mengimpor rekap");
-  }
-});
-
-app.post("/api/mutasi-barang/:id/kembali", async (req, res) => {
-  try {
-    const baris = await dbMutasi.kembalikan(
-      Number(req.params.id),
-      req.body || {},
-      operatorDari(req),
-    );
-    if (!baris) return res.status(404).json({ error: "Pinjaman tidak ditemukan" });
-    res.status(201).json({ message: "Pengembalian dicatat!", data: baris });
-  } catch (err) {
-    balasGalatMutasi(res, err, "Gagal mencatat pengembalian");
   }
 });
 

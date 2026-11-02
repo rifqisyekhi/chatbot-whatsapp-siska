@@ -148,8 +148,9 @@ Catatan:
 ## Dashboard Barang — Rekap & Audit
 
 Tab **Rekap & Audit** di `/barang` mencatat setiap mutasi
-persediaan: masuk, keluar, pinjam, kembali, dan koreksi stock
-opname. Barisnya bisa ditambah, diedit, dihapus, diimpor dari
+persediaan: **masuk** (barang baru dibeli), **keluar** (diambil
+pegawai, terutama lewat order WA), dan **koreksi** stock opname.
+Persediaan habis pakai tidak dipinjam-kembalikan. Barisnya bisa ditambah, diedit, dihapus, diimpor dari
 Excel/CSV, dan diekspor ke Excel atau PDF.
 
 **Wajib dijalankan sekali sebelum deploy** — tanpa tabelnya,
