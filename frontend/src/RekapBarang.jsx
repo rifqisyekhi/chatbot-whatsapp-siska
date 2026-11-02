@@ -16,6 +16,7 @@ import {
   UserPen,
   PackageOpen,
   AlertCircle,
+  FileText,
 } from "lucide-react";
 import { apiTU } from "./services/ApiTU";
 import { bacaOperator, simpanOperator, headerOperator } from "./services/operatorBarang";
@@ -39,7 +40,8 @@ import {
 
 const BASE_URL = (import.meta.env.VITE_API_TU || "").replace(/\/$/, "");
 
-const PER_HALAMAN = 15;
+// Pilihan baris per halaman; yang pertama jadi bawaan.
+const PILIHAN_PER_HALAMAN = [10, 25, 50, 100];
 
 const dua = (n) => String(n).padStart(2, "0");
 
@@ -117,6 +119,7 @@ const RekapBarang = ({ databaseBarang, showToast, onStokBerubah }) => {
   const [cari, setCari] = useState("");
   const [hanyaDipinjam, setHanyaDipinjam] = useState(false);
   const [halaman, setHalaman] = useState(1);
+  const [perHalaman, setPerHalaman] = useState(PILIHAN_PER_HALAMAN[0]);
 
   const [operator, setOperator] = useState(bacaOperator);
 
@@ -203,11 +206,13 @@ const RekapBarang = ({ databaseBarang, showToast, onStokBerubah }) => {
   // sekaligus tombol penyaring "sedang dipinjam".
   const pinjamAktif = baris.filter((b) => b.jenis === "pinjam" && !b.dikembalikan_pada).length;
 
-  const totalHalaman = Math.ceil(baris.length / PER_HALAMAN);
+  const totalHalaman = Math.ceil(baris.length / perHalaman);
   const barisHalaman = useMemo(
-    () => baris.slice((halaman - 1) * PER_HALAMAN, halaman * PER_HALAMAN),
-    [baris, halaman],
+    () => baris.slice((halaman - 1) * perHalaman, halaman * perHalaman),
+    [baris, halaman, perHalaman],
   );
+  const awalTampil = baris.length === 0 ? 0 : (halaman - 1) * perHalaman + 1;
+  const akhirTampil = Math.min(halaman * perHalaman, baris.length);
 
   const barangTerpilih = databaseBarang.find((b) => b.id === form.id_barang);
 
@@ -629,6 +634,17 @@ const RekapBarang = ({ databaseBarang, showToast, onStokBerubah }) => {
                           <Undo2 className="h-4 w-4" />
                         </button>
                       )}
+                      {m.ada_bukti && (
+                        <a
+                          href={`${BASE_URL}/api/mutasi-barang/${m.id}/bukti`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="cursor-pointer rounded-xl bg-amber-50 p-2 text-amber-700 transition-all hover:bg-amber-600 hover:text-white active:scale-95"
+                          title="Bukti serah terima barang (PDF)"
+                        >
+                          <FileText className="h-4 w-4" />
+                        </a>
+                      )}
                       <button
                         onClick={() => bukaLog(m)}
                         className="cursor-pointer rounded-xl bg-paper p-2 text-slate-600 transition-all hover:bg-mist active:scale-95"
@@ -683,9 +699,30 @@ const RekapBarang = ({ databaseBarang, showToast, onStokBerubah }) => {
         </div>
 
         <div className="flex shrink-0 items-center justify-between gap-3 border-t border-mist bg-paper/40 px-4 py-3">
-          <span className="text-[11px] font-bold tracking-tight text-slate-500">
-            {baris.length} mutasi{baris.length >= 5000 && " (dibatasi 5000 — persempit periodenya)"}
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[11px] font-bold tracking-tight text-slate-500">
+              {awalTampil}–{akhirTampil} dari {baris.length} mutasi
+              {baris.length >= 5000 && " (dibatasi 5000 — persempit periodenya)"}
+            </span>
+            <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500">
+              Tampilkan
+              <select
+                value={perHalaman}
+                onChange={(e) => {
+                  setPerHalaman(Number(e.target.value));
+                  setHalaman(1);
+                }}
+                className="cursor-pointer rounded-lg border border-mist bg-white px-2 py-1 text-[11px] font-bold text-navy shadow-2xs focus:outline-none"
+              >
+                {PILIHAN_PER_HALAMAN.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+              per halaman
+            </label>
+          </div>
           <div className="flex items-center gap-1.5">
             <button
               disabled={halaman === 1}
