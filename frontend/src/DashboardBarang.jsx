@@ -405,7 +405,15 @@ const DashboardBarang = () => {
       {/* =====================================================
           2. KONTEN UTAMA
       ===================================================== */}
-      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6">
+      {/* Inventaris dipadatkan ke tinggi layar dan tabelnya bergulir
+          sendiri. Rekap justru menggulir seluruh halaman, supaya
+          tabelnya memakai tinggi penuh dan tidak terjepit di bawah
+          kartu ringkasan dan saringan. */}
+      <main
+        className={`flex min-h-0 flex-1 flex-col gap-4 p-4 sm:p-6 ${
+          tampilan === "rekap" ? "overflow-y-auto" : "overflow-hidden"
+        }`}
+      >
         {/* PILIHAN TAMPILAN */}
         <div className="flex shrink-0 gap-1 self-start rounded-2xl border border-mist bg-white p-1 shadow-2xs">
           {[
