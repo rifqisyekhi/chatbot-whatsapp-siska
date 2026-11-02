@@ -40,8 +40,9 @@
 //
 // BISA DIJALANKAN BERULANG
 //
-// Baris yang sudah pernah diimpor (sama waktu, barang, pemohon,
-// dan jenis) dilewati.
+// Baris yang sudah ada di rekap (barang, pemohon, jenis, dan jumlah
+// sama, terpaut paling lama 15 menit) dilewati — termasuk yang
+// sudah masuk dari impor ekspor chat (impor-riwayat-chat-barang.js).
 //
 // PEMAKAIAN
 //
@@ -56,7 +57,8 @@ require("dotenv").config();
 
 const fs = require("fs");
 const path = require("path");
-const { semuaBaris, satuBaris, dalamTransaksi, tutup } = require("../db/kolam");
+const { semuaBaris, tutup } = require("../db/kolam");
+const { tglWib, batasWaktu, saringSudahAda, simpan } = require("./lib/riwayatBarang");
 
 const argumen = process.argv.slice(2);
 
@@ -68,7 +70,6 @@ const PENANDA = "Direkonstruksi dari log bot";
 const OLEH = "Impor riwayat log";
 
 const SIMPAN = argumen.includes("--apply");
-const argSampai = argumen.find((a) => a.startsWith("--sampai="));
 
 // Satu entri log: "[2026-08-19T03:12:45.123Z] [KELUAR] isi pesan",
 // dan isi pesan boleh berlanjut ke baris-baris berikutnya sampai
@@ -143,26 +144,10 @@ function gabungSalinan(daftar, kunci) {
   return hasil;
 }
 
-const tglWib = (d) =>
-  new Date(d.getTime() + 7 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 16);
-
 (async () => {
   if (!fs.existsSync(DIR_LOG)) throw new Error(`Folder log tidak ada: ${DIR_LOG}`);
 
-  // --- BATAS WAKTU ---
-  let sampai;
-
-  if (argSampai) {
-    sampai = new Date(argSampai.split("=")[1]);
-    if (Number.isNaN(sampai.getTime())) throw new Error(`--sampai tidak terbaca: ${argSampai}`);
-  } else {
-    const pertama = await satuBaris(
-      `SELECT min(dibuat_pada) AS t FROM mutasi_barang
-        WHERE sumber = 'wa' AND keterangan NOT LIKE $1`,
-      [`%${PENANDA}%`],
-    );
-    sampai = pertama?.t ? new Date(pertama.t) : new Date();
-  }
+  const sampai = await batasWaktu(argumen);
 
   // --- BACA LOG ---
   const semua = fs
@@ -239,18 +224,7 @@ const tglWib = (d) =>
     peringatan.push(`${tglWib(b.waktu)} pembatalan untuk ${b.pemohon} tanpa order yang cocok di log — dilewati`);
   }
 
-  // --- LEWATI YANG SUDAH ADA ---
-  const sudah = new Set(
-    (
-      await semuaBaris(
-        `SELECT tanggal, id_barang, pihak, jenis FROM mutasi_barang WHERE sumber = 'wa'`,
-      )
-    ).map((r) => `${new Date(r.tanggal).toISOString()}|${r.id_barang}|${r.pihak}|${r.jenis}`),
-  );
-
-  const baru = baris.filter(
-    (b) => !sudah.has(`${b.tanggal.toISOString()}|${b.id_barang}|${b.pihak}|${b.jenis}`),
-  );
+  const baru = await saringSudahAda(baris);
 
   // --- PRATINJAU ---
   const awal = order.length ? tglWib(order[0].waktu) : "-";
@@ -293,25 +267,7 @@ const tglWib = (d) =>
     return;
   }
 
-  // --- SIMPAN ---
-  await dalamTransaksi(async (koneksi) => {
-    for (const b of baru) {
-      const { rows } = await koneksi.query(
-        `INSERT INTO mutasi_barang
-           (tanggal, id_barang, nama_barang, satuan, jenis, jumlah, stok_sesudah,
-            pihak, unit, keterangan, sumber, dicatat_oleh)
-         VALUES ($1, $2, $3, $4, $5, $6, NULL, $7, $8, $9, 'wa', $10)
-         RETURNING *`,
-        [b.tanggal, b.id_barang, b.nama_barang, b.satuan, b.jenis, b.jumlah, b.pihak, b.unit, b.keterangan, OLEH],
-      );
-
-      await koneksi.query(
-        `INSERT INTO mutasi_barang_log (mutasi_id, aksi, data_lama, data_baru, oleh)
-         VALUES ($1, 'buat', NULL, $2, $3)`,
-        [rows[0].id, rows[0], OLEH],
-      );
-    }
-  });
+  await simpan(baru, OLEH);
 
   console.log(`\n${baru.length} baris riwayat disimpan. Stok barang tidak diubah.\n`);
 })()
