@@ -7,7 +7,6 @@
 //   servis-pilih-kendaraan  pilih dari daftar kendaraan dinas
 //   servis-tanggal          tanggal service (DD-MM-YYYY / "hari ini")
 //   servis-bengkel          nama bengkel
-//   servis-pekerjaan        pekerjaan yang dilakukan
 //   servis-biaya            total biaya sesuai nota
 //   servis-foto-nota        foto nota/kuitansi/invoice, minimal 1
 //   servis-foto-dokumentasi foto kendaraan di bengkel, minimal 1
@@ -44,15 +43,23 @@ function konfigurasiSpby() {
   return {
     kegiatan: env.SPBY_SERVIS_KEGIATAN || "2158.EBC.954",
     akun: env.SPBY_SERVIS_AKUN || "523121",
-    bendahara: {
-      nama: env.SPBY_BENDAHARA_NAMA || "Dhea Andini",
-      nip: env.SPBY_BENDAHARA_NIP || "19990426 201812 2 002",
-    },
-    ppk: {
-      nama: env.SPBY_PPK_NAMA || "Indra Aditama S, S.Kom.",
-      nip: env.SPBY_PPK_NIP || "19900224 201101 1 003",
-    },
+    bendaharaNip: String(env.SPBY_BENDAHARA_NIP || "199611272018121001").trim(),
   };
+}
+
+// Bendahara Pengeluaran dicari di master data pegawai lewat NIP di
+// .env, supaya pergantian nama atau gelar cukup diubah di Master
+// Data. Kalau tidak ketemu, nama dibiarkan bertitik untuk ditulis
+// tangan — PDF tetap jadi.
+async function cariBendahara(nip) {
+  try {
+    const p = await dep.cariPegawaiNip(nip);
+    if (p && p.nama) return { nama: p.nama, nip: p.nip || nip };
+    console.warn(`[SERVIS] Bendahara dengan NIP ${nip} tidak ada di master data pegawai.`);
+  } catch (err) {
+    console.error("[SERVIS] Gagal mencari bendahara:", err?.message || err);
+  }
+  return { nama: "..............................", nip };
 }
 
 // =========================================================
@@ -127,8 +134,7 @@ function bacaBiaya(teks) {
 }
 
 // Kalimat baku "Untuk pembayaran" di SPBY. Hanya nama kendaraan
-// dan nomor polisi yang berubah; pekerjaan dan tanggal service
-// tercatat di tabel lampiran, bukan di sini.
+// dan nomor polisi yang berubah.
 function susunUraian(flow) {
   const k = flow.kendaraan;
 
@@ -145,7 +151,6 @@ function ringkasan(flow) {
     `Kendaraan : ${k.nama} (${k.plat || "-"})\n` +
     `Tanggal   : ${pdf.tanggalPanjang(flow.tanggalServis)}\n` +
     `Bengkel   : ${flow.bengkel}\n` +
-    `Pekerjaan : ${flow.pekerjaan}\n` +
     `Biaya     : ${pdf.formatRupiah(flow.biaya)}\n` +
     `           (${pdf.terbilangRupiah(flow.biaya)})\n` +
     `Foto nota : ${flow.fotoNota.length}\n` +
@@ -259,9 +264,7 @@ async function terimaFoto({ message, chatId, flow, kunci, kategori }) {
   const berkas = path.join(FOLDER_FOTO, nama);
   await fs.promises.writeFile(berkas, buffer);
 
-  // Keterangan foto (caption) ikut tercetak di lampiran.
-  const keterangan = String(message.body || "").trim().slice(0, 120);
-  daftar.push({ path: berkas, kategori, keterangan });
+  daftar.push({ path: berkas, kategori });
   return true;
 }
 
@@ -289,11 +292,13 @@ async function buatDanKirimPdf(chatId, flow) {
     nomor: "",
     biaya: flow.biaya,
     bengkel: flow.bengkel,
-    pekerjaan: flow.pekerjaan,
     uraianPembayaran: susunUraian(flow),
     kendaraan: flow.kendaraan,
-    pelapor: { nama: pegawai.nama || "-", nip: pegawai.nip || "" },
-    ...cfg,
+    kegiatan: cfg.kegiatan,
+    akun: cfg.akun,
+    bendahara: await cariBendahara(cfg.bendaharaNip),
+    // Pejabat Pembuat Komitmen = pegawai yang melapor.
+    ppk: { nama: pegawai.nama || "-", nip: pegawai.nip || "-" },
     jumlahNota: flow.fotoNota.length,
     jumlahDokumentasi: flow.fotoDokumentasi.length,
     fotoList: [...flow.fotoNota, ...flow.fotoDokumentasi],
@@ -385,22 +390,7 @@ async function tanganiLangkah({ message, chatId, bodyLower }) {
         await kirim(chatId, "Nama bengkel terlalu pendek. Silakan ketik ulang.");
         return;
       }
-      setFlow(chatId, { ...flow, step: "servis-pekerjaan", bengkel: teks.slice(0, 120) });
-      await kirim(
-        chatId,
-        "Apa saja *pekerjaan* yang dilakukan?\n" +
-          "Misal: _servis berkala dan ganti oli mesin_, _penggantian ban, spooring dan balancing_.\n\n" +
-          "Keterangan ini dicantumkan di halaman lampiran.",
-      );
-      return;
-    }
-
-    case "servis-pekerjaan": {
-      if (teks.length < 5) {
-        await kirim(chatId, "Mohon tuliskan pekerjaannya sedikit lebih lengkap.");
-        return;
-      }
-      setFlow(chatId, { ...flow, step: "servis-biaya", pekerjaan: teks.slice(0, 300) });
+      setFlow(chatId, { ...flow, step: "servis-biaya", bengkel: teks.slice(0, 120) });
       await kirim(chatId, "Berapa *total biaya* sesuai nota? Ketik angkanya saja, misal *1250000* atau *1.250.000*.");
       return;
     }
@@ -416,7 +406,7 @@ async function tanganiLangkah({ message, chatId, bodyLower }) {
         chatId,
         `Biaya: *${pdf.formatRupiah(biaya)}*\n_${pdf.terbilangRupiah(biaya)}_\n\n` +
           "📸 Sekarang kirim *foto nota / kuitansi / invoice* bengkel (*wajib*, minimal 1).\n" +
-          "Kalau notanya lebih dari satu lembar, kirim semuanya. Boleh diberi keterangan di caption foto.\n\n" +
+          "Kalau notanya lebih dari satu lembar, kirim semuanya.\n\n" +
           "Setelah semua terkirim, ketik *lanjut*.",
       );
       return;

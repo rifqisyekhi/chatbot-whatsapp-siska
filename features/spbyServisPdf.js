@@ -279,99 +279,51 @@ function halamanSpby(doc, data) {
 
   y = doc.y + 64;
   doc.text(data.bendahara.nama, kiri, y, { width: lebarKolom, align: "center" });
-  doc.text(`NIP. ${data.bendahara.nip}`, kiri, doc.y, { width: lebarKolom, align: "center" });
+  doc.text(`NIP. ${formatNip(data.bendahara.nip)}`, kiri, doc.y, { width: lebarKolom, align: "center" });
   doc.text(data.ppk.nama, xKanan, y, { width: lebarKolom, align: "center" });
-  doc.text(`NIP. ${data.ppk.nip}`, xKanan, doc.y, { width: lebarKolom, align: "center" });
+  doc.text(`NIP. ${formatNip(data.ppk.nip)}`, xKanan, doc.y, { width: lebarKolom, align: "center" });
 }
 
-function kepalaLampiran(doc, data, lanjutan) {
-  const kiri = doc.page.margins.left;
-  const lebar = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-
-  doc.font("Isi-Tebal").fontSize(12).text(
-    lanjutan ? "LAMPIRAN (lanjutan)" : "LAMPIRAN",
-    kiri,
-    doc.page.margins.top,
-    { width: lebar, align: "center" },
-  );
-  doc.text("DOKUMENTASI PEMELIHARAAN / SERVICE KENDARAAN DINAS", { width: lebar, align: "center" });
-  doc.moveDown(0.8);
-
-  if (!lanjutan) {
-    doc.fontSize(10);
-    const lebarLabel = 120;
-    const baris = [
-      ["Kendaraan", `${data.kendaraan.nama} (${data.kendaraan.jenis || "-"})`],
-      ["Nomor Polisi", data.kendaraan.plat || "-"],
-      ["Bengkel", data.bengkel],
-      ["Tanggal service", tanggalPanjang(data.tanggalServis)],
-      ["Pekerjaan", data.pekerjaan],
-      ["Total biaya", formatRupiah(data.biaya)],
-      ["Dilaporkan oleh", `${data.pelapor.nama}${data.pelapor.nip ? ` (NIP ${data.pelapor.nip})` : ""}`],
-    ];
-
-    for (const [label, isi] of baris) {
-      const y = doc.y;
-      doc.font("Isi").text(label, kiri, y, { width: lebarLabel });
-      doc.text(`: ${isi}`, kiri + lebarLabel, y, { width: lebar - lebarLabel });
-      doc.y = Math.max(doc.y, y + doc.currentLineHeight()) + 2;
-    }
-    doc.moveDown(0.6);
-  }
-
-  return doc.y;
-}
-
-// Dua foto per halaman. Halaman lampiran pertama memuat tabel
-// keterangan, jadi kotak fotonya lebih pendek.
+// Lampiran berisi foto saja, tanpa judul atau keterangan — semua
+// keterangannya sudah ada di halaman SPBY. Dua foto per halaman,
+// nota lebih dulu lalu dokumentasi.
 function halamanLampiran(doc, data) {
   const kiri = doc.page.margins.left;
+  const atas = doc.page.margins.top;
   const lebar = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const bawah = doc.page.height - doc.page.margins.bottom;
+  const tinggi = doc.page.height - doc.page.margins.top - doc.page.margins.bottom;
 
-  const fotos = data.fotos;
-  let i = 0;
-  let lanjutan = false;
+  const perHalaman = 2;
+  const jarak = 14;
+  const tinggiSlot = (tinggi - jarak * (perHalaman - 1)) / perHalaman;
 
-  while (i < fotos.length) {
-    doc.addPage();
-    let y = kepalaLampiran(doc, data, lanjutan);
-    lanjutan = true;
+  data.fotos.forEach((foto, i) => {
+    const s = i % perHalaman;
+    if (s === 0) doc.addPage();
 
-    const tinggiTersedia = bawah - y;
-    const perHalaman = 2;
-    const tinggiSlot = tinggiTersedia / perHalaman;
+    const y = atas + s * (tinggiSlot + jarak);
 
-    for (let s = 0; s < perHalaman && i < fotos.length; s++, i++) {
-      const foto = fotos[i];
-      const ySlot = y + s * tinggiSlot;
-
-      doc.font("Isi-Tebal").fontSize(10).text(
-        `Foto ${i + 1} — ${foto.kategori}${foto.keterangan ? `: ${foto.keterangan}` : ""}`,
-        kiri,
-        ySlot,
-        { width: lebar, height: 26, ellipsis: true },
-      );
-
-      const yGambar = ySlot + 18;
-      const tinggiKotak = tinggiSlot - 30;
-
-      try {
-        doc.image(foto.buffer, kiri, yGambar, {
-          fit: [lebar, tinggiKotak],
-          align: "center",
-          valign: "center",
-        });
-      } catch (err) {
-        doc.font("Isi").fontSize(10).text(
-          "(foto tidak dapat ditampilkan)",
-          kiri,
-          yGambar + tinggiKotak / 2,
-          { width: lebar, align: "center" },
-        );
-      }
+    try {
+      doc.image(foto.buffer, kiri, y, {
+        fit: [lebar, tinggiSlot],
+        align: "center",
+        valign: "center",
+      });
+    } catch (err) {
+      doc.font("Isi").fontSize(10).text("(foto tidak dapat ditampilkan)", kiri, y + tinggiSlot / 2, {
+        width: lebar,
+        align: "center",
+      });
     }
-  }
+  });
+}
+
+// "199611272018121001" → "19961127 201812 1 001", seperti di templat.
+// NIP yang bukan 18 digit (misal NIK pegawai non-ASN) dibiarkan.
+function formatNip(nip) {
+  const n = String(nip || "").replace(/\s+/g, "");
+  const m = /^(\d{8})(\d{6})(\d)(\d{3})$/.exec(n);
+  return m ? `${m[1]} ${m[2]} ${m[3]} ${m[4]}` : String(nip || "");
 }
 
 // data: lihat servisKendaraan.js → susunDataPdf(). Menulis ke

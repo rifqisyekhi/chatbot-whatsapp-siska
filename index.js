@@ -2193,6 +2193,7 @@ servisKendaraan.pasang({
   },
   ambilMedia: (message, chatId) => ambilMediaAman(message, chatId),
   daftarKendaraan: () => getStatusKendaraan(),
+  cariPegawaiNip: (nip) => dbPeg.satuPerNip(nip),
   getFlow: (chatId) => pengajuanBySender[chatId],
   setFlow: (chatId, flow) => {
     pengajuanBySender[chatId] = flow;

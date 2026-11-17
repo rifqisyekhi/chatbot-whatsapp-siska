@@ -149,13 +149,13 @@ Catatan:
 
 Pegawai melaporkan service kendaraan dinas, lalu bot membuat PDF
 **SPBY (Surat Perintah Bayar)** mengikuti templat `docs/SPBY NEW.xlsx`,
-diikuti lampiran foto (2 foto per halaman).
+diikuti lampiran berisi foto saja (2 foto per halaman, tanpa teks).
 
 ```
 4. Layanan Kendaraan → 4. Lapor Service / Pemeliharaan
-   pilih kendaraan → tanggal service → nama bengkel → pekerjaan
-   → total biaya → foto nota/kuitansi (wajib ≥1) → foto dokumentasi
-   (wajib ≥1) → ringkasan → PDF dikirim ke pegawai
+   pilih kendaraan → tanggal service → nama bengkel → total biaya
+   → foto nota/kuitansi (wajib ≥1) → foto dokumentasi (wajib ≥1)
+   → ringkasan → PDF dikirim ke pegawai
 ```
 
 * Foto **tidak disimpan di basis data**. Begitu diterima, foto
@@ -165,14 +165,16 @@ diikuti lampiran foto (2 foto per halaman).
 * PDF tersimpan di `reports/servis-kendaraan/<nama pegawai>/`.
 * Nomor SPBY dan tanggal lunas sengaja dikosongkan untuk diisi
   Bendahara/PPK.
-* Kode kegiatan, akun, dan penanda tangan bisa diganti di `.env`:
+* **Pejabat Pembuat Komitmen** diisi nama dan NIP pegawai yang melapor.
+* **Bendahara Pengeluaran** dicari di master data pegawai lewat NIP di
+  `.env`, jadi pergantian nama/gelar cukup diubah di Master Data. Kalau
+  NIP-nya tidak ada di master data, nama dibiarkan bertitik.
 
-| Variabel | Bawaan |
+| Variabel `.env` | Bawaan |
 |---|---|
+| `SPBY_BENDAHARA_NIP` | `199611272018121001` |
 | `SPBY_SERVIS_KEGIATAN` | `2158.EBC.954` |
 | `SPBY_SERVIS_AKUN` | `523121` |
-| `SPBY_BENDAHARA_NAMA` / `SPBY_BENDAHARA_NIP` | Dhea Andini / 19990426 201812 2 002 |
-| `SPBY_PPK_NAMA` / `SPBY_PPK_NIP` | Indra Aditama S, S.Kom. / 19900224 201101 1 003 |
 
 Setelah menarik perubahan ini di VPS, jalankan `npm install` sekali
 untuk memasang `sharp`.
