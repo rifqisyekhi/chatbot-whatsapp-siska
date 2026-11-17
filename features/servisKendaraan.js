@@ -287,7 +287,8 @@ async function buatDanKirimPdf(chatId, flow) {
   });
 
   const data = {
-    tanggalSurat: pdf.hariIniWIB(),
+    // Tanggal di kop dan di atas tanda tangan = tanggal service.
+    tanggalSurat: flow.tanggalServis,
     tanggalServis: flow.tanggalServis,
     nomor: "",
     biaya: flow.biaya,
