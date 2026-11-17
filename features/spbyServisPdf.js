@@ -269,7 +269,7 @@ function halamanSpby(doc, data) {
   // Tanggal di atas tanda tangan = tanggal service yang diisi pegawai.
   const tglTtd = tanggalPendek(data.tanggalServis || data.tanggalSurat);
 
-  doc.text("Setuju/lunas dibayar, Tgl ..................", kiri, y, { width: lebarKolom });
+  doc.text(`Setuju/lunas dibayar, Tgl   ${tglTtd}`, kiri, y, { width: lebarKolom });
   doc.text(`Jakarta,   ${tglTtd}`, xKanan, y, { width: lebarKolom, align: "center" });
 
   y = doc.y + 14;

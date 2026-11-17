@@ -318,7 +318,7 @@ async function buatDanKirimPdf(chatId, flow) {
       tujuan,
       "✅ *SPBY Service Kendaraan* sudah jadi.\n\n" +
         "Halaman 1 berisi Surat Perintah Bayar, halaman berikutnya lampiran foto nota dan dokumentasi. " +
-        "Nomor SPBY dan tanggal lunas dibiarkan kosong untuk diisi Bendahara/PPK.",
+        "Nomor SPBY dibiarkan kosong untuk diisi Bendahara/PPK.",
     );
   } catch (err) {
     console.error("[SERVIS] Gagal mengirim PDF:", err?.message || err);

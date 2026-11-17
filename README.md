@@ -163,8 +163,9 @@ diikuti lampiran berisi foto saja (2 foto per halaman, tanpa teks).
   sementara di `uploads/servis/`, ditanam ke PDF, lalu dihapus.
   Sisa foto dari alur yang ditinggal dibuang otomatis setelah 24 jam.
 * PDF tersimpan di `reports/servis-kendaraan/<nama pegawai>/`.
-* Nomor SPBY dan tanggal lunas sengaja dikosongkan untuk diisi
-  Bendahara/PPK.
+* Semua tanggal di SPBY (kop, "Setuju/lunas dibayar", dan di atas
+  tanda tangan) memakai tanggal service yang diisi pegawai. Hanya
+  nomor SPBY yang dikosongkan untuk diisi Bendahara/PPK.
 * **Pejabat Pembuat Komitmen** diisi nama dan NIP pegawai yang melapor.
 * **Bendahara Pengeluaran** dicari di master data pegawai lewat NIP di
   `.env`, jadi pergantian nama/gelar cukup diubah di Master Data. Kalau
