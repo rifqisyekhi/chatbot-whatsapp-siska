@@ -51,6 +51,9 @@ const JENIS = {
   // dialah yang memegang surat itu sebagai bukti peminjaman.
   barang: "barang",
   cuti: "cuti",
+
+  // SPBY service kendaraan beserta lampiran fotonya.
+  servis: "servis-kendaraan",
 };
 
 // =========================================================
