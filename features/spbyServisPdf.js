@@ -266,10 +266,11 @@ function halamanSpby(doc, data) {
   y += 40;
   const lebarKolom = lebar / 2;
   const xKanan = kiri + lebarKolom;
-  const tglSurat = tanggalPendek(data.tanggalSurat);
+  // Tanggal di atas tanda tangan = tanggal service yang diisi pegawai.
+  const tglTtd = tanggalPendek(data.tanggalServis || data.tanggalSurat);
 
   doc.text("Setuju/lunas dibayar, Tgl ..................", kiri, y, { width: lebarKolom });
-  doc.text(`Jakarta,   ${tglSurat}`, xKanan, y, { width: lebarKolom, align: "center" });
+  doc.text(`Jakarta,   ${tglTtd}`, xKanan, y, { width: lebarKolom, align: "center" });
 
   y = doc.y + 14;
   doc.text("Bendahara Pengeluaran", kiri, y, { width: lebarKolom, align: "center" });
