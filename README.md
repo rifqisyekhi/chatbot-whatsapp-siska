@@ -145,6 +145,38 @@ Catatan:
 * Jam memakai zona `Asia/Jakarta`, bukan jam VPS, supaya
   seragam dengan absensi yang masuk dari aplikasi web.
 
+## Menu 4.4 — Lapor Service / Pemeliharaan Kendaraan
+
+Pegawai melaporkan service kendaraan dinas, lalu bot membuat PDF
+**SPBY (Surat Perintah Bayar)** mengikuti templat `docs/SPBY NEW.xlsx`,
+diikuti lampiran foto (2 foto per halaman).
+
+```
+4. Layanan Kendaraan → 4. Lapor Service / Pemeliharaan
+   pilih kendaraan → tanggal service → nama bengkel → pekerjaan
+   → total biaya → foto nota/kuitansi (wajib ≥1) → foto dokumentasi
+   (wajib ≥1) → ringkasan → PDF dikirim ke pegawai
+```
+
+* Foto **tidak disimpan di basis data**. Begitu diterima, foto
+  dikompres (`sharp`, sisi terpanjang 1600 px, JPEG mutu 70), disimpan
+  sementara di `uploads/servis/`, ditanam ke PDF, lalu dihapus.
+  Sisa foto dari alur yang ditinggal dibuang otomatis setelah 24 jam.
+* PDF tersimpan di `reports/servis-kendaraan/<nama pegawai>/`.
+* Nomor SPBY dan tanggal lunas sengaja dikosongkan untuk diisi
+  Bendahara/PPK.
+* Kode kegiatan, akun, dan penanda tangan bisa diganti di `.env`:
+
+| Variabel | Bawaan |
+|---|---|
+| `SPBY_SERVIS_KEGIATAN` | `2158.EBC.954` |
+| `SPBY_SERVIS_AKUN` | `523121` |
+| `SPBY_BENDAHARA_NAMA` / `SPBY_BENDAHARA_NIP` | Dhea Andini / 19990426 201812 2 002 |
+| `SPBY_PPK_NAMA` / `SPBY_PPK_NIP` | Indra Aditama S, S.Kom. / 19900224 201101 1 003 |
+
+Setelah menarik perubahan ini di VPS, jalankan `npm install` sekali
+untuk memasang `sharp`.
+
 ## Dashboard Barang — Rekap & Audit
 
 Tab **Rekap & Audit** di `/barang` mencatat setiap mutasi

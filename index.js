@@ -28,6 +28,7 @@ const diagnosaMedia = require("./features/diagnosaMedia");
 const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
 const penyimpananLaporan = require("./features/penyimpananLaporan");
 const buktiSerahTerima = require("./features/buktiSerahTerima");
+const servisKendaraan = require("./features/servisKendaraan");
 const {
   HELPDESK_GROUP_ID,
   NO_KETUA_SUB_TU,
@@ -2179,6 +2180,27 @@ async function ambilMediaAman(message, chatId, pesanGagal) {
     return null;
   }
 }
+
+// Alur lapor service kendaraan (features/servisKendaraan.js).
+// `client` dibaca saat dipanggil, bukan saat dipasang, karena
+// baru dibuat jauh di bawah.
+servisKendaraan.pasang({
+  kirim: (chatId, teks) => kirimDenganTyping(client, chatId, teks),
+  kirimDokumen: async (chatId, berkas, caption) => {
+    const media = MessageMedia.fromFilePath(berkas);
+    await client.sendMessage(chatId, media, { sendMediaAsDocument: true, caption });
+    logOut(chatId, `[PDF SPBY SERVIS] ${path.basename(berkas)}`);
+  },
+  ambilMedia: (message, chatId) => ambilMediaAman(message, chatId),
+  daftarKendaraan: () => getStatusKendaraan(),
+  getFlow: (chatId) => pengajuanBySender[chatId],
+  setFlow: (chatId, flow) => {
+    pengajuanBySender[chatId] = flow;
+  },
+  hapusFlow: (chatId) => {
+    delete pengajuanBySender[chatId];
+  },
+});
 
 async function simpanMediaFallback(message, chatId, prefix) {
   try {
@@ -5442,7 +5464,7 @@ client.on("message", async (message) => {
         await kirimDenganTyping(
           client,
           chatId,
-          "*Layanan Kendaraan Dinas Biro Keuangan & BMN*\n\nSilakan pilih menu:\n1. Pinjam Mobil 🚗\n2. Pinjam Motor 🏍️\n3. Kembalikan Kendaraan 🔄",
+          "*Layanan Kendaraan Dinas Biro Keuangan & BMN*\n\nSilakan pilih menu:\n1. Pinjam Mobil 🚗\n2. Pinjam Motor 🏍️\n3. Kembalikan Kendaraan 🔄\n4. Lapor Service / Pemeliharaan 🔧",
         );
         pengajuanBySender[chatId] = { step: "menu-kendaraan", pegawai };
         return;
@@ -5570,6 +5592,15 @@ client.on("message", async (message) => {
         bodyLower,
         pegawai,
       });
+      return;
+    }
+
+    // --- ALUR LAPOR SERVICE KENDARAAN ---
+    //
+    // Langkahnya berawalan "servis-", termasuk langkah foto, dan
+    // ditangani seluruhnya di features/servisKendaraan.js.
+    if (typeof flow.step === "string" && flow.step.startsWith("servis-")) {
+      await servisKendaraan.tangani({ message, chatId, flow, bodyLower });
       return;
     }
 
@@ -6643,11 +6674,14 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
           `Sistem mencatat Anda sedang meminjam:\n*${alreadyBorrowed.nama}* (${alreadyBorrowed.plat})\n\nBagaimana *Kondisi Kendaraan* saat ini? (misal: Aman, Lecet dikit, Ban kempes)`,
         );
         return;
+      } else if (bodyLower === "4") {
+        await servisKendaraan.mulai(chatId, pegawai);
+        return;
       } else {
         await kirimDenganTyping(
           client,
           chatId,
-          "Pilihan salah. Silakan ketik angka 1, 2, atau 3.",
+          "Pilihan salah. Silakan ketik angka 1, 2, 3, atau 4.",
         );
         return;
       }
