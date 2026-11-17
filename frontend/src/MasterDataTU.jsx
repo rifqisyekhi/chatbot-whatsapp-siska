@@ -23,6 +23,7 @@ import {
   Sparkles,
   Shield,
   FileSpreadsheet,
+  Wrench,
 } from "lucide-react";
 
 const DAFTAR_JABATAN = [
@@ -370,14 +371,27 @@ export default function AdminMasterDataTU() {
             </button>
           </div>
 
-          {/* Tombol Tambah Data */}
-          <button
-            onClick={() => handleOpenModal("tambah")}
-            className="inline-flex items-center justify-center gap-2 bg-brand hover:bg-navy text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>Tambah {activeTab === "pegawai" ? "Pegawai" : "Kendaraan"}</span>
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {/* Rekap pemeliharaan / service kendaraan */}
+            {activeTab === "kendaraan" && (
+              <a
+                href="/admin/servis-kendaraan"
+                className="inline-flex items-center justify-center gap-2 bg-white hover:bg-paper text-navy border border-mist px-5 py-3 rounded-2xl font-bold text-sm shadow-2xs transition-all active:scale-95"
+              >
+                <Wrench className="w-4 h-4 text-brand" />
+                <span>Rekap Pemeliharaan</span>
+              </a>
+            )}
+
+            {/* Tombol Tambah Data */}
+            <button
+              onClick={() => handleOpenModal("tambah")}
+              className="inline-flex items-center justify-center gap-2 bg-brand hover:bg-navy text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Tambah {activeTab === "pegawai" ? "Pegawai" : "Kendaraan"}</span>
+            </button>
+          </div>
         </div>
 
         {/* METRICS & RINGKASAN */}
@@ -1054,6 +1068,38 @@ export default function AdminMasterDataTU() {
                         <option value="TERSEDIA">Tersedia (Siap Digunakan)</option>
                         <option value="DIPAKAI">Dipakai (Sedang Operasional)</option>
                       </select>
+                    </div>
+                  </div>
+
+                  {/* Dipakai lembar Monitoring Pemeliharaan Kendis */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-1.5">
+                        Tahun Pembuatan
+                      </label>
+                      <input
+                        type="number"
+                        name="tahun"
+                        min="1950"
+                        max="2100"
+                        value={formData.tahun ?? ""}
+                        onChange={handleChange}
+                        placeholder="Contoh: 2015"
+                        className="w-full px-4 py-2.5 rounded-2xl bg-paper/60 hover:bg-paper focus:bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-navy uppercase tracking-wider mb-1.5">
+                        No. Mesin
+                      </label>
+                      <input
+                        type="text"
+                        name="no_mesin"
+                        value={formData.no_mesin ?? ""}
+                        onChange={handleChange}
+                        placeholder="Contoh: L15Z11207539"
+                        className="w-full px-4 py-2.5 rounded-2xl bg-paper/60 hover:bg-paper focus:bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all"
+                      />
                     </div>
                   </div>
                 </>

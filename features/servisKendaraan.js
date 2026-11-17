@@ -212,7 +212,7 @@ async function mulai(chatId, pegawai) {
   setFlow(chatId, {
     step: "servis-pilih-kendaraan",
     pegawai,
-    daftar: list.map((k) => ({ nama: k.nama, plat: k.plat, jenis: k.jenis })),
+    daftar: list.map((k) => ({ id: k._id, nama: k.nama, plat: k.plat, jenis: k.jenis })),
     fotoNota: [],
     fotoDokumentasi: [],
   });
@@ -310,6 +310,30 @@ async function buatDanKirimPdf(chatId, flow) {
   } finally {
     // PDF jadi atau gagal, foto sementara tidak dipakai lagi.
     await hapusFoto(flow);
+  }
+
+  // Catat ke rekap dashboard. Kegagalan di sini tidak menahan PDF:
+  // pegawai tetap menerima SPBY-nya, dan admin bisa menambah barisnya
+  // tangan dari dashboard.
+  try {
+    await dep.simpanRekap({
+      kendaraan_id: flow.kendaraan.id,
+      nama_kendaraan: flow.kendaraan.nama,
+      plat: flow.kendaraan.plat || "",
+      jenis: /motor/i.test(flow.kendaraan.jenis || "") ? "Motor" : "Mobil",
+      tanggal_servis: flow.tanggalServis,
+      bengkel: flow.bengkel,
+      biaya: flow.biaya,
+      pelapor_nama: pegawai.nama || "",
+      pelapor_nip: pegawai.nip || "",
+      pelapor_wa: String(chatId).replace(/\D/g, ""),
+      jumlah_foto_nota: flow.fotoNota.length,
+      jumlah_foto_dokumentasi: flow.fotoDokumentasi.length,
+      berkas_pdf: path.relative(penyimpanan.AKAR_LAPORAN, tujuan).split(path.sep).join("/"),
+      sumber: "whatsapp",
+    });
+  } catch (err) {
+    console.error("[SERVIS] PDF jadi, tapi gagal dicatat ke rekap:", err?.message || err);
   }
 
   try {

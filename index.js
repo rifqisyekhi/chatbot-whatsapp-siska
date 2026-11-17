@@ -29,6 +29,7 @@ const { unduhMediaLangsung } = require("./features/unduhMediaLangsung");
 const penyimpananLaporan = require("./features/penyimpananLaporan");
 const buktiSerahTerima = require("./features/buktiSerahTerima");
 const servisKendaraan = require("./features/servisKendaraan");
+const { pasangRuteServis } = require("./features/ruteServisKendaraan");
 const {
   HELPDESK_GROUP_ID,
   NO_KETUA_SUB_TU,
@@ -56,6 +57,7 @@ const dbBarang = require("./db/barang");
 const dbMutasi = require("./db/mutasiBarang");
 const { tulisLaporanMutasi } = require("./features/laporanMutasiPdf");
 const dbKendaraan = require("./db/kendaraan");
+const dbServis = require("./db/servisKendaraan");
 const dbAntrian = require("./db/antrian");
 const dbRiwayat = require("./db/riwayat");
 const dbAbsensi = require("./db/absensi");
@@ -169,6 +171,10 @@ async function connectToDatabase() {
   try {
     await kolam.pastikanTersambung();
     mongoReady = true;
+
+    // Tabel rekap service kendaraan + kolom tahun/no. mesin. Harus
+    // sebelum data kendaraan dibaca siapa pun.
+    await dbServis.pastikanSkema();
     await refreshDataPegawai();
 
     try {
@@ -659,6 +665,12 @@ app.delete("/api/kendaraan/:id", async (req, res) => {
     res.status(500).json({ error: "Gagal menghapus kendaraan" });
   }
 });
+
+// ------------------------------------------
+// --- RUTE API REKAP SERVICE KENDARAAN ---
+// ------------------------------------------
+
+pasangRuteServis(app);
 
 // ------------------------------------------
 // --- RUTE API BARANG (GUDANG) ---
@@ -2194,6 +2206,7 @@ servisKendaraan.pasang({
   ambilMedia: (message, chatId) => ambilMediaAman(message, chatId),
   daftarKendaraan: () => getStatusKendaraan(),
   cariPegawaiNip: (nip) => dbPeg.satuPerNip(nip),
+  simpanRekap: (baris) => dbServis.buat(baris),
   getFlow: (chatId) => pengajuanBySender[chatId],
   setFlow: (chatId, flow) => {
     pengajuanBySender[chatId] = flow;

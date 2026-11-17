@@ -180,6 +180,38 @@ diikuti lampiran berisi foto saja (2 foto per halaman, tanpa teks).
 Setelah menarik perubahan ini di VPS, jalankan `npm install` sekali
 untuk memasang `sharp`.
 
+### Rekap Pemeliharaan (dashboard)
+
+`/admin` → tab **Kendaraan Dinas** → tombol **Rekap Pemeliharaan**
+(`/admin/servis-kendaraan`).
+
+* Setiap laporan service dari WhatsApp otomatis tercatat di tabel
+  `servis_kendaraan`, lengkap dengan tautan PDF SPBY-nya.
+* Admin bisa menambah (service yang tidak lewat WhatsApp), mengedit, dan
+  menghapus baris. Menghapus baris tidak menghapus PDF di server.
+* Tampilan **Monitoring** = matriks per kendaraan × bulan untuk satu
+  tahun anggaran; **Rincian Service** = daftar per kejadian.
+* **Export Excel** meniru lembar *KEndi* di
+  `docs/Monitoring Pemeliharaan Kendis.xlsx` (Roda 4 / Roda 2, SBM
+  Tahunan, Saldo, Total, Bulan 1–12), ditambah lembar *Rincian Service*.
+* Master Data kendaraan kini punya kolom **Tahun** dan **No. Mesin**
+  untuk lembar itu. Isian awalnya diambil dari Excel Monitoring lewat
+  nopol; kendaraan yang tidak ada di Excel dilengkapi dari form.
+
+Tabel dan kolom baru dibuat otomatis saat bot menyala
+(`db/006-servis-kendaraan.sql`, aman dijalankan berulang). Kalau log
+menunjukkan migrasi gagal (misal hak akses), jalankan tangan:
+
+```
+psql -h 127.0.0.1 -U siska -d db_siska -w -v ON_ERROR_STOP=1 \
+     -f db/006-servis-kendaraan.sql
+```
+
+| Variabel `.env` | Bawaan | Arti |
+|---|---|---|
+| `SBM_SERVIS_MOBIL` | `37000000` | SBM pemeliharaan per mobil per tahun |
+| `SBM_SERVIS_MOTOR` | `4960000` | SBM pemeliharaan per motor per tahun |
+
 ## Dashboard Barang — Rekap & Audit
 
 Tab **Rekap & Audit** di `/barang` mencatat setiap mutasi

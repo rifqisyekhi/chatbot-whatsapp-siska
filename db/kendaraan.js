@@ -26,10 +26,23 @@
 
 const { satuBaris, semuaBaris } = require("./kolam");
 
-const KOLOM = `
+let KOLOM = `
   id, kode_kendaraan, nama, plat, jenis, status,
   peminjam_saat_ini, waktu_pinjam, tujuan_aktif
 `;
+
+// `tahun` dan `no_mesin` baru ada setelah db/006-servis-kendaraan.sql
+// dijalankan (otomatis saat bot menyala). Baru diikutkan sesudah
+// migrasinya terbukti berhasil — kalau kolomnya belum ada, SELECT
+// yang menyebutnya akan menggagalkan peminjaman kendaraan juga.
+let kolomRekapAktif = false;
+
+function aktifkanKolomRekap() {
+  if (kolomRekapAktif) return;
+  kolomRekapAktif = true;
+  KOLOM = `${KOLOM.trim()}, tahun, no_mesin`;
+  KOLOM_BOLEH_DIUBAH.push("tahun", "no_mesin");
+}
 
 function keBentukLama(b) {
   if (!b) return null;
@@ -45,6 +58,8 @@ function keBentukLama(b) {
     peminjam_saat_ini: b.peminjam_saat_ini,
     waktu_pinjam: b.waktu_pinjam,
     tujuan_aktif: b.tujuan_aktif,
+    tahun: b.tahun ?? null,
+    no_mesin: b.no_mesin ?? null,
   };
 }
 
@@ -81,6 +96,16 @@ function saring(data) {
     // peminjam dengan null, dan itu yang menandai kendaraannya
     // tersedia lagi.
     if (data[k] !== undefined) keluar[k] = data[k];
+  }
+
+  // Dari form dashboard keduanya datang sebagai teks; kotak yang
+  // dikosongkan berarti "tidak diketahui", bukan 0.
+  if (keluar.tahun !== undefined) {
+    const t = Number(String(keluar.tahun ?? "").trim());
+    keluar.tahun = Number.isInteger(t) && t > 1900 ? t : null;
+  }
+  if (keluar.no_mesin !== undefined) {
+    keluar.no_mesin = String(keluar.no_mesin ?? "").trim() || null;
   }
 
   // Kode kendaraan boleh diubah dari Master Data, tapi namanya
@@ -185,4 +210,5 @@ module.exports = {
   perbaruiPerId,
   hapusPerId,
   keBentukLama,
+  aktifkanKolomRekap,
 };

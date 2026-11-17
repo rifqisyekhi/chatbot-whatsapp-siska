@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import InventoryTaking from './InventoryTaking'
 import AdminMasterDataTU from './MasterDataTU'
 import DashboardBarang from './DashboardBarang'
+import RekapServis from './RekapServis'
 
 // Ketiga halaman sengaja BERDIRI SENDIRI, tanpa navigasi bersama.
 //
@@ -24,6 +25,9 @@ function App() {
 
         {/* Dashboard pegawai & kendaraan — untuk petugas TU */}
         <Route path="/admin" element={<AdminMasterDataTU />} />
+
+        {/* Rekap pemeliharaan kendaraan, dibuka dari tab Kendaraan Dinas */}
+        <Route path="/admin/servis-kendaraan" element={<RekapServis />} />
 
         {/* Dashboard barang — untuk operator persediaan.
             /admin/barang dipertahankan sebagai alias supaya tautan yang
