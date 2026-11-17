@@ -126,18 +126,15 @@ function bacaBiaya(teks) {
   return Number.isSafeInteger(angka) && angka > 0 ? angka : null;
 }
 
-function rodaKendaraan(jenis) {
-  return /motor/i.test(jenis || "") ? "roda 2 (dua)" : "roda 4 (empat)";
-}
-
+// Kalimat baku "Untuk pembayaran" di SPBY. Hanya nama kendaraan
+// dan nomor polisi yang berubah; pekerjaan dan tanggal service
+// tercatat di tabel lampiran, bukan di sini.
 function susunUraian(flow) {
   const k = flow.kendaraan;
-  const pekerjaan = flow.pekerjaan.replace(/[.\s]+$/, "");
 
   return (
-    `Biaya ${pekerjaan} kendaraan dinas Biro Keuangan dan BMN ` +
-    `${rodaKendaraan(k.jenis)} ${k.nama} Nomor Polisi ${k.plat || "-"} ` +
-    `pada tanggal ${pdf.tanggalPanjang(flow.tanggalServis)}.`
+    `Biaya Pemeliharaan Kendaraan Dinas ${k.nama} No Polisi ${k.plat || "-"} ` +
+    "sesuai dengan Bukti/Faktur Terlampir"
   );
 }
 
@@ -393,7 +390,7 @@ async function tanganiLangkah({ message, chatId, bodyLower }) {
         chatId,
         "Apa saja *pekerjaan* yang dilakukan?\n" +
           "Misal: _servis berkala dan ganti oli mesin_, _penggantian ban, spooring dan balancing_.\n\n" +
-          "Kalimat ini masuk ke bagian *Untuk pembayaran* di SPBY.",
+          "Keterangan ini dicantumkan di halaman lampiran.",
       );
       return;
     }
