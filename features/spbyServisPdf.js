@@ -318,12 +318,9 @@ function halamanLampiran(doc, data) {
   });
 }
 
-// "199611272018121001" → "19961127 201812 1 001", seperti di templat.
-// NIP yang bukan 18 digit (misal NIK pegawai non-ASN) dibiarkan.
+// NIP dicetak rapat tanpa spasi: "199611272018121001".
 function formatNip(nip) {
-  const n = String(nip || "").replace(/\s+/g, "");
-  const m = /^(\d{8})(\d{6})(\d)(\d{3})$/.exec(n);
-  return m ? `${m[1]} ${m[2]} ${m[3]} ${m[4]}` : String(nip || "");
+  return String(nip || "").replace(/\s+/g, "");
 }
 
 // data: lihat servisKendaraan.js → susunDataPdf(). Menulis ke
