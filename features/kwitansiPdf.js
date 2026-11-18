@@ -170,7 +170,6 @@ function halamanNominatif(doc, k) {
   y = barisLabel(doc, "Tanggal SPD", tanggalPanjang(k.tanggalSpd), y, { xLabel: x, xTitik: x + 60, xIsi: x + 68, lebarIsi: 400, jarak: 1 });
   y = barisLabel(doc, "Akun", `${k.akun.kode} — ${k.akun.uraian}`, y, { xLabel: x, xTitik: x + 60, xIsi: x + 68, lebarIsi: 600, jarak: 6 });
 
-  const luar = k.jenis === "luar";
   const jumlahJenis = (p, kunci) => p.rincian.filter((r) => kunci.includes(r.kunci)).reduce((a, r) => a + r.jumlah, 0);
 
   const kolom = [
@@ -181,7 +180,7 @@ function halamanNominatif(doc, k) {
     { judul: "Tujuan / Lama", lebar: 72 },
     { judul: "Uang Harian", lebar: 60, align: "right" },
     { judul: "Represen-tasi", lebar: 50, align: "right" },
-    { judul: luar ? "Tiket" : "Transport", lebar: 60, align: "right" },
+    { judul: "Transport", lebar: 60, align: "right" },
     { judul: "Taksi", lebar: 50, align: "right" },
     { judul: "Penginapan", lebar: 60, align: "right" },
     { judul: "Jumlah", lebar: 66, align: "right" },
@@ -198,7 +197,7 @@ function halamanNominatif(doc, k) {
     `${k.kotaTujuan}\n${lamaHari(k.hari)}`,
     sel(jumlahJenis(p, ["harian"])),
     sel(jumlahJenis(p, ["representasi"])),
-    sel(jumlahJenis(p, ["tiket", "transport"])),
+    sel(jumlahJenis(p, ["tiket", "transport", "darat"])),
     sel(jumlahJenis(p, ["taksiAsal", "taksiTujuan"])),
     sel(jumlahJenis(p, ["penginapan"])),
     angka(p.total),
@@ -209,7 +208,7 @@ function halamanNominatif(doc, k) {
     "", "JUMLAH", "", "", "",
     sel(jumlahSemua(["harian"])),
     sel(jumlahSemua(["representasi"])),
-    sel(jumlahSemua(["tiket", "transport"])),
+    sel(jumlahSemua(["tiket", "transport", "darat"])),
     sel(jumlahSemua(["taksiAsal", "taksiTujuan"])),
     sel(jumlahSemua(["penginapan"])),
     angka(k.total),
@@ -412,7 +411,6 @@ function halamanSpd(doc, k, p) {
   const kUr = 245;
   const kIsi = w - kNo - kUr;
   const xIsi = x + kNo + kUr;
-  const luar = k.jenis === "luar";
 
   // Kolom isi baris 3–7 di templat memakai huruf satu tingkat lebih besar.
   const baris = (no, uraian, isi, { minTinggi = 0, tebalIsi = false, ukuranIsi = HURUF } = {}) => {
@@ -448,7 +446,7 @@ function halamanSpd(doc, k, p) {
     doc.moveTo(xIsi, y).lineTo(xIsi, y + t).stroke();
     doc.font(ISI).fontSize(HURUF).text("5.", x, y + 7, { width: kNo, align: "center" });
     doc.text("Alat Angkutan yang dipergunakan", x + kNo + 4, y + 7, { lineBreak: false });
-    const dicoret = luar ? "Kendaraan Umum" : "Pesawat";
+    const dicoret = k.pakaiPesawat ? "Kendaraan Umum" : "Pesawat";
     // Urutan di templat tetap "Kendaraan Umum / Pesawat"; yang tidak
     // dipakai diberi garis coret.
     let xx = xIsi + 4;

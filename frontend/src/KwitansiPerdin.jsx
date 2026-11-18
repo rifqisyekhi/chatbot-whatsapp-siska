@@ -27,7 +27,7 @@ const KUNCI_DRAF = "kwitansi-perdin-draf";
 
 const PESERTA_KOSONG = {
   nama: "", nip: "", jabatan: "", golongan: "", tingkat: "es4",
-  tiket: "", malam: "", tarif_hotel: "", taksi_asal: "", taksi_tujuan: "", transport: "",
+  tiket: "", malam: "", tarif_hotel: "", taksi_asal: "", taksi_tujuan: "", transport: "", transport_darat: "",
 };
 
 const hariIni = () => new Date().toISOString().slice(0, 10);
@@ -170,6 +170,17 @@ export default function KwitansiPerdin() {
 
   const akunTersedia = useMemo(() => (ref?.akun || []).filter((a) => a.jenis === form.jenis), [ref, form.jenis]);
   const provinsiDipilih = ref?.provinsi.find((p) => p.nama === form.provinsi);
+  const kotaPmk = ref?.kotaTujuan?.[form.provinsi] || [];
+  // Rute PMK hasil hitungan server untuk kota yang diketik (lihat kwitansiTransportDarat.js).
+  const rute = hasil?.rute || null;
+  const sekitar = rute?.jenis === "sekitar";
+  const petunjukKota = !form.kota_tujuan
+    ? "Pilih dari daftar PMK atau ketik sendiri"
+    : !rute
+      ? "Belum ada di tabel PMK — transport darat diisi riil bila ada"
+      : rute.jenis === "ibukota"
+        ? "Ibu kota provinsi — tanpa transport darat"
+        : `Transport darat PMK ${rute.asal} → ${rute.tujuan}: ${rupiah(rute.tarif)} sekali jalan${sekitar ? " (lumpsum, ganti tiket & taksi)" : ""}`;
   const luar = form.jenis === "luar";
 
   const buatPdf = async () => {
@@ -313,8 +324,21 @@ export default function KwitansiPerdin() {
                         ))}
                       </select>
                     </Medan>
-                    <Medan label="Kota / kabupaten tujuan">
-                      <input className={kelasInput} value={form.kota_tujuan} onChange={(e) => ubah("kota_tujuan", e.target.value)} />
+                    <Medan label="Kota / kabupaten tujuan" petunjuk={petunjukKota}>
+                      <input
+                        list="daftar-kota-pmk"
+                        className={kelasInput}
+                        value={form.kota_tujuan}
+                        placeholder={form.provinsi ? "" : "Pilih provinsi dulu"}
+                        onChange={(e) => ubah("kota_tujuan", e.target.value)}
+                      />
+                      <datalist id="daftar-kota-pmk">
+                        {kotaPmk.map((k) => (
+                          <option key={k.nama} value={k.nama}>
+                            {k.tarif ? `${k.keterangan} • ${rupiah(k.tarif)}` : k.keterangan}
+                          </option>
+                        ))}
+                      </datalist>
                     </Medan>
                   </>
                 ) : (
@@ -430,8 +454,22 @@ export default function KwitansiPerdin() {
 
                         {luar ? (
                           <>
-                            <Medan label="Tiket pesawat / kereta PP (riil)">
+                            <Medan label="Tiket pesawat / kereta PP (riil)" petunjuk={sekitar ? "Ke kota sekitar Jakarta biasanya cukup transport darat" : undefined}>
                               <InputRupiah value={p.tiket} onChange={(v) => ubahPeserta(i, "tiket", v)} placeholder="0" />
+                            </Medan>
+                            <Medan
+                              label="Transport darat PP"
+                              petunjuk={
+                                rute?.tarif
+                                  ? `PMK 2 × ${rupiah(rute.tarif)} — kosong = tarif PMK, 0 = tidak dipakai`
+                                  : "Kosong = tidak ada; isi riil bila ada"
+                              }
+                            >
+                              <InputRupiah
+                                value={p.transport_darat}
+                                onChange={(v) => ubahPeserta(i, "transport_darat", v)}
+                                placeholder={rute?.tarif ? (2 * rute.tarif).toLocaleString("id-ID") : "0"}
+                              />
                             </Medan>
                             <Medan label="Jumlah malam menginap" petunjuk="Kosong = lama hari − 1">
                               <input
@@ -453,7 +491,7 @@ export default function KwitansiPerdin() {
                               <InputRupiah
                                 value={p.taksi_asal}
                                 onChange={(v) => ubahPeserta(i, "taksi_asal", v)}
-                                placeholder={taksiJkt ? (2 * taksiJkt).toLocaleString("id-ID") : ""}
+                                placeholder={sekitar ? "0" : taksiJkt ? (2 * taksiJkt).toLocaleString("id-ID") : ""}
                               />
                             </Medan>
                             <Medan
@@ -469,7 +507,7 @@ export default function KwitansiPerdin() {
                               <InputRupiah
                                 value={p.taksi_tujuan}
                                 onChange={(v) => ubahPeserta(i, "taksi_tujuan", v)}
-                                placeholder={provinsiDipilih?.taksi ? (2 * provinsiDipilih.taksi).toLocaleString("id-ID") : "0"}
+                                placeholder={!sekitar && provinsiDipilih?.taksi ? (2 * provinsiDipilih.taksi).toLocaleString("id-ID") : "0"}
                               />
                             </Medan>
                           </>

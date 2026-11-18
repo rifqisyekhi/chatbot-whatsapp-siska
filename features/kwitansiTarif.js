@@ -121,6 +121,8 @@ function pejabat() {
 // PERHITUNGAN
 // =========================================================
 
+const { cariRute, pilihanKota } = require("./kwitansiTransportDarat");
+
 class GalatKwitansi extends Error {}
 
 function tanggalSah(teks) {
@@ -166,6 +168,15 @@ function hitungKegiatan(input = {}) {
 
   const taksiAsal = PROVINSI.find((p) => p.nama === PROVINSI_ASAL).taksi;
 
+  // Rute transport darat PMK untuk kota tujuan yang diketik (luar kota).
+  // "sekitar" = Jakarta → Bekasi/Bogor/Depok/Tangerang/Kep. Seribu: lumpsum,
+  // menggantikan tiket dan taksi bandara.
+  const rute = jenis === "luar" ? cariRute(provinsi.nama, input.kota_tujuan) : null;
+  const sekitar = rute?.jenis === "sekitar";
+  // Bandara ada di ibu kota provinsi: tiket dan taksi tujuan ditulis ke sana
+  // walau kegiatannya di kabupaten (Jakarta - Denpasar, bukan - Tabanan).
+  const kotaBandara = rute?.jenis === "provinsi" ? rute.asal : teks(input.kota_tujuan) || provinsi.nama;
+
   const peserta = daftar.map((p, i) => {
     const nama = teks(p.nama);
     if (!nama) throw new GalatKwitansi(`Nama peserta ke-${i + 1} kosong.`);
@@ -199,14 +210,28 @@ function hitungKegiatan(input = {}) {
       // Tiket pesawat/kereta: riil, diisi tangan.
       const tiket = angkaOpsional(p.tiket, `Tiket ${nama}`) ?? 0;
       if (tiket > 0) {
-        rincian.push({ kunci: "tiket", uraian: "Transport", keterangan: `${KOTA_ASAL} - ${teks(input.kota_tujuan) || provinsi.nama} PP`, volume: 1, satuan: "PP", tarif: tiket, jumlah: tiket });
+        rincian.push({ kunci: "tiket", uraian: "Transport", keterangan: `${KOTA_ASAL} - ${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: tiket, jumlah: tiket });
+      }
+
+      // Transport darat PP = 2 × tarif sekali jalan PMK; kosong = tarif PMK,
+      // 0 = tidak dipakai. Untuk kota yang belum ada di PMK, isi riil.
+      const tarifDarat = rute?.tarif ? 2 * rute.tarif : 0;
+      const darat = angkaOpsional(p.transport_darat, `Transport darat ${nama}`) ?? tarifDarat;
+      if (darat > 0) {
+        const asal = rute?.asal || (sekitar ? KOTA_ASAL : provinsi.nama);
+        rincian.push({
+          kunci: "darat", uraian: "Transport Darat",
+          keterangan: `${asal} - ${rute?.tujuan || teks(input.kota_tujuan) || provinsi.nama} PP`,
+          volume: 1, satuan: "PP", tarif: darat, jumlah: darat,
+        });
       }
 
       // Taksi: PP di kota asal + PP di kota tujuan = 2 × tarif masing-masing.
-      const taksiJkt = angkaOpsional(p.taksi_asal, `Taksi Jakarta ${nama}`) ?? 2 * taksiAsal;
-      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Taksi tujuan ${nama}`) ?? (provinsi.taksi ? 2 * provinsi.taksi : 0);
+      // Ke kota sekitar Jakarta tidak ada bandara: taksi bawaan 0.
+      const taksiJkt = angkaOpsional(p.taksi_asal, `Taksi Jakarta ${nama}`) ?? (sekitar ? 0 : 2 * taksiAsal);
+      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Taksi tujuan ${nama}`) ?? (!sekitar && provinsi.taksi ? 2 * provinsi.taksi : 0);
       if (taksiJkt > 0) rincian.push({ kunci: "taksiAsal", uraian: "Taksi", keterangan: `${KOTA_ASAL} PP`, volume: 1, satuan: "PP", tarif: taksiJkt, jumlah: taksiJkt });
-      if (taksiTujuan > 0) rincian.push({ kunci: "taksiTujuan", uraian: "Taksi", keterangan: `${teks(input.kota_tujuan) || provinsi.nama} PP`, volume: 1, satuan: "PP", tarif: taksiTujuan, jumlah: taksiTujuan });
+      if (taksiTujuan > 0) rincian.push({ kunci: "taksiTujuan", uraian: "Taksi", keterangan: `${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: taksiTujuan, jumlah: taksiTujuan });
     } else {
       // Transpor dalam kota PP per hari, bisa dinolkan (mis. ikut kendaraan dinas).
       const tr = angkaOpsional(p.transport, `Transport ${nama}`) ?? TRANSPOR_DALAM_KOTA;
@@ -231,7 +256,10 @@ function hitungKegiatan(input = {}) {
     akun,
     maksud: teks(input.maksud),
     provinsi: provinsi.nama,
-    kotaTujuan: teks(input.kota_tujuan) || (jenis === "dalam" ? KOTA_ASAL : provinsi.nama),
+    kotaTujuan: rute?.tujuan || teks(input.kota_tujuan) || (jenis === "dalam" ? KOTA_ASAL : provinsi.nama),
+    rute,
+    // Ke kota sekitar Jakarta lewat darat — SPD mencoret "Pesawat".
+    pakaiPesawat: jenis === "luar" && !sekitar,
     tempat: teks(input.tempat),
     kotaAsal: KOTA_ASAL,
     alatAngkut: teks(input.alat_angkut) || (jenis === "luar" ? "Pesawat / Kendaraan Umum" : "Kendaraan Umum"),
@@ -256,6 +284,7 @@ function referensi() {
     transporDalamKota: TRANSPOR_DALAM_KOTA,
     kotaAsal: KOTA_ASAL,
     provinsiAsal: PROVINSI_ASAL,
+    kotaTujuan: pilihanKota(),
     pejabat: pejabat(),
     sumber: "PMK 32 Tahun 2025 (SBM TA 2026)",
   };
