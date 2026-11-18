@@ -4,7 +4,7 @@
 //
 // Meniru lembar "NOMI" (Excel) yang dipakai TU:
 //   1. Per peserta: Kwitansi, Rincian Biaya + Perhitungan SPD
-//      Rampung, SPD lembar depan, dan Daftar Pengeluaran Riil
+//      Rampung, SPD lembar depan, dan Daftar Pengeluaran Riil berkop
 //      (hanya kalau ada biaya tanpa bukti, mis. transport dalam kota).
 //   2. Daftar Nominatif (landscape) — semua peserta, di akhir.
 //
@@ -23,7 +23,7 @@ let HURUF = 10; // `let`: halaman riil memakai 11 (Arial Narrow 12 di templat)
 
 // Font mengikuti lembar NOMI: Tahoma untuk nominatif, kwitansi,
 // rincian, dan SPD; Times New Roman tebal-miring untuk judul KWITANSI;
-// Arial Narrow untuk Daftar Pengeluaran Riil dan kop di kaki SPD.
+// Arial Narrow untuk Daftar Pengeluaran Riil beserta kop suratnya.
 // ISI/TEBAL sengaja `let`: halaman riil menukarnya ke Arial Narrow
 // sementara, supaya semua alat tata letak di bawah ikut berganti.
 let ISI = "Tahoma";
@@ -515,14 +515,19 @@ function halamanSpd(doc, k, p) {
     ...k.pejabat.ppk,
   });
 
-  // Kop alamat di kaki halaman — di bawah tanda tangan, tidak pernah menimpanya.
-  y = Math.max(doc.y + 8, doc.page.height - 96);
+  doc.fontSize(HURUF);
+}
+
+// Kop surat Kemnaker — kepala halaman Daftar Pengeluaran Riil.
+// Mengembalikan y di bawah garis ganda.
+function kopKemnaker(doc, x, y, w) {
   doc.font(NARROW_TEBAL).fontSize(15).text("KEMENTERIAN KETENAGAKERJAAN", x, y, { width: w, align: "center" });
   doc.font(NARROW).fontSize(13).text("SEKRETARIAT JENDERAL", x, doc.y, { width: w, align: "center" });
   doc.fontSize(10).text("Jalan Gatot Subroto Kav. 51 Jakarta Selatan 12950 telp 5255733 ext 280", x, doc.y, { width: w, align: "center" });
-  y = doc.y - 44;
-  garisGanda(doc, x, y + 48, w);
+  const yGaris = doc.y + 4;
+  garisGanda(doc, x, yGaris, w);
   doc.fontSize(HURUF);
+  return yGaris + 4;
 }
 
 // Daftar Pengeluaran Riil — untuk biaya tanpa bukti (transport dalam
@@ -548,8 +553,9 @@ function isiHalamanRiil(doc, k, p) {
   const x = doc.page.margins.left;
   const w = lebarIsi(doc);
 
-  tulis(doc, "DAFTAR PENGELUARAN RIIL", x, 50, { tebal: true, ukuran: 13, lebar: w, align: "center" });
-  let y = doc.y + 22;
+  const yKop = kopKemnaker(doc, x, 34, w);
+  tulis(doc, "DAFTAR PENGELUARAN RIIL", x, yKop + 18, { tebal: true, ukuran: 13, lebar: w, align: "center" });
+  let y = doc.y + 18;
   doc.font(ISI).fontSize(HURUF).text("Yang bertanda tangan di bawah ini :", x + 20, y);
   y = doc.y + 14;
   for (const [l, v] of [["Nama", p.nama], ["NIP", `NIP. ${p.nip || "-"}`], ["Jabatan", p.jabatan || "-"]]) {
