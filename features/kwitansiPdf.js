@@ -3,10 +3,10 @@
 // =========================================================
 //
 // Meniru lembar "NOMI" (Excel) yang dipakai TU:
-//   1. Daftar Nominatif (landscape) — semua peserta.
-//   2. Per peserta: Kwitansi, Rincian Biaya + Perhitungan SPD
+//   1. Per peserta: Kwitansi, Rincian Biaya + Perhitungan SPD
 //      Rampung, SPD lembar depan, dan Daftar Pengeluaran Riil
 //      (hanya kalau ada biaya tanpa bukti, mis. transport dalam kota).
+//   2. Daftar Nominatif (landscape) — semua peserta, di akhir.
 //
 // Data masuk sudah dihitung oleh kwitansiTarif.hitungKegiatan(), jadi
 // berkas ini hanya menata letak — tidak ada aturan PMK di sini.
@@ -631,13 +631,15 @@ function tulisKwitansiPdf(kegiatan, tujuan) {
   pasangFontKwitansi(doc);
   doc.pipe(tujuan);
 
-  halamanNominatif(doc, kegiatan);
+  // Urutan berkas: per peserta Kwitansi, Rincian, SPD, Daftar
+  // Pengeluaran Riil; Daftar Nominatif seluruh peserta di akhir.
   for (const p of kegiatan.peserta) {
     halamanKwitansi(doc, kegiatan, p);
     halamanRincian(doc, kegiatan, p);
     halamanSpd(doc, kegiatan, p);
     if (itemRiil(p).length) halamanRiil(doc, kegiatan, p);
   }
+  halamanNominatif(doc, kegiatan);
 
   doc.end();
   return doc;

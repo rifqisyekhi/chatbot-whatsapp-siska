@@ -619,7 +619,7 @@ export default function KwitansiPerdin() {
                 Buat PDF
               </button>
               <p className="text-[11px] text-slate-400 mt-2 text-center">
-                Nominatif + kwitansi, rincian, dan SPD per peserta
+                Kwitansi, rincian, SPD, pengeluaran riil per peserta + nominatif
               </p>
             </section>
           </aside>
