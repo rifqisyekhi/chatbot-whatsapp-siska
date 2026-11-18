@@ -186,7 +186,7 @@ function halamanNominatif(doc, k) {
     { judul: "Jumlah", lebar: 66, align: "right" },
   ];
   const sisa = w - kolom.reduce((a, c) => a + c.lebar, 0);
-  kolom.push({ judul: "Tanda Tangan", lebar: sisa });
+  kolom.push({ judul: "Keterangan", lebar: sisa });
 
   const sel = (n) => (n ? angka(n) : "-");
   const baris = k.peserta.map((p, i) => [
@@ -201,7 +201,7 @@ function halamanNominatif(doc, k) {
     sel(jumlahJenis(p, ["taksiAsal", "taksiTujuan"])),
     sel(jumlahJenis(p, ["penginapan"])),
     angka(p.total),
-    `${i + 1}. ........`,
+    "",
   ]);
   const jumlahSemua = (kunci) => k.peserta.reduce((a, p) => a + jumlahJenis(p, kunci), 0);
   baris.push([
@@ -446,16 +446,20 @@ function halamanSpd(doc, k, p) {
     doc.moveTo(xIsi, y).lineTo(xIsi, y + t).stroke();
     doc.font(ISI).fontSize(HURUF).text("5.", x, y + 7, { width: kNo, align: "center" });
     doc.text("Alat Angkutan yang dipergunakan", x + kNo + 4, y + 7, { lineBreak: false });
-    const dicoret = k.pakaiPesawat ? "Kendaraan Umum" : "Pesawat";
+    // Pesawat/kendaraan umum: format templat dengan coretan. Kereta api dan
+    // kendaraan dinas ditulis apa adanya.
+    const kode = k.alatAngkut?.kode || "umum";
+    const dicoret = kode === "pesawat" ? "Kendaraan Umum" : "Pesawat";
     // Urutan di templat tetap "Kendaraan Umum / Pesawat"; yang tidak
     // dipakai diberi garis coret.
     let xx = xIsi + 4;
     const yy = y + 7;
     const tengah = yy + doc.currentLineHeight() / 2;
-    for (const [i, kata] of ["Kendaraan Umum", "Pesawat"].entries()) {
-      const teksKata = i === 0 ? `${kata} / ` : kata;
+    const kataAlat = kode === "kereta" ? ["Kereta Api"] : kode === "dinas" ? ["Kendaraan Dinas"] : ["Kendaraan Umum", "Pesawat"];
+    for (const [i, kata] of kataAlat.entries()) {
+      const teksKata = i < kataAlat.length - 1 ? `${kata} / ` : kata;
       doc.text(teksKata, xx, yy, { lineBreak: false });
-      if (kata === dicoret) {
+      if (kataAlat.length > 1 && kata === dicoret) {
         doc.lineWidth(0.6).moveTo(xx, tengah).lineTo(xx + doc.widthOfString(kata), tengah).stroke();
       }
       xx += doc.widthOfString(teksKata);

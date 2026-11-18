@@ -84,6 +84,20 @@ const TINGKAT = [
 ];
 
 const TRANSPOR_DALAM_KOTA = 170000; // PP, per orang per kali
+
+// Alat angkut perjalanan luar kota. Menentukan isian biaya mana yang
+// bawaannya terisi:
+//   taksi — taksi ke/dari bandara/stasiun/terminal (PMK II.16)
+//   darat — transport darat ibu kota provinsi → kab/kota (PMK II.1);
+//           hanya untuk pesawat, karena bandaranya di ibu kota.
+// Kendaraan dinas/mobil: tanpa tiket dan taksi; BBM, tol, dan parkir
+// diisi riil di kolom yang sama dengan tiket.
+const ALAT_ANGKUT = [
+  { kode: "pesawat", label: "Pesawat", isianTiket: "Tiket pesawat PP (riil)", uraianTiket: "Transport", taksi: true, darat: true },
+  { kode: "kereta", label: "Kereta Api", isianTiket: "Tiket kereta PP (riil)", uraianTiket: "Transport", taksi: true, darat: false },
+  { kode: "umum", label: "Kendaraan Umum (bus/travel)", isianTiket: "Tiket bus/travel PP (riil)", uraianTiket: "Transport", taksi: true, darat: false },
+  { kode: "dinas", label: "Kendaraan Dinas / Mobil", isianTiket: "BBM, tol, parkir (riil)", uraianTiket: "BBM, Tol, Parkir", taksi: false, darat: false },
+];
 const KOTA_ASAL = "Jakarta";
 const PROVINSI_ASAL = "DKI Jakarta";
 
@@ -175,7 +189,13 @@ function hitungKegiatan(input = {}) {
   const sekitar = rute?.jenis === "sekitar";
   // Bandara ada di ibu kota provinsi: tiket dan taksi tujuan ditulis ke sana
   // walau kegiatannya di kabupaten (Jakarta - Denpasar, bukan - Tabanan).
-  const kotaBandara = rute?.jenis === "provinsi" ? rute.asal : teks(input.kota_tujuan) || provinsi.nama;
+  const kotaTujuanTeks = rute?.tujuan || teks(input.kota_tujuan) || provinsi.nama;
+
+  // Kosong = otomatis: pesawat, atau kendaraan umum ke kota sekitar Jakarta.
+  const alat =
+    ALAT_ANGKUT.find((a) => a.kode === input.alat_angkut) ||
+    ALAT_ANGKUT.find((a) => a.kode === (sekitar ? "umum" : "pesawat"));
+  const kotaBandara = alat.darat && rute?.jenis === "provinsi" ? rute.asal : kotaTujuanTeks;
 
   const peserta = daftar.map((p, i) => {
     const nama = teks(p.nama);
@@ -207,29 +227,33 @@ function hitungKegiatan(input = {}) {
         });
       }
 
-      // Tiket pesawat/kereta: riil, diisi tangan.
+      // Tiket (atau BBM/tol untuk kendaraan dinas): riil, diisi tangan.
       const tiket = angkaOpsional(p.tiket, `Tiket ${nama}`) ?? 0;
       if (tiket > 0) {
-        rincian.push({ kunci: "tiket", uraian: "Transport", keterangan: `${KOTA_ASAL} - ${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: tiket, jumlah: tiket });
+        rincian.push({ kunci: "tiket", uraian: alat.uraianTiket, keterangan: `${KOTA_ASAL} - ${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: tiket, jumlah: tiket });
       }
 
       // Transport darat PP = 2 × tarif sekali jalan PMK; kosong = tarif PMK,
       // 0 = tidak dipakai. Untuk kota yang belum ada di PMK, isi riil.
-      const tarifDarat = rute?.tarif ? 2 * rute.tarif : 0;
+      // Bawaan hanya untuk pesawat (ibu kota → kab/kota) dan lumpsum kota
+      // sekitar Jakarta; dengan kendaraan dinas bawaannya 0.
+      const daratBawaan = alat.kode !== "dinas" && (sekitar || alat.darat);
+      const tarifDarat = daratBawaan && rute?.tarif ? 2 * rute.tarif : 0;
       const darat = angkaOpsional(p.transport_darat, `Transport darat ${nama}`) ?? tarifDarat;
       if (darat > 0) {
         const asal = rute?.asal || (sekitar ? KOTA_ASAL : provinsi.nama);
         rincian.push({
           kunci: "darat", uraian: "Transport Darat",
-          keterangan: `${asal} - ${rute?.tujuan || teks(input.kota_tujuan) || provinsi.nama} PP`,
+          keterangan: `${asal} - ${kotaTujuanTeks} PP`,
           volume: 1, satuan: "PP", tarif: darat, jumlah: darat,
         });
       }
 
       // Taksi: PP di kota asal + PP di kota tujuan = 2 × tarif masing-masing.
-      // Ke kota sekitar Jakarta tidak ada bandara: taksi bawaan 0.
-      const taksiJkt = angkaOpsional(p.taksi_asal, `Taksi Jakarta ${nama}`) ?? (sekitar ? 0 : 2 * taksiAsal);
-      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Taksi tujuan ${nama}`) ?? (!sekitar && provinsi.taksi ? 2 * provinsi.taksi : 0);
+      // Ke kota sekitar Jakarta dan dengan kendaraan dinas: taksi bawaan 0.
+      const pakaiTaksi = alat.taksi && !sekitar;
+      const taksiJkt = angkaOpsional(p.taksi_asal, `Taksi Jakarta ${nama}`) ?? (pakaiTaksi ? 2 * taksiAsal : 0);
+      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Taksi tujuan ${nama}`) ?? (pakaiTaksi && provinsi.taksi ? 2 * provinsi.taksi : 0);
       if (taksiJkt > 0) rincian.push({ kunci: "taksiAsal", uraian: "Taksi", keterangan: `${KOTA_ASAL} PP`, volume: 1, satuan: "PP", tarif: taksiJkt, jumlah: taksiJkt });
       if (taksiTujuan > 0) rincian.push({ kunci: "taksiTujuan", uraian: "Taksi", keterangan: `${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: taksiTujuan, jumlah: taksiTujuan });
     } else {
@@ -258,11 +282,16 @@ function hitungKegiatan(input = {}) {
     provinsi: provinsi.nama,
     kotaTujuan: rute?.tujuan || teks(input.kota_tujuan) || (jenis === "dalam" ? KOTA_ASAL : provinsi.nama),
     rute,
-    // Ke kota sekitar Jakarta lewat darat — SPD mencoret "Pesawat".
-    pakaiPesawat: jenis === "luar" && !sekitar,
+    // Dalam kota selalu kendaraan umum; SPD baris 5 menulis alat ini.
+    alatAngkut: jenis === "luar" ? { kode: alat.kode, label: alat.label } : { kode: "umum", label: "Kendaraan Umum" },
+    // Bawaan isian per peserta, untuk petunjuk di dashboard.
+    bawaan: jenis === "luar" ? {
+      taksiAsal: alat.taksi && !sekitar ? 2 * taksiAsal : 0,
+      taksiTujuan: alat.taksi && !sekitar && provinsi.taksi ? 2 * provinsi.taksi : 0,
+      darat: alat.kode !== "dinas" && (sekitar || alat.darat) && rute?.tarif ? 2 * rute.tarif : 0,
+    } : null,
     tempat: teks(input.tempat),
     kotaAsal: KOTA_ASAL,
-    alatAngkut: teks(input.alat_angkut) || (jenis === "luar" ? "Pesawat / Kendaraan Umum" : "Kendaraan Umum"),
     nomorSpd: teks(input.nomor_spd),
     noBku: teks(input.no_bku),
     tanggalSpd: tanggalSah(input.tanggal_spd) ? input.tanggal_spd : input.tanggal_berangkat,
@@ -285,6 +314,7 @@ function referensi() {
     kotaAsal: KOTA_ASAL,
     provinsiAsal: PROVINSI_ASAL,
     kotaTujuan: pilihanKota(),
+    alatAngkut: ALAT_ANGKUT,
     pejabat: pejabat(),
     sumber: "PMK 32 Tahun 2025 (SBM TA 2026)",
   };

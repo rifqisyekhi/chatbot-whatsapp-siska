@@ -39,6 +39,7 @@ const FORM_AWAL = () => ({
   tempat: "",
   provinsi: "",
   kota_tujuan: "",
+  alat_angkut: "",
   tanggal_spd: hariIni(),
   tanggal_berangkat: hariIni(),
   tanggal_kembali: hariIni(),
@@ -174,6 +175,10 @@ export default function KwitansiPerdin() {
   // Rute PMK hasil hitungan server untuk kota yang diketik (lihat kwitansiTransportDarat.js).
   const rute = hasil?.rute || null;
   const sekitar = rute?.jenis === "sekitar";
+  // Alat angkut yang berlaku (hasil server, termasuk pilihan "otomatis")
+  // dan nilai bawaan isian biaya per peserta.
+  const alat = ref?.alatAngkut?.find((a) => a.kode === hasil?.alatAngkut?.kode);
+  const bawaan = hasil?.bawaan || null;
   const petunjukKota = !form.kota_tujuan
     ? "Pilih dari daftar PMK atau ketik sendiri"
     : !rute
@@ -340,6 +345,22 @@ export default function KwitansiPerdin() {
                         ))}
                       </datalist>
                     </Medan>
+                    <Medan
+                      label="Alat angkut"
+                      className="sm:col-span-2"
+                      petunjuk={
+                        alat?.kode === "dinas"
+                          ? "Tanpa tiket dan taksi — BBM, tol, dan parkir diisi riil per peserta"
+                          : "Menentukan isian tiket, taksi, dan transport darat"
+                      }
+                    >
+                      <select className={kelasInput} value={form.alat_angkut} onChange={(e) => ubah("alat_angkut", e.target.value)}>
+                        <option value="">Otomatis ({sekitar ? "kendaraan umum" : "pesawat"})</option>
+                        {(ref?.alatAngkut || []).map((a) => (
+                          <option key={a.kode} value={a.kode}>{a.label}</option>
+                        ))}
+                      </select>
+                    </Medan>
                   </>
                 ) : (
                   <Medan label="Tujuan">
@@ -454,21 +475,26 @@ export default function KwitansiPerdin() {
 
                         {luar ? (
                           <>
-                            <Medan label="Tiket pesawat / kereta PP (riil)" petunjuk={sekitar ? "Ke kota sekitar Jakarta biasanya cukup transport darat" : undefined}>
+                            <Medan
+                              label={alat?.isianTiket || "Tiket PP (riil)"}
+                              petunjuk={sekitar && alat?.kode !== "dinas" ? "Ke kota sekitar Jakarta biasanya cukup transport darat" : undefined}
+                            >
                               <InputRupiah value={p.tiket} onChange={(v) => ubahPeserta(i, "tiket", v)} placeholder="0" />
                             </Medan>
                             <Medan
                               label="Transport darat PP"
                               petunjuk={
-                                rute?.tarif
+                                bawaan?.darat
                                   ? `PMK 2 × ${rupiah(rute.tarif)} — kosong = tarif PMK, 0 = tidak dipakai`
-                                  : "Kosong = tidak ada; isi riil bila ada"
+                                  : rute?.tarif
+                                    ? `Tarif PMK ${rupiah(2 * rute.tarif)} PP — tidak otomatis untuk alat angkut ini`
+                                    : "Kosong = tidak ada; isi riil bila ada"
                               }
                             >
                               <InputRupiah
                                 value={p.transport_darat}
                                 onChange={(v) => ubahPeserta(i, "transport_darat", v)}
-                                placeholder={rute?.tarif ? (2 * rute.tarif).toLocaleString("id-ID") : "0"}
+                                placeholder={(bawaan?.darat || 0).toLocaleString("id-ID")}
                               />
                             </Medan>
                             <Medan label="Jumlah malam menginap" petunjuk="Kosong = lama hari − 1">
@@ -487,17 +513,22 @@ export default function KwitansiPerdin() {
                                 placeholder={hotelPmk ? hotelPmk.toLocaleString("id-ID") : ""}
                               />
                             </Medan>
-                            <Medan label="Taksi Jakarta PP" petunjuk={taksiJkt ? `PMK 2 × ${rupiah(taksiJkt)}` : undefined}>
+                            <Medan
+                              label="Taksi Jakarta PP"
+                              petunjuk={bawaan && !bawaan.taksiAsal ? "Tidak otomatis untuk alat angkut/tujuan ini" : taksiJkt ? `PMK 2 × ${rupiah(taksiJkt)}` : undefined}
+                            >
                               <InputRupiah
                                 value={p.taksi_asal}
                                 onChange={(v) => ubahPeserta(i, "taksi_asal", v)}
-                                placeholder={sekitar ? "0" : taksiJkt ? (2 * taksiJkt).toLocaleString("id-ID") : ""}
+                                placeholder={bawaan ? bawaan.taksiAsal.toLocaleString("id-ID") : taksiJkt ? (2 * taksiJkt).toLocaleString("id-ID") : ""}
                               />
                             </Medan>
                             <Medan
                               label="Taksi kota tujuan PP"
                               petunjuk={
-                                provinsiDipilih
+                                bawaan && !bawaan.taksiTujuan && provinsiDipilih?.taksi
+                                  ? "Tidak otomatis untuk alat angkut/tujuan ini"
+                                  : provinsiDipilih
                                   ? provinsiDipilih.taksi
                                     ? `PMK 2 × ${rupiah(provinsiDipilih.taksi)}`
                                     : "Belum ada di tabel PMK — isi riil"
@@ -507,7 +538,7 @@ export default function KwitansiPerdin() {
                               <InputRupiah
                                 value={p.taksi_tujuan}
                                 onChange={(v) => ubahPeserta(i, "taksi_tujuan", v)}
-                                placeholder={!sekitar && provinsiDipilih?.taksi ? (2 * provinsiDipilih.taksi).toLocaleString("id-ID") : "0"}
+                                placeholder={bawaan ? bawaan.taksiTujuan.toLocaleString("id-ID") : "0"}
                               />
                             </Medan>
                           </>
