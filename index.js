@@ -2203,6 +2203,25 @@ servisKendaraan.pasang({
     await client.sendMessage(chatId, media, { sendMediaAsDocument: true, caption });
     logOut(chatId, `[PDF SPBY SERVIS] ${path.basename(berkas)}`);
   },
+  kirimGambar: async (chatId, berkas, caption) => {
+    const media = MessageMedia.fromFilePath(berkas);
+    await client.sendMessage(chatId, media, { caption });
+    logOut(chatId, `[FOTO NOTA SERVIS] ${caption}`);
+  },
+  // Pesan pengajuan dikirim langsung (bukan kirimDenganTyping)
+  // karena id pesannya dipakai sebagai kunci antrian persetujuan.
+  kirimMentah: async (chatId, teks) => {
+    const terkirim = await client.sendMessage(chatId, teks);
+    logOut(chatId, teks);
+    return terkirim;
+  },
+  // Penanggung Jawab kendaraan, sama dengan peminjaman kendaraan.
+  penyetuju: () => ({
+    ...DATA_KETUA_SUB_TU,
+    waId: NO_KETUA_SUB_TU ? getValidWaId(NO_KETUA_SUB_TU) : null,
+  }),
+  daftarkanAntrian: (terkirim, data) =>
+    tambahAntrian(idPesanAtauCadangan(terkirim, "ATASAN"), "ATASAN", data),
   ambilMedia: (message, chatId) => ambilMediaAman(message, chatId),
   daftarKendaraan: () => getStatusKendaraan(),
   cariPegawaiNip: (nip) => dbPeg.satuPerNip(nip),
@@ -5127,6 +5146,23 @@ client.on("message", async (message) => {
             pesanPegawai = `Pengajuan peminjaman *${pengajuan.namaKendaraan}* disetujui oleh Penanggung Jawab, namun sayangnya kendaraan tersebut baru saja dipinjam orang lain atau tidak tersedia di sistem.`;
           }
           delete pengajuanBySender[pemohonId];
+        } else if (jenis === "Servis") {
+          // Antrian dilepas sebelum PDF disusun supaya "1" yang
+          // terkirim dua kali tidak membuat dua SPBY. Alur pemohon
+          // tidak disentuh: ia bebas memakai menu lain selagi menunggu.
+          await hapusAntrian(qid, "ATASAN");
+          await kirimDenganTyping(
+            client,
+            chatId,
+            `[APPROVAL] Laporan service disetujui untuk ${p ? p.nama : "User"}. PDF SPBY sedang dikirim ke pelapor.`,
+          );
+          await kirimDenganTyping(
+            client,
+            pemohonId,
+            `✅ Laporan service Anda *DISETUJUI* oleh ${pengajuan.atasan?.nama || "Penanggung Jawab"}. PDF SPBY sedang disusun...`,
+          );
+          await servisKendaraan.disetujui(pengajuan);
+          pesanPegawai = null;
         } else if (jenis === "Persediaan") {
           pesanPegawai = `✅ *ORDER DISETUJUI*\n\nTim Persediaan sedang mengecek fisik dan menyiapkan pesanan Anda. Mohon tunggu instruksi pengambilan.`;
 
@@ -5230,6 +5266,14 @@ client.on("message", async (message) => {
           } catch (dbErr) {
             console.error("[CUTI] Gagal simpan RiwayatCuti (Ditolak):", dbErr);
           }
+        } else if (jenis === "Servis") {
+          const k = pengajuan.servis?.kendaraan || {};
+          pesanTolak =
+            `❌ *LAPORAN SERVICE DITOLAK*\n\n` +
+            `Laporan service *${k.nama || "kendaraan"}* (${k.plat || "-"}) ditolak oleh ` +
+            `*${pengajuan.atasan?.nama || "Penanggung Jawab"}*, sehingga SPBY tidak dibuat.\n\n` +
+            `Silakan berkoordinasi dengan Penanggung Jawab, lalu kirim ulang laporannya bila perlu.`;
+          await servisKendaraan.ditolak(pengajuan);
         }
 
         await kirimDenganTyping(
@@ -5247,7 +5291,8 @@ client.on("message", async (message) => {
         // ia dibebaskan begitu pengajuannya terkirim. Menghapus alurnya di
         // sini justru memutus apa pun yang sedang ia kerjakan, misalnya
         // absen pulang yang tinggal satu langkah lagi.
-        if (!pengajuan.berbasisAbsensi) delete pengajuanBySender[pemohonId];
+        // Begitu pula pelapor service kendaraan.
+        if (!pengajuan.berbasisAbsensi && jenis !== "Servis") delete pengajuanBySender[pemohonId];
       }
 
       await hapusAntrian(qid, "ATASAN");

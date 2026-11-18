@@ -10,14 +10,22 @@
 //   servis-biaya            total biaya sesuai nota
 //   servis-foto-nota        foto nota/kuitansi/invoice, minimal 1
 //   servis-foto-dokumentasi foto kendaraan di bengkel, minimal 1
-//   servis-konfirmasi       ringkasan → buat PDF SPBY + lampiran
+//   servis-konfirmasi       ringkasan → kirim ke Penanggung Jawab
+//
+// Seperti peminjaman kendaraan, laporan diteruskan ke Penanggung
+// Jawab kendaraan (Ketua Sub TU, NO_KETUA_SUB_TU) untuk disetujui
+// lewat QUOTE REPLY "1"/"2". PDF SPBY baru disusun dan dikirim ke
+// pelapor setelah disetujui. Kalau pelapornya Penanggung Jawab itu
+// sendiri, PDF langsung dibuat.
 //
 // Ketik "batal" di langkah mana pun untuk berhenti; foto yang
 // sudah terkirim ikut dibuang.
 //
 // Foto tidak disimpan di basis data. Setiap foto langsung
-// dikompres lalu ditaruh sementara di uploads/servis/, ditanam ke
-// PDF, dan dihapus begitu PDF selesai.
+// dikompres lalu ditaruh sementara di uploads/servis/. Selama
+// menunggu persetujuan foto dipindah ke uploads/servis/menunggu/
+// (tidak ikut disapu), lalu dihapus begitu PDF jadi atau laporan
+// ditolak.
 
 const fs = require("fs");
 const path = require("path");
@@ -25,6 +33,7 @@ const pdf = require("./spbyServisPdf");
 const penyimpanan = require("./penyimpananLaporan");
 
 const FOLDER_FOTO = path.join(__dirname, "..", "uploads", "servis");
+const FOLDER_MENUNGGU = path.join(FOLDER_FOTO, "menunggu");
 
 const MAKS_FOTO_PER_JENIS = 8;
 const UMUR_SISA_FOTO_MS = 24 * 60 * 60 * 1000;
@@ -41,8 +50,8 @@ function konfigurasiSpby() {
   const env = process.env;
 
   return {
-    kegiatan: env.SPBY_SERVIS_KEGIATAN || "2158.EBC.954",
-    akun: env.SPBY_SERVIS_AKUN || "523121",
+    kegiatan: env.SPBY_SERVIS_KEGIATAN || "2158.EBA.994",
+    akun: env.SPBY_SERVIS_AKUN || "523129",
     bendaharaNip: String(env.SPBY_BENDAHARA_NIP || "199611272018121001").trim(),
   };
 }
@@ -155,7 +164,7 @@ function ringkasan(flow) {
     `           (${pdf.terbilangRupiah(flow.biaya)})\n` +
     `Foto nota : ${flow.fotoNota.length}\n` +
     `Foto dokumentasi : ${flow.fotoDokumentasi.length}\n\n` +
-    `Ketik:\n1. *Buat PDF*\n2. *Batal*`
+    `Ketik:\n1. *Kirim untuk persetujuan*\n2. *Batal*`
   );
 }
 
@@ -272,7 +281,7 @@ async function terimaFoto({ message, chatId, flow, kunci, kategori }) {
 // BUAT PDF
 // =========================================================
 
-async function buatDanKirimPdf(chatId, flow) {
+async function buatDanKirimPdf(chatId, flow, { disetujuiOleh } = {}) {
   const { kirim, kirimDokumen } = dep;
   const cfg = konfigurasiSpby();
   const pegawai = flow.pegawai || {};
@@ -340,7 +349,9 @@ async function buatDanKirimPdf(chatId, flow) {
     await kirimDokumen(
       chatId,
       tujuan,
-      "✅ *SPBY Service Kendaraan* sudah jadi.\n\n" +
+      "✅ *SPBY Service Kendaraan* sudah jadi" +
+        (disetujuiOleh ? ` (disetujui oleh ${disetujuiOleh})` : "") +
+        ".\n\n" +
         "Halaman 1 berisi Surat Perintah Bayar, halaman berikutnya lampiran foto nota dan dokumentasi. " +
         "Nomor SPBY dibiarkan kosong untuk diisi Bendahara/PPK.",
     );
@@ -351,6 +362,129 @@ async function buatDanKirimPdf(chatId, flow) {
       "⚠️ PDF SPBY *sudah dibuat dan tersimpan*, tapi WhatsApp gagal mengirim berkasnya. Silakan hubungi admin TU untuk mengambilnya.",
     );
   }
+}
+
+async function buatPdfAman(chatId, flow, opsi) {
+  try {
+    await buatDanKirimPdf(chatId, flow, opsi);
+  } catch (err) {
+    console.error("[SERVIS] Gagal membuat PDF SPBY:", err?.stack || err);
+    await dep.kirim(chatId, `❌ Gagal membuat PDF SPBY. Silakan hubungi admin TU.\nInfo: ${err?.message || err}`);
+  }
+}
+
+// =========================================================
+// PERSETUJUAN PENANGGUNG JAWAB
+// =========================================================
+
+// Foto dipindah keluar dari jangkauan sapuSisaFoto(): persetujuan
+// bisa datang berhari-hari kemudian.
+async function pindahkanKeMenunggu(daftar) {
+  await fs.promises.mkdir(FOLDER_MENUNGGU, { recursive: true });
+  const hasil = [];
+  for (const f of daftar) {
+    const tujuan = path.join(FOLDER_MENUNGGU, path.basename(f.path));
+    await fs.promises.rename(f.path, tujuan);
+    hasil.push({ ...f, path: tujuan });
+  }
+  return hasil;
+}
+
+function teksPengajuan(flow) {
+  const k = flow.kendaraan;
+  return (
+    `*Pengajuan SPBY Service Kendaraan* dari ${flow.pegawai?.nama || "-"}\n\n` +
+    `Kendaraan : ${k.nama} (${k.plat || "-"})\n` +
+    `Tanggal   : ${pdf.tanggalPanjang(flow.tanggalServis)}\n` +
+    `Bengkel   : ${flow.bengkel}\n` +
+    `Biaya     : ${pdf.formatRupiah(flow.biaya)}\n` +
+    `Foto      : ${flow.fotoNota.length} nota, ${flow.fotoDokumentasi.length} dokumentasi\n\n` +
+    `*Balas pesan ini (QUOTE REPLY) dengan angka:*\n1. Setuju\n2. Tidak Setuju`
+  );
+}
+
+async function ajukanPersetujuan(chatId, flow, pj) {
+  const { kirim } = dep;
+  let data = null;
+
+  try {
+    const fotoNota = await pindahkanKeMenunggu(flow.fotoNota);
+    const fotoDokumentasi = await pindahkanKeMenunggu(flow.fotoDokumentasi);
+    data = { ...flow, fotoNota, fotoDokumentasi };
+
+    // Foto nota dikirim lebih dulu supaya Penanggung Jawab bisa
+    // memeriksa nominalnya; pesan yang dibalas tetap teks terakhir.
+    for (const [i, f] of fotoNota.entries()) {
+      await dep.kirimGambar(
+        pj.waId,
+        f.path,
+        `Nota service ${flow.kendaraan.plat || flow.kendaraan.nama} (${i + 1}/${fotoNota.length})`,
+      );
+    }
+
+    const teks = teksPengajuan(data);
+    const terkirim = await dep.kirimMentah(pj.waId, teks);
+
+    await dep.daftarkanAntrian(terkirim, {
+      sender: chatId,
+      jenis: "Servis",
+      pegawai: flow.pegawai,
+      atasan: { nama: pj.nama, nip: pj.nip, no_wa: pj.no_wa },
+      teksPesan: teks,
+      servis: {
+        kendaraan: data.kendaraan,
+        tanggalServis: data.tanggalServis,
+        bengkel: data.bengkel,
+        biaya: data.biaya,
+        fotoNota,
+        fotoDokumentasi,
+      },
+    });
+  } catch (err) {
+    console.error(`[SERVIS] Gagal meneruskan laporan ke ${pj.waId} (${pj.nama || "?"}):`, err?.message || err);
+    await hapusFoto(data || flow);
+    await kirim(
+      chatId,
+      `❌ Gagal meneruskan laporan ke Penanggung Jawab (${pj.nama || "-"}). Silakan ulangi dari *menu*, atau hubungi admin TU.`,
+    );
+    return;
+  }
+
+  await kirim(
+    chatId,
+    `✅ Laporan service sudah diteruskan ke Penanggung Jawab (${pj.nama || "-"}) untuk persetujuan.\n\n` +
+      "PDF SPBY akan dikirim ke sini begitu disetujui.",
+  );
+}
+
+// Dipanggil index.js saat Penanggung Jawab membalas "1".
+async function disetujui(pengajuan) {
+  const s = pengajuan.servis || {};
+  const flow = { ...s, pegawai: pengajuan.pegawai };
+  const semuaFoto = [...(s.fotoNota || []), ...(s.fotoDokumentasi || [])];
+  const ada = await Promise.all(
+    semuaFoto.map((f) => fs.promises.access(f.path).then(() => true, () => false)),
+  );
+
+  if (!s.kendaraan || semuaFoto.length === 0 || ada.includes(false)) {
+    console.error("[SERVIS] Pengajuan disetujui tapi data/foto sementaranya hilang:", pengajuan.sender);
+    await hapusFoto(flow);
+    await dep.kirim(
+      pengajuan.sender,
+      "Laporan service Anda *disetujui*, tetapi foto lampirannya sudah tidak tersedia di server. " +
+        "Mohon kirim ulang laporannya dari *menu* → Layanan Kendaraan → Lapor Service.",
+    );
+    return false;
+  }
+
+  await buatPdfAman(pengajuan.sender, flow, { disetujuiOleh: pengajuan.atasan?.nama });
+  return true;
+}
+
+// Dipanggil index.js saat Penanggung Jawab membalas "2".
+async function ditolak(pengajuan) {
+  const s = pengajuan.servis || {};
+  await hapusFoto({ fotoNota: s.fotoNota, fotoDokumentasi: s.fotoDokumentasi });
 }
 
 // =========================================================
@@ -489,20 +623,27 @@ async function tanganiLangkah({ message, chatId, bodyLower }) {
         return;
       }
       if (bodyLower !== "1") {
-        await kirim(chatId, "Ketik *1* untuk membuat PDF atau *2* untuk membatalkan.");
+        await kirim(chatId, "Ketik *1* untuk mengirim laporan ke Penanggung Jawab, atau *2* untuk membatalkan.");
         return;
       }
 
       // Lepas alurnya dulu supaya "1" yang terkirim dua kali tidak
-      // membuat dua PDF.
+      // mengirim dua pengajuan.
       hapusFlow(chatId);
 
-      try {
-        await buatDanKirimPdf(chatId, flow);
-      } catch (err) {
-        console.error("[SERVIS] Gagal membuat PDF SPBY:", err?.stack || err);
-        await kirim(chatId, `❌ Gagal membuat PDF SPBY. Silakan ulangi dari *menu*.\nInfo: ${err?.message || err}`);
+      const pj = dep.penyetuju();
+
+      // Pelapornya Penanggung Jawab sendiri: tidak ada yang perlu
+      // dimintai persetujuan, sama seperti peminjaman kendaraan.
+      if (!pj.waId || pj.waId === chatId) {
+        if (!pj.waId) {
+          console.warn("[SERVIS] NO_KETUA_SUB_TU kosong/tidak sah — SPBY dibuat tanpa persetujuan.");
+        }
+        await buatPdfAman(chatId, flow);
+        return;
       }
+
+      await ajukanPersetujuan(chatId, flow, pj);
       return;
     }
 
@@ -516,6 +657,8 @@ module.exports = {
   pasang,
   mulai,
   tangani,
+  disetujui,
+  ditolak,
   // untuk pengujian
   bacaTanggal,
   bacaBiaya,

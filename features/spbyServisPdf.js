@@ -175,114 +175,163 @@ function pasangFont(doc) {
   }
 }
 
-// Baris "Label : isi" dengan isi yang boleh membungkus.
-function barisLabel(doc, { x, y, lebarLabel, lebar, label, isi, tebal = false }) {
-  const xTitikDua = x + lebarLabel;
-  const xIsi = xTitikDua + 14;
+// =========================================================
+// HALAMAN SPBY — meniru lembar "SPBY FIX" di docs/SPBY NEW.xlsx
+// =========================================================
+//
+// Disusun sebagai grid yang sama dengan Excel-nya: lebar kolom A–I
+// dan tinggi baris 1–34 diambil dari lembar itu, lalu diperkecil
+// seragam supaya pas selebar A4. Hasilnya sebanding dengan cetakan
+// Excel "fit to page": huruf 12 pt di Excel menjadi ±10 pt di sini.
 
-  doc.font("Isi").text(label, x, y, { width: lebarLabel });
-  doc.text(":", xTitikDua, y);
-  doc.font(tebal ? "Isi-Tebal" : "Isi").text(isi, xIsi, y, {
-    width: lebar - (xIsi - x),
-    align: "justify",
-  });
+// Lebar kolom A–I dalam piksel Excel (lebar karakter × 7 + 5).
+const KOLOM_PX = [224, 77, 49, 210, 48, 66, 35, 19, 112];
 
-  return Math.max(doc.y, y + doc.currentLineHeight());
+// Tinggi baris 1–34 dalam poin Excel.
+const TINGGI_BARIS = [
+  16, 16, 16, 16, 16, 16, 36, 21.75, 22.5, 16, // 1–10
+  16, 16, 16, 84, 16, 15.75, 16, 16, 16, 16, // 11–20
+  16, 16, 17, 16, 16, 16, 16, 16, 16, 16, // 21–30
+  16, 19.5, 16, 16, // 31–34
+];
+
+const KOL = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7, I: 8 };
+
+function susunGrid(doc) {
+  const kiri = doc.page.margins.left;
+  const lebar = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+  const totalPx = KOLOM_PX.reduce((a, b) => a + b, 0);
+  const skala = lebar / totalPx; // poin PDF per piksel Excel
+
+  const xs = [kiri];
+  KOLOM_PX.forEach((px) => xs.push(xs[xs.length - 1] + px * skala));
+
+  const ys = [doc.page.margins.top];
+  TINGGI_BARIS.forEach((pt) => ys.push(ys[ys.length - 1] + ((pt * 4) / 3) * skala));
+
+  return {
+    huruf: 16 * skala, // 12 pt Excel = 16 px
+    // Tepi kiri kolom (A=0 … I=8); x(9) = tepi kanan kolom I.
+    x: (kolom) => xs[kolom],
+    // Tepi atas baris (mulai 1); y(35) = tepi bawah baris 34.
+    y: (baris) => ys[baris - 1],
+  };
 }
 
 function halamanSpby(doc, data) {
-  const kiri = doc.page.margins.left;
-  const lebar = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const lebarLabel = lebar * 0.3;
+  const g = susunGrid(doc);
+  const pad = 3;
 
-  doc.fontSize(12);
+  // Teks di satu sel atau rentang sel, rata bawah seperti bawaan Excel.
+  const sel = (teks, { dari, sampai = dari, baris, tebal = false, align = "left", ukuran, garisBawah = false }) => {
+    doc.font(tebal ? "Isi-Tebal" : "Isi").fontSize(ukuran || g.huruf);
+    const x0 = g.x(KOL[dari]) + pad;
+    const x1 = g.x(KOL[sampai] + 1) - pad;
+    const yTeks = g.y(baris + 1) - doc.currentLineHeight() - 2;
+    doc.text(String(teks ?? ""), x0, yTeks, { width: x1 - x0, align, lineBreak: false, underline: garisBawah });
+    doc.fontSize(g.huruf);
+  };
 
-  doc.font("Isi-Tebal").text("KEMENTERIAN KETENAGAKERJAAN", kiri, doc.page.margins.top, {
-    width: lebar,
+  // Teks panjang yang membungkus (A7:I7 dan C12:I14).
+  const paragraf = (teks, { dari, sampai, yMulai }) => {
+    doc.font("Isi").fontSize(g.huruf);
+    const x0 = g.x(KOL[dari]) + pad;
+    const x1 = g.x(KOL[sampai] + 1) - pad;
+    doc.text(teks, x0, yMulai, { width: x1 - x0, align: "justify" });
+  };
+
+  const titikDua = (baris) => sel(":", { dari: "B", baris, align: "center" });
+
+  // ---- Kop ----
+  sel("KEMENTERIAN KETENAGAKERJAAN", { dari: "A", sampai: "I", baris: 1, tebal: true, align: "center" });
+  sel("BIRO KEUANGAN DAN BARANG MILIK NEGARA", { dari: "A", sampai: "I", baris: 2, tebal: true, align: "center" });
+  sel("SURAT PERINTAH BAYAR", { dari: "A", sampai: "I", baris: 4, tebal: true, align: "center", garisBawah: true });
+
+  // Nomor dibiarkan kosong untuk diisi Bendahara/PPK.
+  const nomor = data.nomor ? String(data.nomor) : "                    ";
+  sel(`Tanggal :   ${tanggalPendek(data.tanggalSurat)}    Nomor : ${nomor}`, {
+    dari: "A",
+    sampai: "I",
+    baris: 5,
     align: "center",
   });
-  doc.text("BIRO KEUANGAN DAN BARANG MILIK NEGARA", { width: lebar, align: "center" });
 
-  // Garis kop, seperti tepi bawah sel A1:I2 di templat.
-  const yGaris = doc.y + 4;
-  doc.moveTo(kiri, yGaris).lineTo(kiri + lebar, yGaris).lineWidth(1).stroke();
-
-  doc.y = yGaris + 16;
-  doc.font("Isi-Tebal").text("SURAT PERINTAH BAYAR", kiri, doc.y, {
-    width: lebar,
-    align: "center",
-    underline: true,
-  });
-
-  const nomor = data.nomor ? data.nomor : "...............";
-  doc.font("Isi").text(
-    `Tanggal :   ${tanggalPendek(data.tanggalSurat)}      Nomor ${nomor}`,
-    kiri,
-    doc.y + 2,
-    { width: lebar, align: "center" },
-  );
-
-  doc.moveDown(1.5);
-  doc.text(
+  // ---- Perintah bayar ----
+  paragraf(
     "Saya yang bertanda tangan di bawah ini selaku Pejabat Pembuat Komitmen " +
       "memerintahkan Bendahara Pengeluaran agar melakukan pembayaran sejumlah :",
-    kiri,
-    doc.y,
-    { width: lebar, align: "justify" },
+    { dari: "A", sampai: "I", yMulai: g.y(7) + 4 },
   );
 
-  // Kotak nilai dan terbilang, seperti sel A8 dan A9 yang berbingkai.
-  doc.moveDown(0.5);
-  const yKotak = doc.y;
-  doc.font("Isi-Tebal").text(formatRupiah(data.biaya), kiri + 6, yKotak + 6, { width: lebar - 12 });
-  doc.text(terbilangRupiah(data.biaya), kiri + 6, doc.y + 4, { width: lebar - 12 });
-  const tinggiKotak = doc.y - yKotak + 6;
-  doc.rect(kiri, yKotak, lebar, tinggiKotak).lineWidth(0.8).stroke();
+  // Format akuntansi Excel: "Rp" menempel kiri, angka rata kanan sel A.
+  sel("Rp", { dari: "A", baris: 8, tebal: true });
+  sel(Math.floor(Number(data.biaya) || 0).toLocaleString("id-ID"), { dari: "A", baris: 8, tebal: true, align: "right" });
+  sel(terbilangRupiah(data.biaya).toLowerCase(), { dari: "A", sampai: "I", baris: 9, tebal: true });
 
-  let y = yKotak + tinggiKotak + 20;
+  // ---- Kepada / untuk pembayaran ----
+  sel("Kepada", { dari: "A", baris: 11 });
+  titikDua(11);
+  sel(data.bengkel, { dari: "C", sampai: "I", baris: 11, tebal: true });
 
-  y = barisLabel(doc, { x: kiri, y, lebarLabel, lebar, label: "Kepada", isi: data.bengkel, tebal: true });
-  y = barisLabel(doc, { x: kiri, y: y + 6, lebarLabel, lebar, label: "Untuk pembayaran", isi: data.uraianPembayaran });
+  sel("Untuk pembayaran", { dari: "A", baris: 12 });
+  titikDua(12);
+  doc.font("Isi").fontSize(g.huruf);
+  paragraf(data.uraianPembayaran, {
+    dari: "C",
+    sampai: "I",
+    yMulai: g.y(13) - doc.currentLineHeight() - 2, // sebaris dengan label
+  });
 
-  y += 22;
-  doc.font("Isi").text("Atas dasar :", kiri, y);
-  y = doc.y;
-  doc.text("1. Kuitansi/bukti pembelian", kiri, y);
-  doc.text(":", kiri + lebar * 0.62, y);
-  doc.text(`terlampir (${data.jumlahNota} lembar)`, kiri + lebar * 0.62 + 14, y);
-  y = doc.y;
-  doc.text("2. Nota/bukti penerimaan barang/jasa/", kiri, y);
-  doc.text(":", kiri + lebar * 0.62, y);
-  doc.text(`terlampir (${data.jumlahDokumentasi} foto)`, kiri + lebar * 0.62 + 14, y);
-  doc.text("    bukti lainnya", kiri, doc.y);
+  // ---- Atas dasar ----
+  sel("Atas dasar :", { dari: "A", baris: 15 });
+  const teksKuitansi = "1. Nilai Kuitansi/bukti pembelian";
+  sel(teksKuitansi, { dari: "A", sampai: "B", baris: 16 });
+  // Teksnya meluber ke kolom B; titik dua digeser kalau tertimpa.
+  doc.font("Isi").fontSize(g.huruf);
+  const ujungTeks = g.x(KOL.A) + pad + doc.widthOfString(teksKuitansi);
+  const tengahB = (g.x(KOL.B) + g.x(KOL.C)) / 2 - doc.widthOfString(":") / 2;
+  doc.text(":", Math.max(ujungTeks + 8, tengahB), g.y(17) - doc.currentLineHeight() - 2, { lineBreak: false });
 
-  y = doc.y + 18;
-  doc.text("Dibebankan pada :", kiri, y);
-  y = doc.y;
-  y = barisLabel(doc, { x: kiri, y, lebarLabel, lebar, label: "Kegiatan, Output, MAK", isi: data.kegiatan });
-  y = barisLabel(doc, { x: kiri, y, lebarLabel, lebar, label: "Kode", isi: data.akun });
+  // ---- Pembebanan ----
+  sel("Dibebankan pada :", { dari: "A", baris: 19 });
+  sel("Kegiatan, Output, MAK", { dari: "A", baris: 20 });
+  titikDua(20);
+  sel(data.kegiatan, { dari: "C", sampai: "I", baris: 20 });
+  sel("Kode", { dari: "A", baris: 21 });
+  titikDua(21);
+  sel(data.akun, { dari: "C", sampai: "I", baris: 21 });
 
-  // Tanda tangan, dua kolom.
-  y += 40;
-  const lebarKolom = lebar / 2;
-  const xKanan = kiri + lebarKolom;
+  // ---- Tanda tangan ----
   // Tanggal di atas tanda tangan = tanggal service yang diisi pegawai.
   const tglTtd = tanggalPendek(data.tanggalServis || data.tanggalSurat);
+  // Templat memakai Arial Narrow di baris ini; huruf sedikit lebih
+  // kecil menjaganya setara.
+  sel(`Setuju/lunas dibayar, Tgl   ${tglTtd}`, { dari: "A", sampai: "D", baris: 25, ukuran: g.huruf * 0.9 });
+  sel(`Jakarta,   ${tglTtd}`, { dari: "E", sampai: "I", baris: 25, align: "center", ukuran: g.huruf * 0.9 });
 
-  doc.text(`Setuju/lunas dibayar, Tgl   ${tglTtd}`, kiri, y, { width: lebarKolom });
-  doc.text(`Jakarta,   ${tglTtd}`, xKanan, y, { width: lebarKolom, align: "center" });
+  sel("Bendahara Pengeluaran", { dari: "A", sampai: "B", baris: 27, align: "center" });
+  sel("Sekretariat Jenderal Kemnaker", { dari: "A", sampai: "B", baris: 28, align: "center" });
+  sel("Pejabat Pembuat Komitmen", { dari: "E", sampai: "I", baris: 27, align: "center" });
+  sel("Biro Keuangan dan BMN", { dari: "E", sampai: "I", baris: 28, align: "center" });
 
-  y = doc.y + 14;
-  doc.text("Bendahara Pengeluaran", kiri, y, { width: lebarKolom, align: "center" });
-  doc.text("Sekretariat Jenderal Kemnaker", kiri, doc.y, { width: lebarKolom, align: "center" });
-  doc.text("Pejabat Pembuat Komitmen", xKanan, y, { width: lebarKolom, align: "center" });
-  doc.text("Biro Keuangan Setjen Kemnaker", xKanan, doc.y, { width: lebarKolom, align: "center" });
+  sel(data.bendahara.nama, { dari: "A", sampai: "B", baris: 32, align: "center" });
+  sel(`NIP. ${formatNip(data.bendahara.nip)}`, { dari: "A", sampai: "B", baris: 33, align: "center" });
+  sel(data.ppk.nama, { dari: "E", sampai: "I", baris: 32, align: "center" });
+  sel(`NIP. ${formatNip(data.ppk.nip)}`, { dari: "E", sampai: "I", baris: 33, align: "center" });
 
-  y = doc.y + 64;
-  doc.text(data.bendahara.nama, kiri, y, { width: lebarKolom, align: "center" });
-  doc.text(`NIP. ${formatNip(data.bendahara.nip)}`, kiri, doc.y, { width: lebarKolom, align: "center" });
-  doc.text(data.ppk.nama, xKanan, y, { width: lebarKolom, align: "center" });
-  doc.text(`NIP. ${formatNip(data.ppk.nip)}`, xKanan, doc.y, { width: lebarKolom, align: "center" });
+  // ---- Garis ----
+  // Bingkai luar baris 1–34, garis bawah baris Rp, kotak terbilang,
+  // dan pemisah sebelum blok tanda tangan.
+  const xKiri = g.x(0);
+  const xKanan = g.x(9);
+  const datar = (yy) => doc.moveTo(xKiri, yy).lineTo(xKanan, yy);
+
+  doc.lineWidth(0.7);
+  doc.rect(xKiri, g.y(1), xKanan - xKiri, g.y(35) - g.y(1));
+  datar(g.y(9)); // bawah baris 8 (Rp)
+  datar(g.y(10)); // bawah baris 9 (terbilang)
+  datar(g.y(24)); // bawah baris 23
+  doc.stroke();
 }
 
 // Lampiran berisi foto saja, tanpa judul atau keterangan — semua
@@ -334,7 +383,7 @@ async function tulisSpbyServis(data, tujuan) {
 
   const doc = new PDFDocument({
     size: "A4",
-    margins: { top: 57, bottom: 57, left: 64, right: 57 },
+    margins: { top: 40, bottom: 40, left: 36, right: 36 },
     info: {
       Title: `SPBY Service ${data.kendaraan.plat || data.kendaraan.nama}`,
       Author: "SisKA Biro Keuangan dan BMN",

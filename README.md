@@ -148,19 +148,28 @@ Catatan:
 ## Menu 4.4 — Lapor Service / Pemeliharaan Kendaraan
 
 Pegawai melaporkan service kendaraan dinas, lalu bot membuat PDF
-**SPBY (Surat Perintah Bayar)** mengikuti templat `docs/SPBY NEW.xlsx`,
-diikuti lampiran berisi foto saja (2 foto per halaman, tanpa teks).
+**SPBY (Surat Perintah Bayar)** mengikuti lembar **SPBY FIX** di
+`docs/SPBY NEW.xlsx` (grid kolom dan baris yang sama, diperkecil
+selebar A4), diikuti lampiran berisi foto saja (2 foto per halaman).
 
 ```
 4. Layanan Kendaraan → 4. Lapor Service / Pemeliharaan
    pilih kendaraan → tanggal service → nama bengkel → total biaya
    → foto nota/kuitansi (wajib ≥1) → foto dokumentasi (wajib ≥1)
-   → ringkasan → PDF dikirim ke pegawai
+   → ringkasan → diteruskan ke Penanggung Jawab (QUOTE REPLY 1/2)
+   → disetujui: PDF dikirim ke pegawai | ditolak: pegawai diberi tahu
 ```
 
+* **Persetujuan** — seperti peminjaman kendaraan, laporan diteruskan ke
+  Penanggung Jawab kendaraan (`NO_KETUA_SUB_TU`) beserta foto notanya.
+  PDF baru disusun setelah ia membalas *1. Setuju*. Antriannya tersimpan
+  di tabel `antrian`, jadi tetap berlaku walau bot restart. Kalau yang
+  melapor Penanggung Jawab itu sendiri, PDF langsung dibuat.
 * Foto **tidak disimpan di basis data**. Begitu diterima, foto
   dikompres (`sharp`, sisi terpanjang 1600 px, JPEG mutu 70), disimpan
   sementara di `uploads/servis/`, ditanam ke PDF, lalu dihapus.
+  Selama menunggu persetujuan foto berada di `uploads/servis/menunggu/`
+  dan dihapus begitu laporan disetujui (PDF jadi) atau ditolak.
   Sisa foto dari alur yang ditinggal dibuang otomatis setelah 24 jam.
 * PDF tersimpan di `reports/servis-kendaraan/<nama pegawai>/`.
 * Semua tanggal di SPBY (kop, "Setuju/lunas dibayar", dan di atas
@@ -174,8 +183,8 @@ diikuti lampiran berisi foto saja (2 foto per halaman, tanpa teks).
 | Variabel `.env` | Bawaan |
 |---|---|
 | `SPBY_BENDAHARA_NIP` | `199611272018121001` |
-| `SPBY_SERVIS_KEGIATAN` | `2158.EBC.954` |
-| `SPBY_SERVIS_AKUN` | `523121` |
+| `SPBY_SERVIS_KEGIATAN` | `2158.EBA.994` |
+| `SPBY_SERVIS_AKUN` | `523129` |
 
 Setelah menarik perubahan ini di VPS, jalankan `npm install` sekali
 untuk memasang `sharp`.
