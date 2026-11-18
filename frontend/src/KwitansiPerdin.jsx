@@ -156,7 +156,7 @@ export default function KwitansiPerdin() {
     setForm((f) => ({
       ...f,
       peserta: f.peserta.map((p, j) =>
-        j === i ? { ...p, nama, ...(peg ? { nip: peg.nip || "", jabatan: peg.jabatan || "" } : {}) } : p,
+        j === i ? { ...p, nama, ...(peg ? { nip: String(peg.nip || "").replace(/\s+/g, ""), jabatan: peg.jabatan || "" } : {}) } : p,
       ),
     }));
   };
@@ -409,7 +409,7 @@ export default function KwitansiPerdin() {
                           />
                         </Medan>
                         <Medan label="NIP">
-                          <input className={kelasInput} value={p.nip} onChange={(e) => ubahPeserta(i, "nip", e.target.value)} />
+                          <input className={kelasInput} value={p.nip} onChange={(e) => ubahPeserta(i, "nip", e.target.value.replace(/\s+/g, ""))} />
                         </Medan>
                         <Medan label="Jabatan" className="sm:col-span-2">
                           <input className={kelasInput} value={p.jabatan} onChange={(e) => ubahPeserta(i, "jabatan", e.target.value)} />

@@ -99,16 +99,20 @@ const AKUN = [
   { kode: "026.01.WA.2158.EBA.994.002.A.524119", uraian: "Belanja Perjalanan Dinas Paket Meeting Luar Kota (contoh)", jenis: "luar" },
 ];
 
+// NIP selalu dicetak rapat tanpa spasi: "198703232015031002".
+// Data lama dan isian .env kadang berformat "19870323 201503 1 002".
+const nipRapat = (v) => String(v ?? "").replace(/\s+/g, "");
+
 // Penandatangan tetap. Bisa diganti lewat .env tanpa ubah kode.
 function pejabat() {
   return {
     ppk: {
       nama: process.env.KWITANSI_PPK_NAMA || "Alpha Sandro Adithyaswara, S.Sos., M.M.",
-      nip: process.env.KWITANSI_PPK_NIP || "19870323 201503 1 002",
+      nip: nipRapat(process.env.KWITANSI_PPK_NIP || "198703232015031002"),
     },
     bendahara: {
       nama: process.env.KWITANSI_BENDAHARA_NAMA || "Prasetyo Muhammad Sidqi",
-      nip: process.env.KWITANSI_BENDAHARA_NIP || "19961127 201812 1 001",
+      nip: nipRapat(process.env.KWITANSI_BENDAHARA_NIP || "199611272018121001"),
     },
   };
 }
@@ -211,7 +215,7 @@ function hitungKegiatan(input = {}) {
 
     return {
       nama,
-      nip: teks(p.nip),
+      nip: nipRapat(p.nip),
       jabatan: teks(p.jabatan),
       golongan: teks(p.golongan),
       tingkat: tingkat.kode,

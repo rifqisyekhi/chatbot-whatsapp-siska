@@ -502,6 +502,10 @@ function bersihkanDataPegawai(body) {
     }
   }
 
+  // NIP disimpan rapat tanpa spasi ("19870323 201503 1 002" →
+  // "198703232015031002") supaya seragam di kwitansi, SPBY, dan
+  // pencarian atasan_nip.
+  if (typeof bersih.nip === "string") bersih.nip = bersih.nip.replace(/\s+/g, "");
   if (!bersih.nip) delete bersih.nip;
 
   return bersih;
