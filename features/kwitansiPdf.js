@@ -11,15 +11,42 @@
 // Data masuk sudah dihitung oleh kwitansiTarif.hitungKegiatan(), jadi
 // berkas ini hanya menata letak — tidak ada aturan PMK di sini.
 
+const fs = require("fs");
+const path = require("path");
 const PDFDocument = require("pdfkit");
-const { pasangFont, terbilangRupiah, tanggalPanjang } = require("./spbyServisPdf");
+const { terbilangRupiah, tanggalPanjang } = require("./spbyServisPdf");
 
 const angka = (n) => Math.floor(Number(n) || 0).toLocaleString("id-ID");
 const rp = (n) => `Rp ${angka(n)},-`;
 
-const HURUF = 10;
-const ISI = "Isi";
-const TEBAL = "Isi-Tebal";
+let HURUF = 10; // `let`: halaman riil memakai 11 (Arial Narrow 12 di templat)
+
+// Font mengikuti lembar NOMI: Tahoma untuk nominatif, kwitansi,
+// rincian, dan SPD; Times New Roman tebal-miring untuk judul KWITANSI;
+// Arial Narrow untuk Daftar Pengeluaran Riil dan kop di kaki SPD.
+// ISI/TEBAL sengaja `let`: halaman riil menukarnya ke Arial Narrow
+// sementara, supaya semua alat tata letak di bawah ikut berganti.
+let ISI = "Tahoma";
+let TEBAL = "Tahoma-Tebal";
+const NARROW = "Narrow";
+const NARROW_TEBAL = "Narrow-Tebal";
+const JUDUL_KWITANSI = "Times-TebalMiring";
+
+const FONT_DIR = path.join(__dirname, "..", "assets", "fonts");
+
+function pasangFontKwitansi(doc) {
+  const daftar = [
+    ["Tahoma", "tahoma.ttf", "Helvetica"],
+    ["Tahoma-Tebal", "tahomabd.ttf", "Helvetica-Bold"],
+    [NARROW, "arialn.ttf", "Helvetica"],
+    [NARROW_TEBAL, "arialnb.ttf", "Helvetica-Bold"],
+    [JUDUL_KWITANSI, "timesbi.ttf", "Times-BoldItalic"],
+  ];
+  for (const [nama, berkas, cadangan] of daftar) {
+    const lokasi = path.join(FONT_DIR, berkas);
+    doc.registerFont(nama, fs.existsSync(lokasi) ? lokasi : cadangan);
+  }
+}
 
 // "Perjalanan dinas dalam rangka ..." — maksud diketik bebas,
 // awalan "dalam rangka" tidak digandakan kalau sudah diketik user.
@@ -213,11 +240,11 @@ function garisGanda(doc, x, y, w) {
 }
 
 // Teks dalam kotak bergaris; mengembalikan y bawah kotak.
-function kotakTeks(doc, isi, x, y, w, { minTinggi = 0, pad = 4, tebal = false, align = "left", oblique = false } = {}) {
+function kotakTeks(doc, isi, x, y, w, { minTinggi = 0, pad = 4, tebal = false, align = "left" } = {}) {
   doc.font(tebal ? TEBAL : ISI).fontSize(HURUF);
   const t = Math.max(minTinggi, doc.heightOfString(isi, { width: w - 2 * pad, align }) + 2 * pad);
   doc.lineWidth(0.6).rect(x, y, w, t).stroke();
-  doc.text(isi, x + pad, y + pad, { width: w - 2 * pad, align, oblique });
+  doc.text(isi, x + pad, y + pad, { width: w - 2 * pad, align });
   return y + t;
 }
 
@@ -227,7 +254,7 @@ function halamanKwitansi(doc, k, p) {
   const x = doc.page.margins.left;
   const w = lebarIsi(doc);
 
-  doc.font(TEBAL).fontSize(18).text("KWITANSI", x, 34, { width: w, align: "center", underline: true, oblique: true });
+  doc.font(JUDUL_KWITANSI).fontSize(20).text("KWITANSI", x, 30, { width: w, align: "center", underline: true });
   let y = doc.y + 2;
   doc.lineWidth(1.2).moveTo(x, y).lineTo(x + w, y).stroke();
   y += 6;
@@ -254,7 +281,7 @@ function halamanKwitansi(doc, k, p) {
 
   doc.font(ISI).text("Banyaknya Uang", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  y = kotakTeks(doc, terbilangRupiah(p.total), xIsi, y, wIsi, { minTinggi: 40, pad: 8, oblique: true }) + 16;
+  y = kotakTeks(doc, terbilangRupiah(p.total), xIsi, y, wIsi, { minTinggi: 40, pad: 8 }) + 16;
 
   doc.font(ISI).text("Untuk Pembayaran", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
@@ -277,7 +304,7 @@ function halamanRincian(doc, k, p) {
   const x = doc.page.margins.left;
   const w = lebarIsi(doc);
 
-  tulis(doc, "RINCIAN BIAYA PERJALANAN DINAS", x, 34, { tebal: true, ukuran: 12, lebar: w, align: "center" });
+  tulis(doc, "RINCIAN BIAYA PERJALANAN DINAS", x, 34, { tebal: true, ukuran: 13, lebar: w, align: "center" });
   let y = doc.y + 18;
   const opsi = { xLabel: x, xTitik: x + 165, xIsi: x + 180, lebarIsi: w - 180, jarak: 1 };
   y = barisLabel(doc, "Lampiran SPD Nomor", k.nomorSpd || "", y, opsi);
@@ -335,7 +362,8 @@ function halamanRincian(doc, k, p) {
 
   doc.font(TEBAL).text("TERBILANG", xs[1] + 4, y + 4, { lineBreak: false });
   doc.text(":", xs[1] + 140, y + 4, { lineBreak: false });
-  doc.text(terbilangRupiah(p.total), xs[1] + 152, y + 4, { width: w - kNo - 152, oblique: true });
+  doc.fontSize(HURUF - 1).text(terbilangRupiah(p.total), xs[1] + 152, y + 5, { width: w - kNo - 152 });
+  doc.fontSize(HURUF);
   y = doc.y + 24;
 
   const kol = w / 2;
@@ -377,7 +405,7 @@ function halamanSpd(doc, k, p) {
     y += 12;
   }
 
-  tulis(doc, "SURAT PERJALANAN DINAS (SPD)", x, y + 8, { tebal: true, ukuran: 11, lebar: w, align: "center", underline: true });
+  tulis(doc, "SURAT PERJALANAN DINAS (SPD)", x, y + 8, { tebal: true, ukuran: 11.5, lebar: w, align: "center", underline: true });
   y = doc.y + 3;
 
   const kNo = 26;
@@ -386,11 +414,13 @@ function halamanSpd(doc, k, p) {
   const xIsi = x + kNo + kUr;
   const luar = k.jenis === "luar";
 
-  const baris = (no, uraian, isi, { minTinggi = 0, tebalIsi = false } = {}) => {
+  // Kolom isi baris 3–7 di templat memakai huruf satu tingkat lebih besar.
+  const baris = (no, uraian, isi, { minTinggi = 0, tebalIsi = false, ukuranIsi = HURUF } = {}) => {
     doc.font(ISI).fontSize(HURUF);
     const tU = doc.heightOfString(uraian, { width: kUr - 8 });
-    doc.font(tebalIsi ? TEBAL : ISI);
+    doc.font(tebalIsi ? TEBAL : ISI).fontSize(ukuranIsi);
     const tI = doc.heightOfString(isi, { width: kIsi - 8 });
+    doc.fontSize(HURUF);
     const t = Math.max(minTinggi, tU, tI) + 12;
     doc.lineWidth(0.6).rect(x, y, w, t).stroke();
     doc.moveTo(x + kNo, y).lineTo(x + kNo, y + t).stroke();
@@ -398,7 +428,8 @@ function halamanSpd(doc, k, p) {
     const yT = y + (t - Math.max(tU, tI)) / 2;
     doc.font(ISI).text(no, x, yT, { width: kNo, align: "center" });
     doc.text(uraian, x + kNo + 4, yT, { width: kUr - 8 });
-    doc.font(tebalIsi ? TEBAL : ISI).text(isi, xIsi + 4, yT, { width: kIsi - 8 });
+    doc.font(tebalIsi ? TEBAL : ISI).fontSize(ukuranIsi).text(isi, xIsi + 4, yT, { width: kIsi - 8 });
+    doc.fontSize(HURUF);
     y += t;
   };
 
@@ -406,8 +437,8 @@ function halamanSpd(doc, k, p) {
   // Nama tebal, NIP tebal — dua baris di kolom isi.
   baris("2.", "Nama /NIP pegawai yang melaksanakan perjalanan dinas", `${p.nama}\nNIP. ${p.nip || "-"}`, { tebalIsi: true });
   baris("3.", "a. Pangkat dan Golongan\nb. Jabatan/Instansi\nc. Tingkat Biaya Perjalanan Dinas",
-    `a. ${p.golongan || "-"}\nb. ${p.jabatan || "-"}\nc. ${p.tingkatBiaya}`);
-  baris("4", "a. Maksud Perjalanan Dinas", untukPembayaran(k), { minTinggi: 56 });
+    `a. ${p.golongan || "-"}\nb. ${p.jabatan || "-"}\nc. ${p.tingkatBiaya}`, { ukuranIsi: HURUF + 1 });
+  baris("4", "a. Maksud Perjalanan Dinas", untukPembayaran(k), { minTinggi: 56, ukuranIsi: HURUF + 1 });
 
   // Baris 5: alat angkut yang tidak dipakai dicoret, seperti di templat.
   {
@@ -434,9 +465,9 @@ function halamanSpd(doc, k, p) {
     y += t;
   }
 
-  baris("6.", "a. Tempat berangkat\nb. Tempat tujuan", `a. ${k.kotaAsal}\nb. ${k.kotaTujuan}          PP`);
+  baris("6.", "a. Tempat berangkat\nb. Tempat tujuan", `a. ${k.kotaAsal}\nb. ${k.kotaTujuan}          PP`, { ukuranIsi: HURUF + 1 });
   baris("7.", "a. Lamanya Perjalanan Dinas\nb. Tanggal berangkat\nc. Tanggal harus kembali / tiba di tempat baru *)",
-    `a. ${lamaHari(k.hari)}\nb. ${tanggalPanjang(k.tanggalBerangkat)}\nc. ${tanggalPanjang(k.tanggalKembali)}`);
+    `a. ${lamaHari(k.hari)}\nb. ${tanggalPanjang(k.tanggalBerangkat)}\nc. ${tanggalPanjang(k.tanggalKembali)}`, { ukuranIsi: HURUF + 1 });
 
   // Baris 8: pengikut — sub-kolom Tanggal Lahir dan Keterangan.
   {
@@ -484,9 +515,10 @@ function halamanSpd(doc, k, p) {
 
   // Kop alamat di kaki halaman — di bawah tanda tangan, tidak pernah menimpanya.
   y = Math.max(doc.y + 8, doc.page.height - 96);
-  doc.font(TEBAL).fontSize(12).text("KEMENTERIAN KETENAGAKERJAAN", x + 150, y, { width: w - 150, align: "left" });
-  doc.font(ISI).fontSize(11).text("SEKRETARIAT JENDERAL", x + 210, doc.y, { lineBreak: false });
-  doc.fontSize(8).text("Jalan Gatot Subroto Kav. 51 Jakarta Selatan 12950 telp 5255733 ext 280", x + 130, y + 30, { lineBreak: false });
+  doc.font(NARROW_TEBAL).fontSize(15).text("KEMENTERIAN KETENAGAKERJAAN", x, y, { width: w, align: "center" });
+  doc.font(NARROW).fontSize(13).text("SEKRETARIAT JENDERAL", x, doc.y, { width: w, align: "center" });
+  doc.fontSize(10).text("Jalan Gatot Subroto Kav. 51 Jakarta Selatan 12950 telp 5255733 ext 280", x, doc.y, { width: w, align: "center" });
+  y = doc.y - 44;
   garisGanda(doc, x, y + 48, w);
   doc.fontSize(HURUF);
 }
@@ -498,13 +530,23 @@ function itemRiil(p) {
 }
 
 function halamanRiil(doc, k, p) {
+  const asli = [ISI, TEBAL, HURUF];
+  [ISI, TEBAL, HURUF] = [NARROW, NARROW_TEBAL, 11];
+  try {
+    isiHalamanRiil(doc, k, p);
+  } finally {
+    [ISI, TEBAL, HURUF] = asli;
+  }
+}
+
+function isiHalamanRiil(doc, k, p) {
   const item = itemRiil(p);
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 50, right: 50 } });
   bingkai(doc);
   const x = doc.page.margins.left;
   const w = lebarIsi(doc);
 
-  tulis(doc, "DAFTAR PENGELUARAN RIIL", x, 50, { tebal: true, ukuran: 11, lebar: w, align: "center" });
+  tulis(doc, "DAFTAR PENGELUARAN RIIL", x, 50, { tebal: true, ukuran: 13, lebar: w, align: "center" });
   let y = doc.y + 22;
   doc.font(ISI).fontSize(HURUF).text("Yang bertanda tangan di bawah ini :", x + 20, y);
   y = doc.y + 14;
@@ -584,7 +626,7 @@ function tulisKwitansiPdf(kegiatan, tujuan) {
     autoFirstPage: false,
     info: { Title: `Kwitansi Perjalanan Dinas ${kegiatan.kotaTujuan}`, Author: "SisKA Biro Keuangan dan BMN" },
   });
-  pasangFont(doc);
+  pasangFontKwitansi(doc);
   doc.pipe(tujuan);
 
   halamanNominatif(doc, kegiatan);
