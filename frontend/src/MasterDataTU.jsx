@@ -24,6 +24,7 @@ import {
   Shield,
   FileSpreadsheet,
   Wrench,
+  ReceiptText,
 } from "lucide-react";
 
 const DAFTAR_JABATAN = [
@@ -372,6 +373,15 @@ export default function AdminMasterDataTU() {
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2">
+            {/* Kwitansi perjalanan dinas */}
+            <a
+              href="/admin/kwitansi"
+              className="inline-flex items-center justify-center gap-2 bg-white hover:bg-paper text-navy border border-mist px-5 py-3 rounded-2xl font-bold text-sm shadow-2xs transition-all active:scale-95"
+            >
+              <ReceiptText className="w-4 h-4 text-brand" />
+              <span>Kwitansi Perdin</span>
+            </a>
+
             {/* Rekap pemeliharaan / service kendaraan */}
             {activeTab === "kendaraan" && (
               <a

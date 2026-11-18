@@ -408,6 +408,7 @@ async function tulisSpbyServis(data, tujuan) {
 }
 
 module.exports = {
+  pasangFont,
   terbilangRupiah,
   formatRupiah,
   tanggalPanjang,

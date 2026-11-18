@@ -30,6 +30,7 @@ const penyimpananLaporan = require("./features/penyimpananLaporan");
 const buktiSerahTerima = require("./features/buktiSerahTerima");
 const servisKendaraan = require("./features/servisKendaraan");
 const { pasangRuteServis } = require("./features/ruteServisKendaraan");
+const { pasangRuteKwitansi } = require("./features/ruteKwitansi");
 const {
   HELPDESK_GROUP_ID,
   NO_KETUA_SUB_TU,
@@ -671,6 +672,12 @@ app.delete("/api/kendaraan/:id", async (req, res) => {
 // ------------------------------------------
 
 pasangRuteServis(app);
+
+// ------------------------------------------
+// --- RUTE API KWITANSI PERJALANAN DINAS ---
+// ------------------------------------------
+
+pasangRuteKwitansi(app);
 
 // ------------------------------------------
 // --- RUTE API BARANG (GUDANG) ---
