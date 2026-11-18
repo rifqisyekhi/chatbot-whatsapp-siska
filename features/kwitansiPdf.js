@@ -181,7 +181,7 @@ function halamanNominatif(doc, k) {
     { judul: "Uang Harian", lebar: 60, align: "right" },
     { judul: "Represen-tasi", lebar: 50, align: "right" },
     { judul: "Transport", lebar: 60, align: "right" },
-    { judul: "Taksi", lebar: 50, align: "right" },
+    { judul: `Transport ${k.alatAngkut?.simpul || "Terminal"}`, lebar: 50, align: "right" },
     { judul: "Penginapan", lebar: 60, align: "right" },
     { judul: "Jumlah", lebar: 66, align: "right" },
   ];

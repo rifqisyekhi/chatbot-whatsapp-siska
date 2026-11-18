@@ -87,16 +87,19 @@ const TRANSPOR_DALAM_KOTA = 170000; // PP, per orang per kali
 
 // Alat angkut perjalanan luar kota. Menentukan isian biaya mana yang
 // bawaannya terisi:
-//   taksi — taksi ke/dari bandara/stasiun/terminal (PMK II.16)
+//   taksi — transport ke/dari bandara/stasiun/terminal (PMK II.16).
+//           PMK tidak menentukan jenis kendaraannya (taksi, taksi/ojek
+//           online mobil, bus bandara), asal bukan kendaraan pribadi.
+//           `simpul` = nama tempatnya untuk label: Bandara/Stasiun/Terminal.
 //   darat — transport darat ibu kota provinsi → kab/kota (PMK II.1);
 //           hanya untuk pesawat, karena bandaranya di ibu kota.
 // Kendaraan dinas/mobil: tanpa tiket dan taksi; BBM, tol, dan parkir
 // diisi riil di kolom yang sama dengan tiket.
 const ALAT_ANGKUT = [
-  { kode: "pesawat", label: "Pesawat", isianTiket: "Tiket pesawat PP (riil)", uraianTiket: "Transport", taksi: true, darat: true },
-  { kode: "kereta", label: "Kereta Api", isianTiket: "Tiket kereta PP (riil)", uraianTiket: "Transport", taksi: true, darat: false },
-  { kode: "umum", label: "Kendaraan Umum (bus/travel)", isianTiket: "Tiket bus/travel PP (riil)", uraianTiket: "Transport", taksi: true, darat: false },
-  { kode: "dinas", label: "Kendaraan Dinas / Mobil", isianTiket: "BBM, tol, parkir (riil)", uraianTiket: "BBM, Tol, Parkir", taksi: false, darat: false },
+  { kode: "pesawat", label: "Pesawat", isianTiket: "Tiket pesawat PP (riil)", uraianTiket: "Transport", taksi: true, darat: true, simpul: "Bandara" },
+  { kode: "kereta", label: "Kereta Api", isianTiket: "Tiket kereta PP (riil)", uraianTiket: "Transport", taksi: true, darat: false, simpul: "Stasiun" },
+  { kode: "umum", label: "Kendaraan Umum (bus/travel)", isianTiket: "Tiket bus/travel PP (riil)", uraianTiket: "Transport", taksi: true, darat: false, simpul: "Terminal" },
+  { kode: "dinas", label: "Kendaraan Dinas / Mobil", isianTiket: "BBM, tol, parkir (riil)", uraianTiket: "BBM, Tol, Parkir", taksi: false, darat: false, simpul: "Terminal" },
 ];
 const KOTA_ASAL = "Jakarta";
 const PROVINSI_ASAL = "DKI Jakarta";
@@ -252,10 +255,10 @@ function hitungKegiatan(input = {}) {
       // Taksi: PP di kota asal + PP di kota tujuan = 2 × tarif masing-masing.
       // Ke kota sekitar Jakarta dan dengan kendaraan dinas: taksi bawaan 0.
       const pakaiTaksi = alat.taksi && !sekitar;
-      const taksiJkt = angkaOpsional(p.taksi_asal, `Taksi Jakarta ${nama}`) ?? (pakaiTaksi ? 2 * taksiAsal : 0);
-      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Taksi tujuan ${nama}`) ?? (pakaiTaksi && provinsi.taksi ? 2 * provinsi.taksi : 0);
-      if (taksiJkt > 0) rincian.push({ kunci: "taksiAsal", uraian: "Taksi", keterangan: `${KOTA_ASAL} PP`, volume: 1, satuan: "PP", tarif: taksiJkt, jumlah: taksiJkt });
-      if (taksiTujuan > 0) rincian.push({ kunci: "taksiTujuan", uraian: "Taksi", keterangan: `${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: taksiTujuan, jumlah: taksiTujuan });
+      const taksiJkt = angkaOpsional(p.taksi_asal, `Transport ${alat.simpul.toLowerCase()} Jakarta ${nama}`) ?? (pakaiTaksi ? 2 * taksiAsal : 0);
+      const taksiTujuan = angkaOpsional(p.taksi_tujuan, `Transport ${alat.simpul.toLowerCase()} tujuan ${nama}`) ?? (pakaiTaksi && provinsi.taksi ? 2 * provinsi.taksi : 0);
+      if (taksiJkt > 0) rincian.push({ kunci: "taksiAsal", uraian: `Transport ${alat.simpul}`, keterangan: `${KOTA_ASAL} PP`, volume: 1, satuan: "PP", tarif: taksiJkt, jumlah: taksiJkt });
+      if (taksiTujuan > 0) rincian.push({ kunci: "taksiTujuan", uraian: `Transport ${alat.simpul}`, keterangan: `${kotaBandara} PP`, volume: 1, satuan: "PP", tarif: taksiTujuan, jumlah: taksiTujuan });
     } else {
       // Transpor dalam kota PP per hari, bisa dinolkan (mis. ikut kendaraan dinas).
       const tr = angkaOpsional(p.transport, `Transport ${nama}`) ?? TRANSPOR_DALAM_KOTA;
@@ -283,7 +286,7 @@ function hitungKegiatan(input = {}) {
     kotaTujuan: rute?.tujuan || teks(input.kota_tujuan) || (jenis === "dalam" ? KOTA_ASAL : provinsi.nama),
     rute,
     // Dalam kota selalu kendaraan umum; SPD baris 5 menulis alat ini.
-    alatAngkut: jenis === "luar" ? { kode: alat.kode, label: alat.label } : { kode: "umum", label: "Kendaraan Umum" },
+    alatAngkut: jenis === "luar" ? { kode: alat.kode, label: alat.label, simpul: alat.simpul } : { kode: "umum", label: "Kendaraan Umum" },
     // Bawaan isian per peserta, untuk petunjuk di dashboard.
     bawaan: jenis === "luar" ? {
       taksiAsal: alat.taksi && !sekitar ? 2 * taksiAsal : 0,

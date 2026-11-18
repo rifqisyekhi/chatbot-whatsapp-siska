@@ -179,13 +179,16 @@ export default function KwitansiPerdin() {
   // dan nilai bawaan isian biaya per peserta.
   const alat = ref?.alatAngkut?.find((a) => a.kode === hasil?.alatAngkut?.kode);
   const bawaan = hasil?.bawaan || null;
+  // PMK II.16: transport ke/dari bandara/stasiun/terminal, jenis
+  // kendaraannya bebas (taksi, taksi/ojek online mobil, bus bandara).
+  const simpul = (hasil?.alatAngkut?.simpul || "Bandara").toLowerCase();
   const petunjukKota = !form.kota_tujuan
     ? "Pilih dari daftar PMK atau ketik sendiri"
     : !rute
       ? "Belum ada di tabel PMK — transport darat diisi riil bila ada"
       : rute.jenis === "ibukota"
         ? "Ibu kota provinsi — tanpa transport darat"
-        : `Transport darat PMK ${rute.asal} → ${rute.tujuan}: ${rupiah(rute.tarif)} sekali jalan${sekitar ? " (lumpsum, ganti tiket & taksi)" : ""}`;
+        : `Transport darat PMK ${rute.asal} → ${rute.tujuan}: ${rupiah(rute.tarif)} sekali jalan${sekitar ? " (lumpsum, ganti tiket & transport bandara)" : ""}`;
   const luar = form.jenis === "luar";
 
   const buatPdf = async () => {
@@ -321,7 +324,7 @@ export default function KwitansiPerdin() {
 
                 {luar ? (
                   <>
-                    <Medan label="Provinsi tujuan" petunjuk="Menentukan tarif uang harian, hotel, dan taksi">
+                    <Medan label="Provinsi tujuan" petunjuk="Menentukan tarif uang harian, hotel, dan transport bandara/stasiun">
                       <select className={kelasInput} value={form.provinsi} onChange={(e) => ubah("provinsi", e.target.value)}>
                         <option value="">— Pilih provinsi —</option>
                         {(ref?.provinsi || []).map((p) => (
@@ -350,8 +353,8 @@ export default function KwitansiPerdin() {
                       className="sm:col-span-2"
                       petunjuk={
                         alat?.kode === "dinas"
-                          ? "Tanpa tiket dan taksi — BBM, tol, dan parkir diisi riil per peserta"
-                          : "Menentukan isian tiket, taksi, dan transport darat"
+                          ? "Tanpa tiket dan transport bandara — BBM, tol, dan parkir diisi riil per peserta"
+                          : "Menentukan isian tiket, transport bandara/stasiun/terminal, dan transport darat"
                       }
                     >
                       <select className={kelasInput} value={form.alat_angkut} onChange={(e) => ubah("alat_angkut", e.target.value)}>
@@ -514,8 +517,14 @@ export default function KwitansiPerdin() {
                               />
                             </Medan>
                             <Medan
-                              label="Taksi Jakarta PP"
-                              petunjuk={bawaan && !bawaan.taksiAsal ? "Tidak otomatis untuk alat angkut/tujuan ini" : taksiJkt ? `PMK 2 × ${rupiah(taksiJkt)}` : undefined}
+                              label={`Transport ${simpul} Jakarta PP`}
+                              petunjuk={
+                                bawaan && !bawaan.taksiAsal
+                                  ? "Tidak otomatis untuk alat angkut/tujuan ini"
+                                  : taksiJkt
+                                    ? `Lumpsum PMK 2 × ${rupiah(taksiJkt)} — taksi, online, atau bus ${simpul}`
+                                    : undefined
+                              }
                             >
                               <InputRupiah
                                 value={p.taksi_asal}
@@ -524,13 +533,13 @@ export default function KwitansiPerdin() {
                               />
                             </Medan>
                             <Medan
-                              label="Taksi kota tujuan PP"
+                              label={`Transport ${simpul} kota tujuan PP`}
                               petunjuk={
                                 bawaan && !bawaan.taksiTujuan && provinsiDipilih?.taksi
                                   ? "Tidak otomatis untuk alat angkut/tujuan ini"
                                   : provinsiDipilih
                                   ? provinsiDipilih.taksi
-                                    ? `PMK 2 × ${rupiah(provinsiDipilih.taksi)}`
+                                    ? `Lumpsum PMK 2 × ${rupiah(provinsiDipilih.taksi)}`
                                     : "Belum ada di tabel PMK — isi riil"
                                   : undefined
                               }
