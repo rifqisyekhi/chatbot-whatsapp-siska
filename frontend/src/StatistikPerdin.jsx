@@ -74,18 +74,25 @@ export default function StatistikPerdin({ daftar, tahun }) {
     );
   }
 
-  const totalSemua = jenis.dalam.total + jenis.luar.total;
-
   return (
     <section className="grid lg:grid-cols-2 gap-4">
-      <Kartu judul="Biaya per bidang" sub="Perjalanan aktif, diurutkan dari terbesar">
-        <BatangMendatar
+      <Kartu judul="Porsi biaya per bidang" sub="Dari total biaya perjalanan aktif">
+        <Pie
           data={perBidang.map((g) => ({
             label: g.kunci,
             nilai: g.total,
-            labelNilai: singkat(g.total),
-            tip: [g.kunci, rupiah(g.total), `${g.perjalanan} perjalanan • ${g.peserta} peserta`],
+            warna: warnaBidang(g.kunci),
+            keterangan: `${g.perjalanan} perjalanan • ${g.peserta} peserta`,
           }))}
+        />
+      </Kartu>
+
+      <Kartu judul="Dalam kota vs luar kota" sub="Dari total biaya perjalanan aktif">
+        <Pie
+          data={[
+            { label: "Dalam kota", nilai: jenis.dalam.total, warna: WARNA[0], keterangan: `${jenis.dalam.n} perjalanan` },
+            { label: "Luar kota", nilai: jenis.luar.total, warna: WARNA[1], keterangan: `${jenis.luar.n} perjalanan` },
+          ]}
         />
       </Kartu>
 
@@ -109,25 +116,85 @@ export default function StatistikPerdin({ daftar, tahun }) {
           }))}
         />
       </Kartu>
-
-      <Kartu judul="Dalam kota vs luar kota" sub="Porsi dari total biaya">
-        <div className="grid grid-cols-2 gap-3">
-          {[
-            ["Dalam kota", jenis.dalam],
-            ["Luar kota", jenis.luar],
-          ].map(([l, j]) => (
-            <div key={l} className="rounded-2xl bg-paper border border-mist p-4">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{l}</p>
-              <p className="text-2xl font-black tabular-nums mt-1">
-                {totalSemua ? Math.round((j.total / totalSemua) * 100) : 0}%
-              </p>
-              <p className="text-xs text-slate-500 mt-1 tabular-nums">{rupiah(j.total)}</p>
-              <p className="text-xs text-slate-500 tabular-nums">{j.n} perjalanan</p>
-            </div>
-          ))}
-        </div>
-      </Kartu>
     </section>
+  );
+}
+
+// Palet kategori tervalidasi (dataviz: lolos uji buta warna antar-irisan
+// bersebelahan di permukaan putih). Warna mengikuti BIDANG, bukan urutan
+// besarnya, jadi saringan tidak mengecat ulang bidang yang tersisa.
+const WARNA = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300"];
+const URUTAN_BIDANG = ["BMN", "PTUK", "TU", "AKLAP", "PA"];
+const warnaBidang = (b) => WARNA[URUTAN_BIDANG.indexOf(b) >= 0 ? URUTAN_BIDANG.indexOf(b) : WARNA.length - 1];
+
+// Pie (donut) bagian-dari-keseluruhan: irisan dipisah celah putih 2px,
+// total di tengah, legenda selalu tampil dengan persen + rupiah (tiga warna
+// palet kontrasnya < 3:1, jadi identitas tidak boleh bergantung warna saja).
+function Pie({ data }) {
+  const { tip, tampil, sembunyi } = useTip();
+  const isi = data.filter((d) => d.nilai > 0);
+  const total = isi.reduce((a, d) => a + d.nilai, 0);
+  const R = 70;
+  const TEBAL = 26;
+  const r = R - TEBAL / 2;
+  const KELILING = 2 * Math.PI * r;
+  // Titik awal tiap irisan di sepanjang keliling lingkaran.
+  const irisan = isi.reduce((acc, d) => {
+    const awal = acc.length ? acc[acc.length - 1].awal + acc[acc.length - 1].panjang : 0;
+    return [...acc, { ...d, awal, panjang: total ? (d.nilai / total) * KELILING : 0 }];
+  }, []);
+  const persen = (n) => (total ? Math.round((n / total) * 1000) / 10 : 0);
+  const persenTeks = (n) => `${persen(n).toLocaleString("id-ID")}%`;
+
+  return (
+    <div className="relative flex flex-col sm:flex-row items-center gap-5" data-wadah-grafik>
+      <svg viewBox={`0 0 ${2 * R} ${2 * R}`} className="w-40 h-40 shrink-0 -rotate-90" role="img" aria-label={isi.map((d) => `${d.label} ${persenTeks(d.nilai)}`).join(", ")}>
+        {irisan.map(({ awal, panjang, ...d }) => {
+          const celah = isi.length > 1 ? Math.min(2, panjang / 2) : 0;
+          return (
+            <circle
+              key={d.label}
+              cx={R}
+              cy={R}
+              r={r}
+              fill="none"
+              stroke={d.warna}
+              strokeWidth={TEBAL}
+              strokeDasharray={`${Math.max(0, panjang - celah)} ${KELILING}`}
+              strokeDashoffset={-awal}
+              className="cursor-default outline-none"
+              tabIndex={0}
+              onMouseEnter={(e) => tampil(e, [d.label, `${rupiah(d.nilai)} (${persenTeks(d.nilai)})`, d.keterangan])}
+              onFocus={(e) => tampil(e, [d.label, `${rupiah(d.nilai)} (${persenTeks(d.nilai)})`, d.keterangan])}
+              onMouseLeave={sembunyi}
+              onBlur={sembunyi}
+            />
+          );
+        })}
+      </svg>
+      <div className="absolute left-0 top-0 w-40 h-40 hidden sm:flex flex-col items-center justify-center pointer-events-none">
+        <span className="text-[10px] font-bold text-slate-500 uppercase">Total</span>
+        <span className="text-sm font-black tabular-nums">{singkat(total)}</span>
+      </div>
+      <ul className="flex-1 w-full space-y-2">
+        {data.map((d) => (
+          <li key={d.label} className="flex items-start gap-2.5 text-xs">
+            <span className="mt-0.5 w-3 h-3 rounded-sm shrink-0" style={{ background: d.warna }} />
+            <span className="flex-1 min-w-0">
+              <span className="flex justify-between gap-2">
+                <span className="font-bold text-navy truncate">{d.label}</span>
+                <span className="font-black tabular-nums">{persenTeks(d.nilai)}</span>
+              </span>
+              <span className="flex justify-between gap-2 text-slate-500">
+                <span className="truncate">{d.keterangan}</span>
+                <span className="tabular-nums whitespace-nowrap">{rupiah(d.nilai)}</span>
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <Tooltip tip={tip} />
+    </div>
   );
 }
 
