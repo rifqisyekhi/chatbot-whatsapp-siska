@@ -45,11 +45,12 @@ port nginx masing-masing yang hanya membuka modul itu
 |---|---|---|
 | Presensi non ASN | (repo presensi) | `:8001` |
 | Stok ATK (katalog, kelola) | `localhost:3000/atk`, `/atk/kelola` | `:8002` |
-| Master Data Pegawai | `localhost:3000/pegawai` | `:8003` |
+| Master Data Pegawai | `localhost:3000/pegawai` | `:8006` |
 | Kendaraan Dinas (+ pemeliharaan) | `localhost:3000/kendaraan` | `:8004` |
 | Perjalanan Dinas | `localhost:3000/perjalanan-dinas` | `:8005` |
 
-Modul baru melanjutkan ke `:8006` dan seterusnya.
+Port 8003 sudah dipakai aplikasi lain di VPS. Modul baru melanjutkan ke
+`:8007` dan seterusnya (cek dulu dengan `sudo ss -tlnp | grep :80`).
 
 ## Menu 9 — Absensi Non-ASN
 

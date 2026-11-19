@@ -58,7 +58,7 @@ function proxyApi() {
   const peta = {
     '/api/barang': 8002,
     '/api/mutasi-barang': 8002,
-    '/api/pegawai': 8003,
+    '/api/pegawai': 8006,
     '/api/kendaraan': 8004,
     '/api/servis-kendaraan': 8004,
     '/api/kwitansi': 8005,

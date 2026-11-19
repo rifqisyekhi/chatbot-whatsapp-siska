@@ -15,7 +15,7 @@ import KwitansiMasuk from './KwitansiMasuk'
 //
 //   Modul                     Path                       Port VPS (nginx)
 //   Stok ATK (katalog)        /atk, /atk/kelola          8002
-//   Master Data Pegawai       /pegawai                   8003
+//   Master Data Pegawai       /pegawai                   8006
 //   Kendaraan Dinas           /kendaraan, /kendaraan/... 8004
 //   Perjalanan Dinas          /perjalanan-dinas/...      8005
 //   (Presensi non ASN: aplikasi terpisah di 8001)
