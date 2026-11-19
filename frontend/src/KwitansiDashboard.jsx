@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
+import StatistikPerdin from "./StatistikPerdin";
 
 // =========================================================
 // DASHBOARD PERJALANAN DINAS PER BIDANG
@@ -39,7 +40,10 @@ const kelasInput =
   "px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
 
 export default function KwitansiDashboard({ operator, keluar }) {
-  const admin = operator.peran === "admin";
+  // Bendahara memantau semua bidang (statistik + daftar + PDF) tanpa
+  // tombol ubah/batal/hapus; server juga menolak perubahannya.
+  const bendahara = operator.peran === "bendahara";
+  const admin = operator.peran === "admin" || bendahara; // = melihat semua bidang
   const tahunIni = Number(hariIni().slice(0, 4));
   const [daftar, setDaftar] = useState([]);
   const [memuat, setMemuat] = useState(true);
@@ -150,10 +154,11 @@ export default function KwitansiDashboard({ operator, keluar }) {
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
-                  Perjalanan Dinas {admin ? "— Semua Bidang" : `— Bidang ${operator.bidang}`}
+                  {bendahara ? "Monitoring Perjalanan Dinas" : "Perjalanan Dinas"}{" "}
+                  {admin ? "— Semua Bidang" : `— Bidang ${operator.bidang}`}
                 </h1>
                 <p className="text-xs text-slate-500 font-medium truncate">
-                  {operator.nama} • {admin ? "Admin" : "Operator"}
+                  {operator.nama} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
                 </p>
               </div>
             </div>
@@ -178,10 +183,12 @@ export default function KwitansiDashboard({ operator, keluar }) {
           ].map(([l, v]) => (
             <div key={l} className="bg-white rounded-2xl border border-mist shadow-2xs p-4">
               <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{l}</p>
-              <p className="text-xl sm:text-2xl font-black tabular-nums mt-1 truncate">{v}</p>
+              <p className="text-lg sm:text-2xl font-black tabular-nums mt-1 truncate">{v}</p>
             </div>
           ))}
         </div>
+
+        {admin && !memuat && <StatistikPerdin daftar={daftar} tahun={tahun} />}
 
         <section className="bg-white rounded-3xl border border-mist shadow-2xs p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-center gap-3 mb-4">
@@ -214,12 +221,14 @@ export default function KwitansiDashboard({ operator, keluar }) {
                 <option value="aktif">Aktif</option>
                 <option value="dibatalkan">Dibatalkan</option>
               </select>
-              <Link
-                to="/perjalanan-dinas/baru"
-                className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
-              >
-                <Plus className="w-4 h-4" /> Perjalanan baru
-              </Link>
+              {!bendahara && (
+                <Link
+                  to="/perjalanan-dinas/baru"
+                  className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
+                >
+                  <Plus className="w-4 h-4" /> Perjalanan baru
+                </Link>
+              )}
             </div>
           </div>
 
@@ -237,7 +246,11 @@ export default function KwitansiDashboard({ operator, keluar }) {
             <div className="py-16 text-center text-slate-400">
               <Plane className="w-8 h-8 mx-auto mb-2 opacity-50" />
               <p className="text-sm font-semibold">
-                {daftar.length ? "Tidak ada yang cocok dengan saringan." : "Belum ada perjalanan dinas. Klik \"Perjalanan baru\"."}
+                {daftar.length
+                  ? "Tidak ada yang cocok dengan saringan."
+                  : bendahara
+                    ? "Belum ada perjalanan dinas pada tahun ini."
+                    : "Belum ada perjalanan dinas. Klik \"Perjalanan baru\"."}
               </p>
             </div>
           ) : (
@@ -295,18 +308,22 @@ export default function KwitansiDashboard({ operator, keluar }) {
                             {d.jumlah_pembatalan > 0 && (
                               <Aksi judul="Surat pembatalan" onClick={() => suratBatal(d)} ikon={FileX2} warna="text-amber-700 hover:bg-amber-50" />
                             )}
-                            {!batalkan && (
-                              <Link to={`/perjalanan-dinas/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
-                                <Pencil className="w-4 h-4" />
-                              </Link>
+                            {!bendahara && (
+                              <>
+                                {!batalkan && (
+                                  <Link to={`/perjalanan-dinas/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
+                                    <Pencil className="w-4 h-4" />
+                                  </Link>
+                                )}
+                                {(batalkan || d.peserta_batal > 0) && (
+                                  <Aksi judul={batalkan ? "Pulihkan" : "Pulihkan peserta batal"} onClick={() => pulihkan(d)} ikon={RotateCcw} />
+                                )}
+                                {!batalkan && (
+                                  <Aksi judul="Batalkan" onClick={() => setBatal(d)} ikon={Ban} warna="text-amber-600 hover:bg-amber-50" />
+                                )}
+                                <Aksi judul="Hapus" onClick={() => hapus(d)} ikon={Trash2} warna="text-rose-500 hover:bg-rose-50" />
+                              </>
                             )}
-                            {(batalkan || d.peserta_batal > 0) && (
-                              <Aksi judul={batalkan ? "Pulihkan" : "Pulihkan peserta batal"} onClick={() => pulihkan(d)} ikon={RotateCcw} />
-                            )}
-                            {!batalkan && (
-                              <Aksi judul="Batalkan" onClick={() => setBatal(d)} ikon={Ban} warna="text-amber-600 hover:bg-amber-50" />
-                            )}
-                            <Aksi judul="Hapus" onClick={() => hapus(d)} ikon={Trash2} warna="text-rose-500 hover:bg-rose-50" />
                           </div>
                         </td>
                       </tr>

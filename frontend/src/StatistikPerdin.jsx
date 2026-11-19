@@ -1,0 +1,241 @@
+import { useMemo, useState } from "react";
+
+// =========================================================
+// STATISTIK PERJALANAN DINAS (MONITORING BENDAHARA / ADMIN)
+// =========================================================
+//
+// Dihitung dari daftar yang sudah dimuat dashboard (tahun & bidang yang
+// dipilih), hanya perjalanan berstatus aktif. Satu deret per grafik, jadi
+// satu warna (brand) tanpa legenda; nilai lengkap di tooltip, dan tabel
+// di bawah dashboard tetap jadi tampilan rincinya.
+
+const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
+const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
+
+// 12.300.000 → "12,3 jt" untuk label di ujung batang.
+function singkat(n) {
+  const v = Number(n) || 0;
+  const f = (x) => x.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+  if (v >= 1e9) return `${f(v / 1e9)} M`;
+  if (v >= 1e6) return `${f(v / 1e6)} jt`;
+  if (v >= 1e3) return `${f(v / 1e3)} rb`;
+  return String(v);
+}
+
+function kelompok(daftar, kunci) {
+  const peta = new Map();
+  for (const d of daftar) {
+    const k = kunci(d);
+    const g = peta.get(k) || { kunci: k, total: 0, perjalanan: 0, peserta: 0 };
+    g.total += Number(d.total) || 0;
+    g.perjalanan += 1;
+    g.peserta += d.jumlah_peserta || 0;
+    peta.set(k, g);
+  }
+  return [...peta.values()];
+}
+
+export default function StatistikPerdin({ daftar, tahun }) {
+  const aktif = useMemo(() => daftar.filter((d) => d.status === "aktif"), [daftar]);
+
+  const perBidang = useMemo(() => kelompok(aktif, (d) => d.bidang).sort((a, b) => b.total - a.total), [aktif]);
+
+  // Satu tahun dipilih: per bulan Jan–Des; "Semua tahun": per tahun.
+  const perWaktu = useMemo(() => {
+    if (tahun) {
+      const g = kelompok(aktif, (d) => Number(String(d.tanggal_berangkat).slice(5, 7)) - 1);
+      return BULAN.map((label, i) => ({ label, ...(g.find((x) => x.kunci === i) || { total: 0, perjalanan: 0, peserta: 0 }) }));
+    }
+    return kelompok(aktif, (d) => String(d.tanggal_berangkat).slice(0, 4))
+      .sort((a, b) => a.kunci.localeCompare(b.kunci))
+      .map((g) => ({ label: g.kunci, ...g }));
+  }, [aktif, tahun]);
+
+  const perTujuan = useMemo(
+    () =>
+      kelompok(aktif, (d) => d.kota_tujuan || "-")
+        .sort((a, b) => b.perjalanan - a.perjalanan || b.total - a.total)
+        .slice(0, 6),
+    [aktif],
+  );
+
+  const jenis = useMemo(() => {
+    const dalam = aktif.filter((d) => d.jenis === "dalam");
+    const luar = aktif.filter((d) => d.jenis === "luar");
+    const sum = (xs) => xs.reduce((a, d) => a + (Number(d.total) || 0), 0);
+    return { dalam: { n: dalam.length, total: sum(dalam) }, luar: { n: luar.length, total: sum(luar) } };
+  }, [aktif]);
+
+  if (!aktif.length) {
+    return (
+      <section className="bg-white rounded-3xl border border-mist shadow-2xs p-5 text-sm text-slate-400 font-semibold">
+        Statistik muncul setelah ada perjalanan dinas aktif {tahun ? `pada ${tahun}` : ""}.
+      </section>
+    );
+  }
+
+  const totalSemua = jenis.dalam.total + jenis.luar.total;
+
+  return (
+    <section className="grid lg:grid-cols-2 gap-4">
+      <Kartu judul="Biaya per bidang" sub="Perjalanan aktif, diurutkan dari terbesar">
+        <BatangMendatar
+          data={perBidang.map((g) => ({
+            label: g.kunci,
+            nilai: g.total,
+            labelNilai: singkat(g.total),
+            tip: [g.kunci, rupiah(g.total), `${g.perjalanan} perjalanan • ${g.peserta} peserta`],
+          }))}
+        />
+      </Kartu>
+
+      <Kartu judul={tahun ? `Biaya per bulan (${tahun})` : "Biaya per tahun"} sub="Menurut tanggal berangkat">
+        <Kolom
+          data={perWaktu.map((g) => ({
+            label: g.label,
+            nilai: g.total,
+            tip: [tahun ? `${g.label} ${tahun}` : g.label, rupiah(g.total), `${g.perjalanan} perjalanan • ${g.peserta} peserta`],
+          }))}
+        />
+      </Kartu>
+
+      <Kartu judul="Tujuan terbanyak" sub="Jumlah perjalanan, enam teratas">
+        <BatangMendatar
+          data={perTujuan.map((g) => ({
+            label: g.kunci,
+            nilai: g.perjalanan,
+            labelNilai: `${g.perjalanan}×`,
+            tip: [g.kunci, `${g.perjalanan} perjalanan • ${g.peserta} peserta`, rupiah(g.total)],
+          }))}
+        />
+      </Kartu>
+
+      <Kartu judul="Dalam kota vs luar kota" sub="Porsi dari total biaya">
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            ["Dalam kota", jenis.dalam],
+            ["Luar kota", jenis.luar],
+          ].map(([l, j]) => (
+            <div key={l} className="rounded-2xl bg-paper border border-mist p-4">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">{l}</p>
+              <p className="text-2xl font-black tabular-nums mt-1">
+                {totalSemua ? Math.round((j.total / totalSemua) * 100) : 0}%
+              </p>
+              <p className="text-xs text-slate-500 mt-1 tabular-nums">{rupiah(j.total)}</p>
+              <p className="text-xs text-slate-500 tabular-nums">{j.n} perjalanan</p>
+            </div>
+          ))}
+        </div>
+      </Kartu>
+    </section>
+  );
+}
+
+function Kartu({ judul, sub, children }) {
+  return (
+    <div className="bg-white rounded-3xl border border-mist shadow-2xs p-5">
+      <h3 className="text-sm font-extrabold">{judul}</h3>
+      <p className="text-[11px] text-slate-500 mb-4">{sub}</p>
+      {children}
+    </div>
+  );
+}
+
+// Tooltip mengikuti batang yang disorot (mouse atau fokus keyboard).
+function Tooltip({ tip }) {
+  if (!tip) return null;
+  return (
+    <div
+      className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-xl bg-navy text-white px-3 py-2 text-[11px] shadow-lg whitespace-nowrap"
+      style={{ left: tip.x, top: tip.y - 8 }}
+    >
+      <p className="font-bold">{tip.baris[0]}</p>
+      {tip.baris.slice(1).map((b) => (
+        <p key={b} className="text-white/80 tabular-nums">{b}</p>
+      ))}
+    </div>
+  );
+}
+
+function useTip() {
+  const [tip, setTip] = useState(null);
+  const tampil = (e, baris) => {
+    const wadah = e.currentTarget.closest("[data-wadah-grafik]").getBoundingClientRect();
+    const r = e.currentTarget.getBoundingClientRect();
+    setTip({ x: r.left - wadah.left + r.width / 2, y: r.top - wadah.top, baris });
+  };
+  return { tip, tampil, sembunyi: () => setTip(null) };
+}
+
+// Batang mendatar: label kiri, batang ≤ 20px dari satu garis dasar, nilai di ujung.
+function BatangMendatar({ data }) {
+  const { tip, tampil, sembunyi } = useTip();
+  const maks = Math.max(...data.map((d) => d.nilai), 1);
+  return (
+    <div className="relative space-y-2" data-wadah-grafik>
+      {data.map((d) => (
+        <div key={d.label} className="grid grid-cols-[88px_1fr] items-center gap-3">
+          <span className="text-xs font-semibold text-slate-600 truncate" title={d.label}>{d.label}</span>
+          <div
+            className="flex items-center gap-2 py-1 cursor-default outline-none"
+            tabIndex={0}
+            aria-label={d.tip.join(", ")}
+            onMouseEnter={(e) => tampil(e, d.tip)}
+            onFocus={(e) => tampil(e, d.tip)}
+            onMouseLeave={sembunyi}
+            onBlur={sembunyi}
+          >
+            <div className="h-5 rounded-r bg-brand" style={{ width: `${Math.max(1, (d.nilai / maks) * 85)}%` }} />
+            <span className="text-[11px] font-bold text-slate-600 tabular-nums whitespace-nowrap">{d.labelNilai}</span>
+          </div>
+        </div>
+      ))}
+      <Tooltip tip={tip} />
+    </div>
+  );
+}
+
+// Kolom tegak per bulan/tahun: garis bantu tipis, label nilai hanya di puncak.
+function Kolom({ data }) {
+  const { tip, tampil, sembunyi } = useTip();
+  const maks = Math.max(...data.map((d) => d.nilai), 1);
+  const iMaks = data.findIndex((d) => d.nilai === maks);
+  const TINGGI = 160;
+  return (
+    <div className="relative" data-wadah-grafik>
+      <div className="relative" style={{ height: TINGGI }}>
+        {[0.5, 1].map((t) => (
+          <div key={t} className="absolute inset-x-0 border-t border-dashed border-mist" style={{ bottom: TINGGI * t * 0.85 }} />
+        ))}
+        <div className="absolute inset-0 flex items-end gap-1 border-b border-slate-300">
+          {data.map((d, i) => (
+            <div
+              key={d.label}
+              className="flex-1 h-full flex flex-col justify-end items-center cursor-default outline-none"
+              tabIndex={0}
+              aria-label={d.tip.join(", ")}
+              onMouseEnter={(e) => tampil(e, d.tip)}
+              onFocus={(e) => tampil(e, d.tip)}
+              onMouseLeave={sembunyi}
+              onBlur={sembunyi}
+            >
+              {i === iMaks && d.nilai > 0 && (
+                <span className="text-[10px] font-bold text-slate-600 tabular-nums mb-1 whitespace-nowrap">{singkat(d.nilai)}</span>
+              )}
+              <div
+                className="w-full max-w-6 rounded-t bg-brand"
+                style={{ height: d.nilai ? `${Math.max(2, (d.nilai / maks) * 85)}%` : 0 }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="flex gap-1 mt-1.5">
+        {data.map((d) => (
+          <span key={d.label} className="flex-1 text-center text-[10px] text-slate-500">{d.label}</span>
+        ))}
+      </div>
+      <Tooltip tip={tip} />
+    </div>
+  );
+}

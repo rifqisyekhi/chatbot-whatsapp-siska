@@ -106,7 +106,7 @@ function pasangRuteKwitansi(app) {
   app.get("/api/kwitansi/perjalanan", auth.wajibLogin, async (req, res) => {
     try {
       const op = req.operator;
-      const bidang = op.peran === "admin" ? req.query.bidang || null : op.bidang;
+      const bidang = auth.lihatSemua(op) ? req.query.bidang || null : op.bidang;
       res.json(await db.daftar({ bidang, tahun: req.query.tahun || null }));
     } catch (err) {
       balasGalat(res, err, "Gagal memuat daftar perjalanan dinas");
@@ -122,7 +122,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  app.post("/api/kwitansi/perjalanan", auth.wajibLogin, async (req, res) => {
+  app.post("/api/kwitansi/perjalanan", auth.wajibLogin, auth.wajibPengubah, async (req, res) => {
     try {
       const op = req.operator;
       const isian = req.body?.isian || {};
@@ -135,7 +135,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  app.put("/api/kwitansi/perjalanan/:id", auth.wajibLogin, async (req, res) => {
+  app.put("/api/kwitansi/perjalanan/:id", auth.wajibLogin, auth.wajibPengubah, async (req, res) => {
     try {
       const baris = await ambilMilik(req, res);
       if (!baris) return;
@@ -148,7 +148,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  app.post("/api/kwitansi/perjalanan/:id/batal", auth.wajibLogin, async (req, res) => {
+  app.post("/api/kwitansi/perjalanan/:id/batal", auth.wajibLogin, auth.wajibPengubah, async (req, res) => {
     try {
       const baris = await ambilMilik(req, res);
       if (!baris) return;
@@ -195,7 +195,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  app.post("/api/kwitansi/perjalanan/:id/pulihkan", auth.wajibLogin, async (req, res) => {
+  app.post("/api/kwitansi/perjalanan/:id/pulihkan", auth.wajibLogin, auth.wajibPengubah, async (req, res) => {
     try {
       const baris = await ambilMilik(req, res);
       if (!baris) return;
@@ -211,7 +211,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  app.delete("/api/kwitansi/perjalanan/:id", auth.wajibLogin, async (req, res) => {
+  app.delete("/api/kwitansi/perjalanan/:id", auth.wajibLogin, auth.wajibPengubah, async (req, res) => {
     try {
       const baris = await ambilMilik(req, res);
       if (!baris) return;

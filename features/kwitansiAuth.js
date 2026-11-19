@@ -78,13 +78,22 @@ function daftarAdmin() {
     .filter(Boolean);
 }
 
-// Peran pegawai di kwitansi, atau null kalau bukan operator/admin.
+// Bendahara: memantau perjalanan dinas semua bidang (daftar, statistik,
+// PDF) tanpa bisa membuat, mengubah, membatalkan, atau menghapus.
+// KWITANSI_BENDAHARA = daftar NIP/nomor WA dipisah koma.
+function daftarBendahara() {
+  return String(process.env.KWITANSI_BENDAHARA || "199611272018121001")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+// Peran pegawai di kwitansi, atau null kalau tidak punya akses.
 function peranPegawai(p) {
-  const admin = daftarAdmin();
   const nip = String(p.nip || "").replace(/\s+/g, "");
-  if (admin.some((a) => a.replace(/\s+/g, "") === nip || nomorBaku(a) === nomorBaku(p.no_wa))) {
-    return { peran: "admin", bidang: null };
-  }
+  const cocok = (daftar) => daftar.some((a) => a.replace(/\s+/g, "") === nip || nomorBaku(a) === nomorBaku(p.no_wa));
+  if (cocok(daftarAdmin())) return { peran: "admin", bidang: null };
+  if (cocok(daftarBendahara())) return { peran: "bendahara", bidang: null };
   const op = OPERATOR.find((o) => rapat(o.nama) === rapat(p.nama));
   return op ? { peran: "operator", bidang: op.bidang } : null;
 }
@@ -135,7 +144,16 @@ function wajibLogin(req, res, next) {
   next();
 }
 
-// Operator hanya boleh menyentuh bidangnya; admin semua.
-const bolehBidang = (op, bidang) => op.peran === "admin" || op.bidang === bidang;
+// Admin dan bendahara melihat semua bidang; operator hanya bidangnya.
+const lihatSemua = (op) => op.peran === "admin" || op.peran === "bendahara";
+const bolehBidang = (op, bidang) => lihatSemua(op) || op.bidang === bidang;
 
-module.exports = { OPERATOR, BIDANG, login, wajibLogin, bolehBidang, buatToken, nomorBaku };
+// Middleware untuk rute yang mengubah data: bendahara hanya memantau.
+function wajibPengubah(req, res, next) {
+  if (req.operator?.peran === "bendahara") {
+    return res.status(403).json({ error: "Akun bendahara hanya untuk memantau, tidak bisa mengubah data." });
+  }
+  next();
+}
+
+module.exports = { OPERATOR, BIDANG, login, wajibLogin, wajibPengubah, lihatSemua, bolehBidang, buatToken, nomorBaku };
