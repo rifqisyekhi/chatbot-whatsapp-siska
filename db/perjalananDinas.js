@@ -22,7 +22,11 @@ const KOLOM_RINGKAS = `
   jsonb_array_length(pembatalan) AS jumlah_pembatalan,
   (SELECT COALESCE(SUM(jsonb_array_length(e->'peserta')), 0)::int
      FROM jsonb_array_elements(pembatalan) e
-    WHERE NOT COALESCE((e->>'seluruh')::boolean, false)) AS peserta_batal
+    WHERE NOT COALESCE((e->>'seluruh')::boolean, false)) AS peserta_batal,
+  -- Nama & jabatan peserta untuk pop up di daftar. nama_peserta tidak bisa
+  -- dipecah per koma karena gelar juga memakai koma ("Ahmad, S.E.").
+  (SELECT COALESCE(jsonb_agg(jsonb_build_object('nama', p->>'nama', 'jabatan', COALESCE(p->>'jabatan', ''))), '[]'::jsonb)
+     FROM jsonb_array_elements(COALESCE(isian->'peserta', '[]'::jsonb)) p) AS daftar_peserta
 `;
 
 let siap = false;

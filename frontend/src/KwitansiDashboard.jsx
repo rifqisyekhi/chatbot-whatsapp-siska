@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   Plane,
   X,
+  Users,
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
 import StatistikPerdin from "./StatistikPerdin";
@@ -54,6 +55,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
   const [bidang, setBidang] = useState("");
   const [daftarBidang, setDaftarBidang] = useState([]);
   const [batal, setBatal] = useState(null); // baris yang sedang dibatalkan
+  const [lihatPeserta, setLihatPeserta] = useState(null); // baris yang daftar pesertanya dibuka
   const [toast, setToast] = useState(null);
 
   const kabari = (text, type = "success") => {
@@ -154,8 +156,9 @@ export default function KwitansiDashboard({ operator, keluar }) {
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
-                  {bendahara ? "Monitoring Perjalanan Dinas" : "Perjalanan Dinas"}{" "}
-                  {admin ? "— Semua Bidang" : `— Bidang ${operator.bidang}`}
+                  {bendahara
+                    ? "Monitoring Perjalanan Dinas"
+                    : `Perjalanan Dinas ${admin ? "— Semua Bidang" : `— Bidang ${operator.bidang}`}`}
                 </h1>
                 <p className="text-xs text-slate-500 font-medium truncate">
                   {operator.nama} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
@@ -282,9 +285,16 @@ export default function KwitansiDashboard({ operator, keluar }) {
                           <p className="text-[11px] text-slate-500">{d.jenis === "luar" ? d.provinsi : "Dalam kota"}</p>
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap">{rentang(d.tanggal_berangkat, d.tanggal_kembali)}</td>
-                        <td className="py-3 px-3 max-w-[220px]">
-                          <p className="font-semibold">{d.jumlah_peserta} orang</p>
-                          <p className="text-[11px] text-slate-500 truncate" title={d.nama_peserta}>{d.nama_peserta}</p>
+                        <td className="py-3 px-3">
+                          <button
+                            type="button"
+                            onClick={() => setLihatPeserta(d)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-mist bg-paper hover:bg-mist font-semibold whitespace-nowrap cursor-pointer"
+                            title="Lihat nama peserta"
+                          >
+                            <Users className="w-3.5 h-3.5 text-brand" />
+                            {d.jumlah_peserta} orang
+                          </button>
                         </td>
                         <td className="py-3 px-3 text-right tabular-nums font-bold whitespace-nowrap">{rupiah(d.total)}</td>
                         <td className="py-3 px-3">
@@ -336,6 +346,8 @@ export default function KwitansiDashboard({ operator, keluar }) {
         </section>
       </main>
 
+      {lihatPeserta && <ModalPeserta baris={lihatPeserta} tutup={() => setLihatPeserta(null)} />}
+
       {batal && (
         <ModalBatal
           baris={batal}
@@ -363,6 +375,56 @@ function Aksi({ judul, onClick, ikon: Ikon, warna = "text-slate-600 hover:bg-pap
     <button type="button" title={judul} onClick={onClick} className={`p-2 rounded-lg cursor-pointer ${warna}`}>
       <Ikon className="w-4 h-4" />
     </button>
+  );
+}
+
+// Pop up daftar nama peserta satu perjalanan (dibuka dari kolom Peserta).
+function ModalPeserta({ baris, tutup }) {
+  useEffect(() => {
+    const tombol = (e) => e.key === "Escape" && tutup();
+    document.addEventListener("keydown", tombol);
+    return () => document.removeEventListener("keydown", tombol);
+  }, [tutup]);
+  const daftar = Array.isArray(baris.daftar_peserta) ? baris.daftar_peserta : [];
+  return (
+    <div className="fixed inset-0 z-40 bg-navy/40 flex items-center justify-center px-4 py-6" onClick={tutup}>
+      <div
+        role="dialog"
+        aria-label="Daftar peserta"
+        className="w-full max-w-sm max-h-full overflow-y-auto bg-white rounded-3xl shadow-xl p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="min-w-0">
+            <h2 className="text-base font-extrabold">Peserta ({daftar.length} orang)</h2>
+            <p className="text-xs text-slate-500 mt-0.5 truncate">
+              {baris.maksud} • {baris.kota_tujuan}
+            </p>
+          </div>
+          <button onClick={tutup} className="p-1.5 rounded-lg hover:bg-paper cursor-pointer" title="Tutup">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+        <ol className="space-y-2">
+          {daftar.map((p, i) => (
+            <li key={i} className="flex gap-3 rounded-xl border border-mist px-3 py-2.5">
+              <span className="w-6 h-6 rounded-lg bg-paper text-xs font-black text-brand flex items-center justify-center shrink-0">
+                {i + 1}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold">{p.nama}</span>
+                {p.jabatan && <span className="block text-[11px] text-slate-500">{p.jabatan}</span>}
+              </span>
+            </li>
+          ))}
+        </ol>
+        {baris.peserta_batal > 0 && (
+          <p className="mt-3 text-[11px] font-semibold text-amber-600">
+            {baris.peserta_batal} peserta lain sudah dibatalkan (lihat surat pembatalan).
+          </p>
+        )}
+      </div>
+    </div>
   );
 }
 
