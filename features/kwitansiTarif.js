@@ -194,10 +194,10 @@ function hitungKegiatan(input = {}) {
   // walau kegiatannya di kabupaten (Jakarta - Denpasar, bukan - Tabanan).
   const kotaTujuanTeks = rute?.tujuan || teks(input.kota_tujuan) || provinsi.nama;
 
-  // Kosong = otomatis: pesawat, atau kendaraan umum ke kota sekitar Jakarta.
-  const alat =
-    ALAT_ANGKUT.find((a) => a.kode === input.alat_angkut) ||
-    ALAT_ANGKUT.find((a) => a.kode === (sekitar ? "umum" : "pesawat"));
+  // Bawaan pesawat. Ke kota sekitar Jakarta tidak ada penerbangan, jadi
+  // pesawat (atau kosong) di sana berarti kendaraan umum.
+  const kodeAlat = ALAT_ANGKUT.some((a) => a.kode === input.alat_angkut) ? input.alat_angkut : "pesawat";
+  const alat = ALAT_ANGKUT.find((a) => a.kode === (sekitar && kodeAlat === "pesawat" ? "umum" : kodeAlat));
   const kotaBandara = alat.darat && rute?.jenis === "provinsi" ? rute.asal : kotaTujuanTeks;
 
   // Dalam kota sampai dengan 8 jam: hanya biaya transport, tanpa uang

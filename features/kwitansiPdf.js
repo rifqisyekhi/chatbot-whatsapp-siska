@@ -95,6 +95,15 @@ function barisLabel(doc, label, isi, y, { xLabel, xTitik, xIsi, lebarIsi: w, teb
 }
 
 // Blok tanda tangan: beberapa baris judul, ruang kosong, nama bergaris bawah, NIP.
+// Ukuran huruf terbesar (≤ maks) supaya semua teks muat satu baris di lebar.
+function ukuranSatuBaris(doc, daftar, lebar, font, maks, min = 6) {
+  doc.font(font);
+  let u = maks;
+  while (u > min && daftar.some((t) => doc.fontSize(u).widthOfString(String(t || "")) > lebar)) u -= 0.25;
+  doc.fontSize(HURUF);
+  return u;
+}
+
 // Setiap baris judul memakai tinggi satu baris tetap (judul kosong pun),
 // supaya blok yang berdampingan punya nama di ketinggian yang sama.
 function blokTtd(doc, {
@@ -398,12 +407,23 @@ function halamanKwitansi(doc, k, p) {
   garisGanda(doc, x, y, w);
   y += 12;
 
-  const kol = w / 3;
-  const ukuranNama = 8.5;
-  tulis(doc, `Jakarta, ${tanggalPanjang(k.tanggalKembali)}`, x + 2 * kol, y, { lebar: kol, align: "center" });
-  blokTtd(doc, { x, y, lebar: kol, ukuranNama, tebalNama: false, judul: ["Setuju dibayar", "Pejabat Pembuat Komitmen", "Biro Keuangan Kemnaker"], ...k.pejabat.ppk });
-  blokTtd(doc, { x: x + kol, y, lebar: kol, ukuranNama, tebalNama: false, judul: ["Lunas dibayar", "Bendahara Pengeluaran", "Setjen Kemnaker"], ...k.pejabat.bendahara });
-  blokTtd(doc, { x: x + 2 * kol, y, lebar: kol, ukuranNama, tebalNama: false, judul: ["", "Yang Menerima,", ""], nama: p.nama, nip: p.nip });
+  // Nama seukuran NIP dan tetap satu baris. Lebar ketiga kolom mengikuti
+  // isinya (nama PPK biasanya paling panjang); baru kalau tetap tidak muat,
+  // ketiga nama dikecilkan bersama supaya sejajar.
+  const blok = [
+    { judul: ["Setuju dibayar", "Pejabat Pembuat Komitmen", "Biro Keuangan Kemnaker"], ...k.pejabat.ppk },
+    { judul: ["Lunas dibayar", "Bendahara Pengeluaran", "Setjen Kemnaker"], ...k.pejabat.bendahara },
+    { judul: ["", "Yang Menerima,", ""], nama: p.nama, nip: p.nip },
+  ];
+  doc.font(ISI).fontSize(HURUF);
+  const butuh = blok.map((b) => Math.max(...[...b.judul, b.nama, `NIP. ${b.nip}`].map((t) => doc.widthOfString(String(t || "")))) + 8);
+  const sisa = w - butuh.reduce((a, b) => a + b, 0);
+  const total = butuh.reduce((a, b) => a + b, 0);
+  const lebarKol = sisa >= 0 ? butuh.map((b) => b + sisa / 3) : butuh.map((b) => (b / total) * w);
+  const ukuranNama = Math.min(...blok.map((b, i) => ukuranSatuBaris(doc, [b.nama], lebarKol[i] - 8, ISI, HURUF)));
+  const xKol = [x, x + lebarKol[0], x + lebarKol[0] + lebarKol[1]];
+  tulis(doc, `Jakarta, ${tanggalPanjang(k.tanggalKembali)}`, xKol[2], y, { lebar: lebarKol[2], align: "center" });
+  blok.forEach((b, i) => blokTtd(doc, { x: xKol[i], y, lebar: lebarKol[i], ukuranNama: sisa >= 0 ? HURUF : ukuranNama, tebalNama: false, ...b }));
 }
 
 function halamanRincian(doc, k, p) {

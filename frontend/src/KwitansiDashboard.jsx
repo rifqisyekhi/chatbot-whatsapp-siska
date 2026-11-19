@@ -197,7 +197,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 className={kelasInput + " w-full pl-10"}
-                placeholder="Cari maksud, tujuan, peserta…"
+                placeholder="Cari kegiatan, tujuan, peserta…"
                 value={cari}
                 onChange={(e) => setCari(e.target.value)}
               />
@@ -254,7 +254,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-mist">
                     {admin && <th className="py-2.5 px-3 font-bold">Bidang</th>}
-                    <th className="py-2.5 px-3 font-bold">Maksud</th>
+                    <th className="py-2.5 px-3 font-bold">Kegiatan</th>
                     <th className="py-2.5 px-3 font-bold">Tujuan</th>
                     <th className="py-2.5 px-3 font-bold">Tanggal</th>
                     <th className="py-2.5 px-3 font-bold">Peserta</th>
@@ -270,7 +270,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
                       <tr key={d.id} className={`border-b border-mist/70 align-top ${batalkan ? "bg-slate-50/70 text-slate-400" : ""}`}>
                         {admin && <td className="py-3 px-3 font-bold">{d.bidang}</td>}
                         <td className="py-3 px-3 max-w-[280px]">
-                          <p className={`font-semibold line-clamp-2 ${batalkan ? "line-through" : ""}`}>{d.maksud || "(tanpa maksud)"}</p>
+                          <p className={`font-semibold line-clamp-2 ${batalkan ? "line-through" : ""}`}>{d.maksud || "(tanpa nama kegiatan)"}</p>
                         </td>
                         <td className="py-3 px-3">
                           <p className="font-semibold">{d.kota_tujuan}</p>

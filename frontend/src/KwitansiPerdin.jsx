@@ -206,7 +206,13 @@ export default function KwitansiPerdin({ operator }) {
   const kotaPmk = ref?.kotaTujuan?.[form.provinsi] || [];
   // Rute PMK hasil hitungan server untuk kota yang diketik (lihat kwitansiTransportDarat.js).
   const rute = hasil?.rute || null;
-  const sekitar = rute?.jenis === "sekitar";
+  // Kota sekitar Jakarta (lumpsum PMK). Sebelum server selesai menghitung
+  // (mis. peserta belum diisi), ditebak dari daftar kota PMK provinsi itu.
+  const intiKota = (s) => String(s || "").toLowerCase().replace(/^(kota|kab\.?|kabupaten)\s+/, "").trim();
+  const sekitar = rute
+    ? rute.jenis === "sekitar"
+    : !!form.kota_tujuan &&
+      kotaPmk.some((k) => /jakarta/i.test(k.keterangan) && intiKota(k.nama) === intiKota(form.kota_tujuan));
   // Alat angkut yang berlaku (hasil server, termasuk pilihan "otomatis")
   // dan nilai bawaan isian biaya per peserta.
   const alat = ref?.alatAngkut?.find((a) => a.kode === hasil?.alatAngkut?.kode);
@@ -416,9 +422,13 @@ export default function KwitansiPerdin({ operator }) {
                           : undefined
                       }
                     >
-                      <select className={kelasInput} value={form.alat_angkut} onChange={(e) => ubah("alat_angkut", e.target.value)}>
-                        <option value="">Otomatis ({sekitar ? "kendaraan umum" : "pesawat"})</option>
-                        {(ref?.alatAngkut || []).map((a) => (
+                      <select
+                        className={kelasInput}
+                        // Bawaan pesawat; ke kota sekitar Jakarta server memakai kendaraan umum.
+                        value={sekitar && (form.alat_angkut || "pesawat") === "pesawat" ? "umum" : form.alat_angkut || "pesawat"}
+                        onChange={(e) => ubah("alat_angkut", e.target.value)}
+                      >
+                        {(ref?.alatAngkut || []).filter((a) => !(sekitar && a.kode === "pesawat")).map((a) => (
                           <option key={a.kode} value={a.kode}>{a.label}</option>
                         ))}
                       </select>
