@@ -39,7 +39,6 @@ const FORM_AWAL = () => ({
   jenis: "dalam",
   sampai_8_jam: false,
   akun: "",
-  nomor_nota_dinas: "",
   maksud: "",
   tempat: "",
   provinsi: "",
@@ -343,7 +342,7 @@ export default function KwitansiPerdin({ operator }) {
 
               <div className="grid sm:grid-cols-2 gap-4">
                 {admin && (
-                  <Medan label="Bidang" petunjuk={baru ? undefined : "Bidang tidak bisa diubah setelah disimpan"}>
+                  <Medan label="Bidang" className="sm:col-span-2" petunjuk={baru ? undefined : "Bidang tidak bisa diubah setelah disimpan"}>
                     <select className={kelasInput} value={bidang} disabled={!baru} onChange={(e) => setBidang(e.target.value)}>
                       <option value="">— Pilih bidang —</option>
                       {(ref?.bidang || []).map((b) => (
@@ -352,9 +351,6 @@ export default function KwitansiPerdin({ operator }) {
                     </select>
                   </Medan>
                 )}
-                <Medan label="Nomor nota dinas" className={admin ? "" : "sm:col-span-2"} petunjuk="Boleh dikosongkan">
-                  <input className={kelasInput} value={form.nomor_nota_dinas} onChange={(e) => ubah("nomor_nota_dinas", e.target.value)} />
-                </Medan>
                 <Medan label="Akun" className="sm:col-span-2">
                   <select className={kelasInput} value={form.akun} onChange={(e) => ubah("akun", e.target.value)}>
                     <option value="">— Pilih akun —</option>

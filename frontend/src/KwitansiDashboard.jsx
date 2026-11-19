@@ -24,7 +24,7 @@ import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
 // DASHBOARD PERJALANAN DINAS PER BIDANG
 // =========================================================
 //
-// Daftar nota dinas bidang operator yang masuk (admin: semua bidang),
+// Daftar perjalanan dinas bidang operator yang masuk (admin: semua bidang),
 // dengan aksi buka/ubah, PDF, batalkan/pulihkan, dan hapus.
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
@@ -90,7 +90,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
     return daftar.filter(
       (d) =>
         (status === "semua" || d.status === status) &&
-        (!c || [d.maksud, d.kota_tujuan, d.provinsi, d.nama_peserta, d.nomor_nota_dinas].join(" ").toLowerCase().includes(c)),
+        (!c || [d.maksud, d.kota_tujuan, d.provinsi, d.nama_peserta].join(" ").toLowerCase().includes(c)),
     );
   }, [daftar, status, cari]);
 
@@ -197,7 +197,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 className={kelasInput + " w-full pl-10"}
-                placeholder="Cari maksud, tujuan, peserta, nomor nota dinas…"
+                placeholder="Cari maksud, tujuan, peserta…"
                 value={cari}
                 onChange={(e) => setCari(e.target.value)}
               />
@@ -254,7 +254,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-slate-500 border-b border-mist">
                     {admin && <th className="py-2.5 px-3 font-bold">Bidang</th>}
-                    <th className="py-2.5 px-3 font-bold">Nota dinas / maksud</th>
+                    <th className="py-2.5 px-3 font-bold">Maksud</th>
                     <th className="py-2.5 px-3 font-bold">Tujuan</th>
                     <th className="py-2.5 px-3 font-bold">Tanggal</th>
                     <th className="py-2.5 px-3 font-bold">Peserta</th>
@@ -270,7 +270,6 @@ export default function KwitansiDashboard({ operator, keluar }) {
                       <tr key={d.id} className={`border-b border-mist/70 align-top ${batalkan ? "bg-slate-50/70 text-slate-400" : ""}`}>
                         {admin && <td className="py-3 px-3 font-bold">{d.bidang}</td>}
                         <td className="py-3 px-3 max-w-[280px]">
-                          {d.nomor_nota_dinas && <p className="text-[11px] font-bold text-brand truncate">{d.nomor_nota_dinas}</p>}
                           <p className={`font-semibold line-clamp-2 ${batalkan ? "line-through" : ""}`}>{d.maksud || "(tanpa maksud)"}</p>
                         </td>
                         <td className="py-3 px-3">
@@ -374,7 +373,7 @@ function ModalBatal({ baris, tutup, selesai }) {
     alasan: "",
     tanggal: hariIni(),
     nomor_pernyataan: "",
-    nomor_surat_tugas: baris.nomor_nota_dinas || "",
+    nomor_surat_tugas: "",
     tanggal_surat_tugas: "",
     uraian_biaya: "transport berupa tiket pesawat",
     sifat_biaya: "seluruhnya",

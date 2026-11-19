@@ -304,7 +304,6 @@ function hitungKegiatan(input = {}) {
     tempat: teks(input.tempat),
     kotaAsal: KOTA_ASAL,
     nomorSpd: teks(input.nomor_spd),
-    nomorNotaDinas: teks(input.nomor_nota_dinas),
     noBku: teks(input.no_bku),
     tanggalSpd: tanggalSah(input.tanggal_spd) ? input.tanggal_spd : input.tanggal_berangkat,
     tanggalBerangkat: input.tanggal_berangkat,
