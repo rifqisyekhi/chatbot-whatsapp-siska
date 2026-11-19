@@ -519,7 +519,7 @@ export default function KwitansiPerdin({ operator }) {
 
                       <div className="grid sm:grid-cols-2 gap-3">
                         {p.luar_biro ? (
-                          <Medan label="Nama lengkap dan gelar">
+                          <Medan label="Nama lengkap">
                             <input className={kelasInput} value={p.nama} onChange={(e) => ubahPeserta(i, "nama", e.target.value)} />
                           </Medan>
                         ) : (
