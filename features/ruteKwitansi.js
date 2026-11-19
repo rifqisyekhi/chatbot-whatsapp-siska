@@ -28,7 +28,10 @@ function pasangRuteKwitansi(app) {
     res.status(500).json({ error: umum });
   };
 
-  const kirimPdf = (res, kegiatan, awalan = "Kwitansi") => {
+  // `req` memberi nama operator untuk tanda tangan "Pembuat daftar"
+  // pada nominatif kota sekitar Jakarta.
+  const kirimPdf = (req, res, kegiatan, awalan = "Kwitansi") => {
+    kegiatan.pembuat = { nama: req.operator?.nama || "", nip: req.operator?.nip || "" };
     const nama = `${awalan}_${kegiatan.kotaTujuan}_${kegiatan.tanggalBerangkat}.pdf`.replace(/[^\w.-]+/g, "_");
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `inline; filename="${nama}"`);
@@ -83,7 +86,7 @@ function pasangRuteKwitansi(app) {
     } catch (err) {
       return balasGalat(res, err, "Gagal menghitung kwitansi");
     }
-    kirimPdf(res, kegiatan);
+    kirimPdf(req, res, kegiatan);
   });
 
   // ---------- Perjalanan dinas tersimpan ----------
@@ -217,7 +220,7 @@ function pasangRuteKwitansi(app) {
     } catch (err) {
       return balasGalat(res, err, "Gagal menyusun PDF perjalanan dinas");
     }
-    kirimPdf(res, kegiatan);
+    kirimPdf(req, res, kegiatan);
   });
 
   // Surat Pernyataan Pembatalan (+ Pembebanan Biaya bila ada biaya yang

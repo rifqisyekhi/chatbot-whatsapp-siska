@@ -234,6 +234,193 @@ function halamanNominatif(doc, k) {
 }
 
 // Bingkai tipis sekeliling halaman, seperti cetakan lembar NOMI.
+// =========================================================
+// NOMINATIF LUAR KOTA (FORMAT "NOMI" TU)
+// =========================================================
+//
+// Meniru lembar NOMINATIF berkas NOMI yang dipakai TU, dua varian:
+//   - Kota sekitar Jakarta (NOMI BEKASI): uang harian (tarif, jumlah),
+//     representasi bila ada, dan transport lumpsum PMK (vol, tarif, jumlah).
+//   - Luar kota lainnya (NOMI SOLO): tujuan, uang harian dan representasi
+//     (vol, tarif, jumlah), taksi kota tujuan, taksi Jakarta, transport
+//     (tiket + darat), penginapan (vol, tarif, jumlah).
+// Ditandatangani PPK ("Setuju dibayar") dan operator pembuat daftar.
+// Dalam kota tetap memakai halamanNominatif() umum.
+
+const KUNCI_SEKITAR = ["harian", "representasi", "darat"];
+
+function nominatifSekitar(k) {
+  return k.rute?.jenis === "sekitar" && k.peserta.every((p) => p.rincian.every((r) => KUNCI_SEKITAR.includes(r.kunci)));
+}
+
+// Kolom: { judul, lebar (relatif), align, nilai(p, i), bentuk: "rp" | "angka" | "teks", total }
+function kolomNominatifNomi(k) {
+  const ambil = (p, kunci) => p.rincian.find((r) => r.kunci === kunci);
+  const jml = (p, ...kunci) => p.rincian.filter((r) => kunci.includes(r.kunci)).reduce((a, r) => a + r.jumlah, 0);
+  const adaRep = k.peserta.some((p) => ambil(p, "representasi"));
+  const no = { judul: "NO.", lebar: 3.5, align: "center", nilai: (p, i) => String(i + 1), bentuk: "teks" };
+  const nama = { judul: "N A M A", lebar: 20, align: "left", nilai: (p) => p.nama, bentuk: "teks" };
+  const jumlah = { judul: "JUMLAH", lebar: 10, nilai: (p) => p.total, bentuk: "rp", total: true };
+  const ttd = { judul: "Tanda Terima", lebar: 7, align: "left", nilai: () => "", bentuk: "teks" };
+
+  if (nominatifSekitar(k)) {
+    return [
+      no, nama,
+      { judul: "", lebar: 9.5, align: "left", nilai: () => lamaHari(k.hari), bentuk: "teks" },
+      { judul: "UANG HARIAN", lebar: 10, nilai: (p) => ambil(p, "harian")?.tarif || 0, bentuk: "angka" },
+      { judul: "UANG HARIAN", lebar: 10, nilai: (p) => jml(p, "harian"), bentuk: "rp", total: true },
+      ...(adaRep
+        ? [
+            { judul: "REPRESENTATIF", lebar: 9, nilai: (p) => ambil(p, "representasi")?.tarif || 0, bentuk: "rp" },
+            { judul: "REPRESENTATIF", lebar: 9, nilai: (p) => jml(p, "representasi"), bentuk: "rp", total: true },
+          ]
+        : []),
+      { judul: "TRANSPORT", lebar: 7, align: "center", nilai: (p) => String(ambil(p, "darat")?.volume || 0), bentuk: "teks" },
+      { judul: "TRANSPORT", lebar: 9, nilai: (p) => ambil(p, "darat")?.tarif || 0, bentuk: "rp" },
+      { judul: "TRANSPORT", lebar: 9, nilai: (p) => jml(p, "darat"), bentuk: "angka", total: true },
+      { ...jumlah, lebar: 12 }, ttd,
+    ];
+  }
+
+  // Taksi kota tujuan diberi nama kotanya, seperti "TAKSI Surakarta".
+  const ketTaksi = k.peserta.flatMap((p) => p.rincian).find((r) => r.kunci === "taksiTujuan")?.keterangan;
+  const kotaTaksi = (ketTaksi || k.kotaTujuan).replace(/\s*PP$/, "").replace(/^(Kota|Kab\.?|Kabupaten)\s+/i, "");
+  const volume = (kunci) => (p) => (ambil(p, kunci) ? String(ambil(p, kunci).volume) : "");
+  return [
+    no, nama,
+    { judul: "TUJUAN", lebar: 9, align: "left", nilai: () => k.tempat || k.kotaTujuan, bentuk: "teks" },
+    { judul: "UANG HARIAN", lebar: 5, align: "center", nilai: volume("harian"), bentuk: "teks" },
+    { judul: "UANG HARIAN", lebar: 7, nilai: (p) => ambil(p, "harian")?.tarif || 0, bentuk: "angka" },
+    { judul: "UANG HARIAN", lebar: 8, nilai: (p) => jml(p, "harian"), bentuk: "rp", total: true },
+    { judul: "Representatif", lebar: 5, align: "center", nilai: volume("representasi"), bentuk: "teks" },
+    { judul: "Representatif", lebar: 7, nilai: (p) => ambil(p, "representasi")?.tarif || 0, bentuk: "rp" },
+    { judul: "Representatif", lebar: 7, nilai: (p) => jml(p, "representasi"), bentuk: "rp", total: true },
+    { judul: `TAKSI ${kotaTaksi}`, lebar: 7.5, nilai: (p) => jml(p, "taksiTujuan"), bentuk: "angka", total: true },
+    { judul: "TAKSI Jakarta", lebar: 7.5, nilai: (p) => jml(p, "taksiAsal"), bentuk: "rp", total: true },
+    { judul: "TRANSPORT", lebar: 8, nilai: (p) => jml(p, "tiket", "darat"), bentuk: "angka", total: true },
+    { judul: "PENGINAPAN", lebar: 5.5, align: "center", nilai: volume("penginapan"), bentuk: "teks" },
+    { judul: "PENGINAPAN", lebar: 7.5, nilai: (p) => ambil(p, "penginapan")?.tarif || 0, bentuk: "rp" },
+    { judul: "PENGINAPAN", lebar: 7.5, nilai: (p) => jml(p, "penginapan"), bentuk: "rp", total: true },
+    jumlah, ttd,
+  ];
+}
+
+function halamanNominatifNomi(doc, k) {
+  const halaman = () => doc.addPage({ size: "A4", layout: "landscape", margins: { top: 30, bottom: 30, left: 24, right: 24 } });
+  halaman();
+  const x = doc.page.margins.left;
+  const w = lebarIsi(doc);
+  const kolom = kolomNominatifNomi(k);
+  const rapat = kolom.length > 12;
+  const huruf = rapat ? 7.5 : 9;
+
+  // Kepala: uraian di kanan, SPD dan Akun di kiri.
+  const xUraian = x + w * 0.4;
+  doc.font(TEBAL).fontSize(10).text("Daftar Nominatif:", x + w * 0.26, 32, { width: w * 0.14 - 4, align: "right" });
+  doc.font(ISI).fontSize(11).text(untukPembayaran(k), xUraian, 30, { width: x + w - xUraian, align: "justify" });
+  let y = Math.max(doc.y + 10, 96);
+  doc.font(TEBAL).fontSize(10);
+  doc.text("SPD", x, y - 32, { lineBreak: false });
+  doc.text(`:  ${tanggalPanjang(k.tanggalSpd)}`, x + 34, y - 32, { lineBreak: false });
+  doc.text("Akun", x, y - 17, { lineBreak: false });
+  doc.text(`:  ${k.akun.kode}`, x + 34, y - 17, { lineBreak: false });
+
+  const skala = w / kolom.reduce((a, c) => a + c.lebar, 0);
+  const xs = kolom.reduce((a, c) => [...a, a[a.length - 1] + c.lebar * skala], [x]);
+
+  const isiSel = (c, nilai, i, yy, h, tebal = false) => {
+    const x0 = xs[i] + 3;
+    const lebar = xs[i + 1] - xs[i] - 6;
+    doc.font(tebal ? TEBAL : ISI).fontSize(huruf);
+    if (c.bentuk === "teks") {
+      // Teks panjang (nama, tujuan) boleh dua baris, ditengahkan tegak.
+      const isi = String(nilai ?? "");
+      const th = Math.min(h - 2, doc.heightOfString(isi, { width: lebar }));
+      doc.text(isi, x0, yy + (h - th) / 2, { width: lebar, align: c.align || "left", height: h - 2, ellipsis: true });
+      return;
+    }
+    const ty = yy + (h - doc.currentLineHeight()) / 2;
+    const teks = nilai ? angka(nilai) : "-";
+    // "Rp" di kiri sel hanya kalau muat berdampingan dengan angkanya.
+    if (c.bentuk === "rp" && doc.widthOfString(`Rp ${teks}`) <= lebar) doc.text("Rp", x0, ty, { lineBreak: false });
+    doc.text(teks, x0, ty, { width: lebar, align: "right", lineBreak: false });
+  };
+
+  const kepalaTabel = () => {
+    const tKepala = 28;
+    doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+    kolom.forEach((c, i) => {
+      const lebar = xs[i + 1] - xs[i] - 4;
+      // Huruf dikecilkan sampai kata terpanjang muat (tanpa memotong kata).
+      let ukuran = rapat ? 7.5 : 8.5;
+      doc.font(TEBAL).fontSize(ukuran);
+      const kataTerpanjang = () => Math.max(...c.judul.split(/\s+/).map((kata) => doc.widthOfString(kata)), 0);
+      while (ukuran > 5 && kataTerpanjang() > lebar) doc.fontSize((ukuran -= 0.5));
+      const th = doc.heightOfString(c.judul, { width: lebar, align: "center" });
+      doc.text(c.judul, xs[i] + 2, y + (tKepala - th) / 2 + 1, { width: lebar, align: "center" });
+    });
+    y += tKepala;
+    doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+    return y - tKepala;
+  };
+  let yTabel = kepalaTabel();
+  const tutupKolom = (yAkhir) => xs.forEach((xx) => doc.lineWidth(0.6).moveTo(xx, yTabel).lineTo(xx, yAkhir).stroke());
+
+  // Isi: garis antarbaris putus-putus seperti cetakan Excel.
+  const tBaris = 25;
+  k.peserta.forEach((p, i) => {
+    if (y + tBaris > doc.page.height - 150) {
+      doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+      tutupKolom(y);
+      halaman();
+      y = doc.page.margins.top;
+      yTabel = kepalaTabel();
+    }
+    kolom.forEach((c, j) => isiSel(c, c.nilai(p, i), j, y, tBaris));
+    y += tBaris;
+    if (i < k.peserta.length - 1) {
+      doc.save().lineWidth(0.5).dash(2, { space: 2 }).moveTo(x, y).lineTo(x + w, y).stroke().undash().restore();
+    }
+  });
+
+  // Baris jumlah dengan garis ganda di atas.
+  doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+  doc.lineWidth(0.5).moveTo(x, y + 2.5).lineTo(x + w, y + 2.5).stroke();
+  const tJumlah = 20;
+  doc.font(TEBAL).fontSize(10).text("J u m l a h", xs[1], y + 6, { width: xs[2] - xs[1], align: "center", lineBreak: false });
+  kolom.forEach((c, j) => {
+    if (c.total) isiSel(c, k.peserta.reduce((a, p, i) => a + c.nilai(p, i), 0), j, y + 2, tJumlah, true);
+  });
+  y += tJumlah + 2;
+  doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+  tutupKolom(y);
+
+  // Tanda tangan: PPK (setuju dibayar) dan operator pembuat daftar.
+  if (y + 130 > doc.page.height - doc.page.margins.bottom) {
+    halaman();
+    y = doc.page.margins.top;
+  }
+  const pembuat = k.pembuat || {};
+  const lebarTtd = 280;
+  const xKanan = x + w - lebarTtd;
+  doc.font(TEBAL).fontSize(10).text(`Jakarta, ${tanggalPanjang(k.tanggalKembali)}`, xKanan, y + 14, { width: lebarTtd, align: "center" });
+  const yTtd = y + 42;
+  const asli = [ISI, HURUF];
+  [ISI, HURUF] = [TEBAL, 10];
+  try {
+    blokTtd(doc, {
+      x: x + 20, y: yTtd, lebar: lebarTtd, tinggi: 56, tebalNip: true,
+      judul: ["Setuju dibayar :", "Pejabat Pembuat Komitmen", "Biro Keuangan dan BMN Setjen Kemnaker"], ...k.pejabat.ppk,
+    });
+    blokTtd(doc, {
+      x: xKanan, y: yTtd, lebar: lebarTtd, tinggi: 56, tebalNip: true,
+      judul: ["", "Pembuat daftar,", ""], nama: pembuat.nama || "", nip: pembuat.nip || "",
+    });
+  } finally {
+    [ISI, HURUF] = asli;
+  }
+}
+
 function bingkai(doc) {
   doc.lineWidth(0.8).rect(18, 18, doc.page.width - 36, doc.page.height - 36).stroke();
 }
@@ -791,7 +978,9 @@ function tulisKwitansiPdf(kegiatan, tujuan) {
     if (itemRiil(p).length) halamanRiil(doc, kegiatan, p);
   }
   if (kegiatan.sampai8Jam) halamanBuktiKehadiran(doc, kegiatan);
-  halamanNominatif(doc, kegiatan);
+  // Luar kota: format NOMI TU; dalam kota: nominatif umum.
+  if (kegiatan.jenis === "luar") halamanNominatifNomi(doc, kegiatan);
+  else halamanNominatif(doc, kegiatan);
 
   doc.end();
   return doc;
