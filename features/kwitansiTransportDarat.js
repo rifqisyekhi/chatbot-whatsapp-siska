@@ -552,19 +552,37 @@ const rapat = (t) => String(t || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 //   { jenis: "provinsi", asal: ibukota,    tujuan, tarif }  dari ibu kota provinsi
 //   { jenis: "ibukota",  asal: ibukota,    tujuan }         tujuan = ibu kota itu sendiri
 //   null                                                    belum ada di PMK
-function cariRute(provinsi, kota) {
-  const k = rapat(kota);
-  if (!k) return null;
+// Nama tanpa awalan "Kota"/"Kab."/"Kabupaten": "Kab. Bogor" → "bogor".
+const inti = (t) => rapat(String(t || "").replace(/^\s*(kota|kabupaten|kab\.?)\s+/i, ""));
 
-  const sekitar = DARI_JAKARTA.find(([nama, prov]) => prov === provinsi && rapat(nama) === k);
+// Singkatan yang lazim diketik operator.
+const ALIAS = { tangsel: "Kota Tangerang Selatan", kepseribu: "Kepulauan Seribu" };
+
+// Pencocokan bertingkat: persis dulu, lalu tanpa awalan. "Bogor" atau
+// "Depok" saja cocok ke "Kota Bogor"/"Kota Depok"; kalau ada kota dan
+// kabupaten bernama sama, kota didahulukan — kabupatennya tetap bisa
+// dipilih dengan menulis "Kab. Bogor".
+function cocokkan(daftar, kota, ambilNama) {
+  const k = rapat(ALIAS[rapat(kota)] || kota);
+  const persis = daftar.find((x) => rapat(ambilNama(x)) === k);
+  if (persis) return persis;
+  const i = inti(ALIAS[rapat(kota)] || kota);
+  const longgar = daftar.filter((x) => inti(ambilNama(x)) === i);
+  return longgar.find((x) => /^kota\s/i.test(ambilNama(x))) || longgar[0] || null;
+}
+
+function cariRute(provinsi, kota) {
+  if (!rapat(kota)) return null;
+
+  const sekitar = cocokkan(DARI_JAKARTA.filter(([, prov]) => prov === provinsi), kota, (x) => x[0]);
   if (sekitar) return { jenis: "sekitar", asal: "Jakarta", tujuan: sekitar[0], tarif: sekitar[2] };
 
   const p = DARI_IBUKOTA[provinsi];
   if (!p) return null;
-  if (rapat(p.ibukota) === k || rapat(`Kota ${p.ibukota}`) === k) {
+  if (inti(p.ibukota) === inti(kota)) {
     return { jenis: "ibukota", asal: p.ibukota, tujuan: p.ibukota };
   }
-  const t = p.tujuan.find(([nama]) => rapat(nama) === k);
+  const t = cocokkan(p.tujuan, kota, (x) => x[0]);
   return t ? { jenis: "provinsi", asal: p.ibukota, tujuan: t[0], tarif: t[1] } : null;
 }
 

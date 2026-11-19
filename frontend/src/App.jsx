@@ -4,6 +4,8 @@ import AdminMasterDataTU from './MasterDataTU'
 import DashboardBarang from './DashboardBarang'
 import RekapServis from './RekapServis'
 import KwitansiPerdin from './KwitansiPerdin'
+import KwitansiDashboard from './KwitansiDashboard'
+import KwitansiMasuk from './KwitansiMasuk'
 
 // Ketiga halaman sengaja BERDIRI SENDIRI, tanpa navigasi bersama.
 //
@@ -30,8 +32,16 @@ function App() {
         {/* Rekap pemeliharaan kendaraan, dibuka dari tab Kendaraan Dinas */}
         <Route path="/admin/servis-kendaraan" element={<RekapServis />} />
 
-        {/* Kwitansi perjalanan dinas → PDF, dibuka dari Master Data */}
-        <Route path="/admin/kwitansi" element={<KwitansiPerdin />} />
+        {/* Perjalanan dinas per bidang (login operator), dibuka dari Master Data:
+            daftar nota dinas, lalu form baru/ubah yang menghasilkan PDF. */}
+        <Route
+          path="/admin/kwitansi"
+          element={<KwitansiMasuk>{(s) => <KwitansiDashboard {...s} />}</KwitansiMasuk>}
+        />
+        <Route
+          path="/admin/kwitansi/:id"
+          element={<KwitansiMasuk>{(s) => <KwitansiPerdin {...s} />}</KwitansiMasuk>}
+        />
 
         {/* Dashboard barang — untuk operator persediaan.
             /admin/barang dipertahankan sebagai alias supaya tautan yang

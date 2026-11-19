@@ -14,7 +14,7 @@
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-const { terbilangRupiah, tanggalPanjang } = require("./spbyServisPdf");
+const { terbilangRupiah, tanggalPanjang, pasangFont: pasangFontSpby, halamanSpby } = require("./spbyServisPdf");
 
 const angka = (n) => Math.floor(Number(n) || 0).toLocaleString("id-ID");
 const rp = (n) => `Rp ${angka(n)},-`;
@@ -532,8 +532,19 @@ function kopKemnaker(doc, x, y, w) {
 
 // Daftar Pengeluaran Riil — untuk biaya tanpa bukti (transport dalam
 // kota). Hanya dibuat kalau peserta memang menerima biaya itu.
+// Biaya yang lazim tanpa bukti: transport dalam kota, transport darat,
+// dan transport ke/dari bandara/stasiun/terminal (luar kota).
+const KUNCI_RIIL = ["transport", "darat", "taksiAsal", "taksiTujuan"];
+
 function itemRiil(p) {
-  return p.rincian.filter((r) => r.kunci === "transport");
+  return p.rincian.filter((r) => KUNCI_RIIL.includes(r.kunci));
+}
+
+function uraianRiil(r) {
+  const ket = r.keterangan ? ` ${r.keterangan}` : "";
+  if (r.kunci === "transport") return `Biaya transportasi dalam kota${ket}`;
+  if (r.kunci === "darat") return `Biaya transport darat${ket}`;
+  return `Biaya ${r.uraian.toLowerCase()}${ket}`;
 }
 
 function halamanRiil(doc, k, p) {
@@ -590,7 +601,7 @@ function isiHalamanRiil(doc, k, p) {
   y += 22;
   const total = item.reduce((a, r) => a + r.jumlah, 0);
   item.forEach((r, i) => {
-    const ur = `Biaya transportasi dalam kota ${r.keterangan || ""}`.trim() + (r.volume > 1 ? ` (${r.volume} x ${rp(r.tarif)})` : "");
+    const ur = uraianRiil(r) + (r.volume > 1 ? ` (${r.volume} x ${rp(r.tarif)})` : "");
     doc.text(`${i + 1}.`, x, y, { width: kNo, align: "center" });
     doc.text(ur, x + kNo + 4, y, { width: kUr - 8 });
     doc.text("Rp.", x + kNo + kUr + 4, y, { lineBreak: false });
@@ -624,6 +635,28 @@ function isiHalamanRiil(doc, k, p) {
   blokTtd(doc, { x: x + kol + 30, y, lebar: kol - 30, align: "left", tebalNip: true, garisNama: false, tinggi: 56, judul: ["", "Pelaksana Surat Perjalanan Dinas", ""], nama: p.nama, nip: p.nip });
 }
 
+// SPBY per peserta, memakai halaman yang sama dengan SPBY service
+// kendaraan. Akun 026.01.WA.2158.EBA.994.002.A.524111 dipecah:
+// kegiatan/output/komponen "2158.EBA.994.002.A" dan kode akun "524111".
+function halamanSpbyPerdin(doc, k, p) {
+  doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 36, right: 36 } });
+  const bagian = k.akun.kode.split(".");
+  const kodeAkun = bagian.pop();
+  const kegiatan = bagian.slice(3).join(".") || k.akun.kode;
+  halamanSpby(doc, {
+    tanggalSurat: k.tanggalKembali,
+    tanggalServis: k.tanggalKembali,
+    nomor: "",
+    biaya: p.total,
+    bengkel: p.nama,
+    uraianPembayaran: untukPembayaran(k),
+    kegiatan,
+    akun: kodeAkun,
+    bendahara: k.pejabat.bendahara,
+    ppk: k.pejabat.ppk,
+  });
+}
+
 // =========================================================
 // PENULIS
 // =========================================================
@@ -635,11 +668,13 @@ function tulisKwitansiPdf(kegiatan, tujuan) {
     info: { Title: `Kwitansi Perjalanan Dinas ${kegiatan.kotaTujuan}`, Author: "SisKA Biro Keuangan dan BMN" },
   });
   pasangFontKwitansi(doc);
+  pasangFontSpby(doc);
   doc.pipe(tujuan);
 
-  // Urutan berkas: per peserta Kwitansi, Rincian, SPD, Daftar
-  // Pengeluaran Riil; Daftar Nominatif seluruh peserta di akhir.
+  // Urutan berkas: per peserta SPBY, Kwitansi, Rincian, SPD, Daftar
+  // Pengeluaran Riil (bila ada); Daftar Nominatif seluruh peserta di akhir.
   for (const p of kegiatan.peserta) {
+    halamanSpbyPerdin(doc, kegiatan, p);
     halamanKwitansi(doc, kegiatan, p);
     halamanRincian(doc, kegiatan, p);
     halamanSpd(doc, kegiatan, p);

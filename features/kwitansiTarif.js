@@ -219,8 +219,11 @@ function hitungKegiatan(input = {}) {
     }
 
     if (jenis === "luar") {
-      // Penginapan: bawaan (hari − 1) malam × tarif PMK; keduanya bisa diganti riil.
-      const malam = angkaOpsional(p.malam, `Jumlah malam ${nama}`) ?? Math.max(0, hari - 1);
+      // Penginapan hanya kalau dicentang "menginap" di form. Bawaan
+      // (hari − 1) malam × tarif PMK; keduanya bisa diganti riil. Isian
+      // lama tanpa medan `menginap` dianggap menginap.
+      const menginap = p.menginap !== false && p.menginap !== "false";
+      const malam = menginap ? angkaOpsional(p.malam, `Jumlah malam ${nama}`) ?? Math.max(0, hari - 1) : 0;
       const tarifPmk = provinsi.hotel[tingkat.kode];
       const tarifHotel = angkaOpsional(p.tarif_hotel, `Tarif hotel ${nama}`) ?? tarifPmk;
       if (malam > 0) {
@@ -296,6 +299,7 @@ function hitungKegiatan(input = {}) {
     tempat: teks(input.tempat),
     kotaAsal: KOTA_ASAL,
     nomorSpd: teks(input.nomor_spd),
+    nomorNotaDinas: teks(input.nomor_nota_dinas),
     noBku: teks(input.no_bku),
     tanggalSpd: tanggalSah(input.tanggal_spd) ? input.tanggal_spd : input.tanggal_berangkat,
     tanggalBerangkat: input.tanggal_berangkat,

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiTU } from "./services/ApiTU";
+import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
 import logoKemnaker from "./assets/logo-kemnaker.png";
 import {
   ArrowLeft,
@@ -11,22 +13,23 @@ import {
   CheckCircle2,
   RotateCcw,
   Loader2,
+  Save,
 } from "lucide-react";
 
 // =========================================================
-// KWITANSI PERJALANAN DINAS (TAHAP DUMMY)
+// FORM PERJALANAN DINAS (BARU / UBAH)
 // =========================================================
 //
-// Petugas mengisi data kegiatan dan peserta; server menghitung uang
-// harian, representasi, penginapan, transport, dan taksi menurut
-// PMK 32/2025, lalu membuat PDF (nominatif + kwitansi + rincian +
-// SPD per peserta). Belum ada yang disimpan ke basis data — isian
-// form hanya diingat di browser ini sebagai draf.
+// Operator mengisi data kegiatan dan peserta; server menghitung uang
+// harian, representasi, penginapan, dan transport menurut PMK 32/2025,
+// lalu membuat PDF (SPBY, kwitansi, rincian, SPD, pengeluaran riil per
+// peserta + nominatif). "Simpan" mencatatnya ke daftar bidang di
+// dashboard. Form baru yang belum disimpan diingat di browser sebagai draf.
 
 const KUNCI_DRAF = "kwitansi-perdin-draf";
 
 const PESERTA_KOSONG = {
-  nama: "", nip: "", jabatan: "", golongan: "", tingkat: "es4",
+  nama: "", nip: "", jabatan: "", golongan: "", tingkat: "es4", menginap: false,
   tiket: "", malam: "", tarif_hotel: "", taksi_asal: "", taksi_tujuan: "", transport: "", transport_darat: "",
 };
 
@@ -35,6 +38,7 @@ const hariIni = () => new Date().toISOString().slice(0, 10);
 const FORM_AWAL = () => ({
   jenis: "dalam",
   akun: "",
+  nomor_nota_dinas: "",
   maksud: "",
   tempat: "",
   provinsi: "",
@@ -87,11 +91,18 @@ function InputRupiah({ value, onChange, placeholder }) {
   );
 }
 
-export default function KwitansiPerdin() {
+export default function KwitansiPerdin({ operator }) {
+  const { id } = useParams();
+  const baru = !id || id === "baru";
+  const navigate = useNavigate();
+  const admin = operator?.peran === "admin";
   const [ref, setRef] = useState(null);
   const [pegawai, setPegawai] = useState([]);
   const [galatMuat, setGalatMuat] = useState("");
-  const [form, setForm] = useState(bacaDraf);
+  const [form, setForm] = useState(() => (baru ? bacaDraf() : FORM_AWAL()));
+  const [tersimpan, setTersimpan] = useState(null); // baris DB yang sedang diubah
+  const [bidang, setBidang] = useState(operator?.bidang || "");
+  const [menyimpan, setMenyimpan] = useState(false);
   const [hasil, setHasil] = useState(null);
   const [galatHitung, setGalatHitung] = useState("");
   const [menghitung, setMenghitung] = useState(false);
@@ -115,14 +126,27 @@ export default function KwitansiPerdin() {
       .catch((e) => setGalatMuat(e.message || "Gagal memuat data referensi"));
   }, []);
 
-  // Simpan draf setiap isian berubah.
+  // Membuka perjalanan dinas tersimpan untuk diubah.
   useEffect(() => {
+    if (baru) return;
+    apiKwitansi({ url: `api/kwitansi/perjalanan/${id}` })
+      .then((b) => {
+        setTersimpan(b);
+        setBidang(b.bidang);
+        setForm({ ...FORM_AWAL(), ...b.isian });
+      })
+      .catch((e) => setGalatMuat(e.message || "Gagal memuat perjalanan dinas"));
+  }, [id, baru]);
+
+  // Simpan draf setiap isian berubah (hanya form baru).
+  useEffect(() => {
+    if (!baru) return;
     try {
       localStorage.setItem(KUNCI_DRAF, JSON.stringify(form));
     } catch {
       // storage tidak tersedia — draf tidak diingat, form tetap jalan
     }
-  }, [form]);
+  }, [form, baru]);
 
   // Pratinjau dihitung server (satu sumber aturan PMK), ditunda sebentar
   // supaya tidak memanggil API setiap ketukan.
@@ -132,7 +156,7 @@ export default function KwitansiPerdin() {
     const t = setTimeout(async () => {
       setMenghitung(true);
       try {
-        const h = await apiTU({ url: "api/kwitansi/hitung", method: "POST", options: { body: form } });
+        const h = await apiKwitansi({ url: "api/kwitansi/hitung", method: "POST", body: form });
         if (nomor !== urutanHitung.current) return;
         setHasil(h);
         setGalatHitung("");
@@ -193,29 +217,33 @@ export default function KwitansiPerdin() {
 
   const buatPdf = async () => {
     setMembuatPdf(true);
-    // Jendela dibuka lebih dulu (masih di dalam klik) supaya tidak diblokir
-    // pemblokir pop-up, lalu diarahkan ke PDF begitu siap.
-    const jendela = window.open("", "_blank");
     try {
-      const base = (import.meta.env.VITE_API_TU || "").replace(/\/$/, "");
-      const res = await fetch(`${base}/api/kwitansi/pdf`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `Error: ${res.status}`);
-      }
-      const url = URL.createObjectURL(await res.blob());
-      if (jendela) jendela.location.href = url;
-      else window.location.href = url;
+      await bukaPdf({ url: "api/kwitansi/pdf", method: "POST", body: form });
       kabari("PDF kwitansi dibuat");
     } catch (e) {
-      if (jendela) jendela.close();
       kabari(e.message || "Gagal membuat PDF", "error");
     } finally {
       setMembuatPdf(false);
+    }
+  };
+
+  const simpan = async () => {
+    setMenyimpan(true);
+    try {
+      if (baru) {
+        await apiKwitansi({ url: "api/kwitansi/perjalanan", method: "POST", body: { isian: form, bidang } });
+        try {
+          localStorage.removeItem(KUNCI_DRAF);
+        } catch {
+          // abaikan
+        }
+      } else {
+        await apiKwitansi({ url: `api/kwitansi/perjalanan/${id}`, method: "PUT", body: { isian: form } });
+      }
+      navigate("/admin/kwitansi");
+    } catch (e) {
+      kabari(e.message || "Gagal menyimpan", "error");
+      setMenyimpan(false);
     }
   };
 
@@ -230,33 +258,33 @@ export default function KwitansiPerdin() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20 gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <a
-                href="/admin"
+              <Link
+                to="/admin/kwitansi"
                 className="p-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 transition-all active:scale-95 shadow-2xs"
-                title="Kembali ke Master Data"
+                title="Kembali ke daftar perjalanan dinas"
               >
                 <ArrowLeft className="w-4 h-4" />
-              </a>
+              </Link>
               <div className="w-11 h-11 rounded-2xl bg-paper border border-mist hidden sm:flex items-center justify-center p-1.5 shrink-0">
                 <img src={logoKemnaker} alt="Logo Kemnaker" className="w-full h-full object-contain" />
               </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
-                  Kwitansi Perjalanan Dinas
+                  {baru ? "Perjalanan Dinas Baru" : "Ubah Perjalanan Dinas"}
                 </h1>
                 <p className="text-xs text-slate-500 font-medium truncate">
-                  Biro Keuangan dan BMN • Tarif {ref?.sumber || "PMK 32/2025"}
+                  {bidang ? `Bidang ${bidang} • ` : ""}Tarif {ref?.sumber || "PMK 32/2025"}
                 </p>
               </div>
             </div>
-            <button
+            {baru && <button
               onClick={ulangi}
               className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 text-sm font-bold transition-all active:scale-95 shadow-2xs cursor-pointer shrink-0"
               title="Kosongkan form"
             >
               <RotateCcw className="w-4 h-4 text-brand" />
-              <span className="hidden sm:inline">Form baru</span>
-            </button>
+              <span className="hidden sm:inline">Kosongkan</span>
+            </button>}
           </div>
         </div>
       </header>
@@ -269,8 +297,7 @@ export default function KwitansiPerdin() {
         )}
 
         <div className="mb-6 p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-          Tahap uji coba: daftar akun masih contoh (menunggu POK/DIPA), dan kwitansi belum disimpan ke basis data —
-          isian hanya diingat di browser ini.
+          Tahap uji coba: daftar akun masih contoh (menunggu POK/DIPA).
         </div>
 
         <div className="grid lg:grid-cols-[minmax(0,1fr)_380px] gap-6 items-start">
@@ -298,6 +325,19 @@ export default function KwitansiPerdin() {
               </div>
 
               <div className="grid sm:grid-cols-2 gap-4">
+                {admin && (
+                  <Medan label="Bidang" petunjuk={baru ? undefined : "Bidang tidak bisa diubah setelah disimpan"}>
+                    <select className={kelasInput} value={bidang} disabled={!baru} onChange={(e) => setBidang(e.target.value)}>
+                      <option value="">— Pilih bidang —</option>
+                      {(ref?.bidang || []).map((b) => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                  </Medan>
+                )}
+                <Medan label="Nomor nota dinas" className={admin ? "" : "sm:col-span-2"} petunjuk="Boleh dikosongkan">
+                  <input className={kelasInput} value={form.nomor_nota_dinas} onChange={(e) => ubah("nomor_nota_dinas", e.target.value)} />
+                </Medan>
                 <Medan label="Akun" className="sm:col-span-2">
                   <select className={kelasInput} value={form.akun} onChange={(e) => ubah("akun", e.target.value)}>
                     <option value="">— Pilih akun —</option>
@@ -500,22 +540,38 @@ export default function KwitansiPerdin() {
                                 placeholder={(bawaan?.darat || 0).toLocaleString("id-ID")}
                               />
                             </Medan>
-                            <Medan label="Jumlah malam menginap" petunjuk="Kosong = lama hari − 1">
+                            <label className="sm:col-span-2 flex items-center gap-2.5 px-3.5 py-3 rounded-xl border border-mist bg-white cursor-pointer select-none">
                               <input
-                                inputMode="numeric"
-                                className={kelasInput}
-                                value={p.malam}
-                                placeholder={hasil ? String(Math.max(0, hasil.hari - 1)) : ""}
-                                onChange={(e) => ubahPeserta(i, "malam", e.target.value.replace(/[^\d]/g, ""))}
+                                type="checkbox"
+                                className="w-4 h-4 accent-brand cursor-pointer"
+                                checked={p.menginap !== false}
+                                onChange={(e) => ubahPeserta(i, "menginap", e.target.checked)}
                               />
-                            </Medan>
-                            <Medan label="Tarif hotel per malam" petunjuk={hotelPmk ? `Batas PMK ${rupiah(hotelPmk)} — kosong = pakai batas` : "Pilih provinsi dulu"}>
-                              <InputRupiah
-                                value={p.tarif_hotel}
-                                onChange={(v) => ubahPeserta(i, "tarif_hotel", v)}
-                                placeholder={hotelPmk ? hotelPmk.toLocaleString("id-ID") : ""}
-                              />
-                            </Medan>
+                              <span className="text-sm font-bold">Menginap (ada biaya penginapan)</span>
+                              <span className="text-[11px] text-slate-400 ml-auto hidden sm:inline">
+                                {p.menginap !== false ? "Isi jumlah malam dan tarif hotel" : "Centang bila menginap"}
+                              </span>
+                            </label>
+                            {p.menginap !== false && (
+                              <>
+                                <Medan label="Jumlah malam menginap" petunjuk="Kosong = lama hari − 1">
+                                  <input
+                                    inputMode="numeric"
+                                    className={kelasInput}
+                                    value={p.malam}
+                                    placeholder={hasil ? String(Math.max(0, hasil.hari - 1)) : ""}
+                                    onChange={(e) => ubahPeserta(i, "malam", e.target.value.replace(/[^\d]/g, ""))}
+                                  />
+                                </Medan>
+                                <Medan label="Tarif hotel per malam" petunjuk={hotelPmk ? `Batas PMK ${rupiah(hotelPmk)} — kosong = pakai batas` : "Pilih provinsi dulu"}>
+                                  <InputRupiah
+                                    value={p.tarif_hotel}
+                                    onChange={(v) => ubahPeserta(i, "tarif_hotel", v)}
+                                    placeholder={hotelPmk ? hotelPmk.toLocaleString("id-ID") : ""}
+                                  />
+                                </Medan>
+                              </>
+                            )}
                             <Medan
                               label={`Transport ${simpul} Jakarta PP`}
                               petunjuk={
@@ -625,10 +681,19 @@ export default function KwitansiPerdin() {
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand hover:bg-navy disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 {membuatPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Buat PDF
+                Lihat PDF
+              </button>
+              <button
+                type="button"
+                onClick={simpan}
+                disabled={!hasil || !!galatHitung || menyimpan || (admin && !bidang) || tersimpan?.status === "dibatalkan"}
+                className="mt-2 w-full inline-flex items-center justify-center gap-2 border-2 border-brand text-brand hover:bg-brand hover:text-white disabled:border-slate-300 disabled:text-slate-400 disabled:bg-transparent disabled:cursor-not-allowed px-5 py-2.5 rounded-2xl font-bold text-sm transition-all active:scale-95 cursor-pointer"
+              >
+                {menyimpan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {baru ? "Simpan ke daftar" : "Simpan perubahan"}
               </button>
               <p className="text-[11px] text-slate-400 mt-2 text-center">
-                Kwitansi, rincian, SPD, pengeluaran riil per peserta + nominatif
+                SPBY, kwitansi, rincian, SPD, pengeluaran riil per peserta + nominatif
               </p>
             </section>
           </aside>

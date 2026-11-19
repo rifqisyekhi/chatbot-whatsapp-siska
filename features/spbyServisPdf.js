@@ -227,6 +227,13 @@ function halamanSpby(doc, data) {
     doc.font(tebal ? "Isi-Tebal" : "Isi").fontSize(ukuran || g.huruf);
     const x0 = g.x(KOL[dari]) + pad;
     const x1 = g.x(KOL[sampai] + 1) - pad;
+    // Teks yang lebih lebar dari selnya (nama bergelar panjang) diperkecil
+    // supaya tetap sebaris, bukan membungkus dan menimpa baris NIP.
+    let ukuranPakai = ukuran || g.huruf;
+    while (doc.widthOfString(String(teks ?? "")) > x1 - x0 && ukuranPakai > 6) {
+      ukuranPakai -= 0.25;
+      doc.fontSize(ukuranPakai);
+    }
     const yTeks = g.y(baris + 1) - doc.currentLineHeight() - 2;
     doc.text(String(teks ?? ""), x0, yTeks, { width: x1 - x0, align, lineBreak: false, underline: garisBawah });
     doc.fontSize(g.huruf);
@@ -415,4 +422,7 @@ module.exports = {
   hariIniWIB,
   kompresFoto,
   tulisSpbyServis,
+  // Dipakai SPBY perjalanan dinas (kwitansiPdf.js).
+  pasangFont,
+  halamanSpby,
 };
