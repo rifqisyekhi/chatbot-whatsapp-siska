@@ -35,6 +35,22 @@ cd SisKA
 * Melihat Log (Untuk Scan QR Code atau Cek Error): pm2 logs bot-siska --lines 200
 ```
 
+## Alamat modul web
+
+Tiap modul berdiri sendiri. Di lokal dibuka lewat path, di VPS lewat
+port nginx masing-masing yang hanya membuka modul itu
+(panduan pasang: `deploy/nginx/README.md`).
+
+| Modul | Lokal | VPS |
+|---|---|---|
+| Presensi non ASN | (repo presensi) | `:8001` |
+| Stok ATK (katalog, kelola) | `localhost:3000/atk`, `/atk/kelola` | `:8002` |
+| Master Data Pegawai | `localhost:3000/pegawai` | `:8003` |
+| Kendaraan Dinas (+ pemeliharaan) | `localhost:3000/kendaraan` | `:8004` |
+| Perjalanan Dinas | `localhost:3000/perjalanan-dinas` | `:8005` |
+
+Modul baru melanjutkan ke `:8006` dan seterusnya.
+
 ## Menu 9 — Absensi Non-ASN
 
 Menu ini menyambungkan bot ke backend presensi (repo
@@ -191,8 +207,8 @@ untuk memasang `sharp`.
 
 ### Rekap Pemeliharaan (dashboard)
 
-`/admin` → tab **Kendaraan Dinas** → tombol **Rekap Pemeliharaan**
-(`/admin/servis-kendaraan`).
+`/kendaraan` (VPS :8004) → tombol **Rekap Pemeliharaan**
+(`/kendaraan/pemeliharaan`).
 
 * Setiap laporan service dari WhatsApp otomatis tercatat di tabel
   `servis_kendaraan`, lengkap dengan tautan PDF SPBY-nya.
@@ -223,7 +239,7 @@ psql -h 127.0.0.1 -U siska -d db_siska -w -v ON_ERROR_STOP=1 \
 
 ## Dashboard Barang — Rekap & Audit
 
-Tab **Rekap & Audit** di `/barang` mencatat setiap mutasi
+Tab **Rekap & Audit** di `/atk/kelola` (VPS :8002) mencatat setiap mutasi
 persediaan: **masuk** (barang baru dibeli), **keluar** (diambil
 pegawai, terutama lewat order WA), dan **koreksi** stock opname.
 Persediaan habis pakai tidak dipinjam-kembalikan. Barisnya bisa ditambah, diedit, dihapus, diimpor dari

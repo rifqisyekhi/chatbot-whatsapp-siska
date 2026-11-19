@@ -41,14 +41,32 @@ export default defineConfig({
   },
   server: {
     // URL API dibuat relatif (lihat services/ApiTU.js), jadi saat `npm run dev`
-    // panggilan /api diteruskan ke server target (default: http://192.168.221.44:8002
-    // atau http://localhost:3000 jika diset via VITE_PROXY_TARGET)
-    // sehingga saat edit desain di lokal, data real langsung tampil tanpa perlu menyalakan bot backend.
-    proxy: {
-      '/api': {
-        target: process.env.VITE_PROXY_TARGET || 'http://192.168.221.44:8002',
-        changeOrigin: true,
-      },
-    },
+    // panggilan /api diteruskan ke server lain sehingga data real langsung
+    // tampil tanpa perlu menyalakan bot di laptop.
+    //
+    // Di VPS tiap modul punya port sendiri yang hanya membuka API modul itu
+    // (deploy/nginx/), jadi bawaannya tiap API diteruskan ke port modulnya.
+    // VITE_PROXY_TARGET=http://localhost:3000 meneruskan semuanya ke satu
+    // server (mis. Node SisKA yang jalan di laptop).
+    proxy: proxyApi(),
   },
 })
+
+function proxyApi() {
+  const satu = process.env.VITE_PROXY_TARGET
+  const vps = 'http://192.168.221.44'
+  const peta = {
+    '/api/barang': 8002,
+    '/api/mutasi-barang': 8002,
+    '/api/pegawai': 8003,
+    '/api/kendaraan': 8004,
+    '/api/servis-kendaraan': 8004,
+    '/api/kwitansi': 8005,
+  }
+  return Object.fromEntries(
+    Object.entries(peta).map(([awalan, port]) => [
+      awalan,
+      { target: satu || `${vps}:${port}`, changeOrigin: true },
+    ]),
+  )
+}

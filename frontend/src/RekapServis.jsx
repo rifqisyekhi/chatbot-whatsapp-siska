@@ -251,9 +251,9 @@ export default function RekapServis() {
           <div className="flex items-center justify-between h-20 gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <a
-                href="/admin"
+                href="/kendaraan"
                 className="p-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 transition-all active:scale-95 shadow-2xs"
-                title="Kembali ke Master Data"
+                title="Kembali ke Kendaraan Dinas"
               >
                 <ArrowLeft className="w-4 h-4" />
               </a>

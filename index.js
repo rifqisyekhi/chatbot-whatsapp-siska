@@ -7147,10 +7147,10 @@ async function matikanDenganAman(label) {
 process.on("SIGINT", () => matikanDenganAman("SIGINT"));
 process.on("SIGTERM", () => matikanDenganAman("SIGTERM (PM2 Restart)"));
 
-// Fallback SPA. React Router memakai path sungguhan (/admin, /admin/barang),
+// Fallback SPA. React Router memakai path sungguhan (/pegawai, /atk/kelola),
 // jadi saat halaman itu di-refresh atau dibuka langsung dari bilah alamat,
 // Express harus tetap mengirim index.html — kalau tidak, muncul "Cannot GET
-// /admin". Ditulis sebagai middleware biasa, bukan app.get("*"), karena
+// /pegawai". Ditulis sebagai middleware biasa, bukan app.get("*"), karena
 // Express 5 memakai path-to-regexp v8 yang menolak pola bintang telanjang.
 // Wajib terdaftar paling akhir supaya tidak menelan route API di atasnya.
 app.use((req, res, next) => {

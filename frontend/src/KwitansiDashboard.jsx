@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import logoKemnaker from "./assets/logo-kemnaker.png";
 import {
-  ArrowLeft,
   Plus,
   Search,
   FileText,
@@ -146,13 +145,6 @@ export default function KwitansiDashboard({ operator, keluar }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20 gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <a
-                href="/admin"
-                className="p-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 transition-all active:scale-95 shadow-2xs"
-                title="Kembali ke Master Data"
-              >
-                <ArrowLeft className="w-4 h-4" />
-              </a>
               <div className="w-11 h-11 rounded-2xl bg-paper border border-mist hidden sm:flex items-center justify-center p-1.5 shrink-0">
                 <img src={logoKemnaker} alt="Logo Kemnaker" className="w-full h-full object-contain" />
               </div>
@@ -223,7 +215,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
                 <option value="dibatalkan">Dibatalkan</option>
               </select>
               <Link
-                to="/admin/kwitansi/baru"
+                to="/perjalanan-dinas/baru"
                 className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
               >
                 <Plus className="w-4 h-4" /> Perjalanan baru
@@ -304,7 +296,7 @@ export default function KwitansiDashboard({ operator, keluar }) {
                               <Aksi judul="Surat pembatalan" onClick={() => suratBatal(d)} ikon={FileX2} warna="text-amber-700 hover:bg-amber-50" />
                             )}
                             {!batalkan && (
-                              <Link to={`/admin/kwitansi/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
+                              <Link to={`/perjalanan-dinas/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
                                 <Pencil className="w-4 h-4" />
                               </Link>
                             )}

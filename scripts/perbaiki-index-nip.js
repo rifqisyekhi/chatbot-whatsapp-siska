@@ -133,7 +133,7 @@ async function main() {
     }
 
     console.log(
-      "\nBetulkan dulu lewat Master Data Pegawai (http://192.168.221.44:8002/admin),\n" +
+      "\nBetulkan dulu lewat Master Data Pegawai (http://192.168.221.44:8003/pegawai),\n" +
         "baru jalankan skrip ini lagi. Index unik tidak bisa dibuat selama masih kembar.",
     );
 

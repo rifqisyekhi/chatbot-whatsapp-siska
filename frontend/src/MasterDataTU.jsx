@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { apiTU, getUrlPresensi } from "./services/ApiTU";
+import { apiTU } from "./services/ApiTU";
 import logoKemnaker from "./assets/logo-kemnaker.png";
 import {
   Users,
@@ -10,21 +10,16 @@ import {
   X,
   Search,
   Filter,
-  Package,
-  Calendar,
-  ExternalLink,
   RefreshCw,
   Mail,
   Building2,
   CheckCircle2,
   AlertCircle,
   Briefcase,
-  Layers,
   Sparkles,
   Shield,
   FileSpreadsheet,
   Wrench,
-  ReceiptText,
 } from "lucide-react";
 
 const DAFTAR_JABATAN = [
@@ -57,11 +52,15 @@ const DAFTAR_JABATAN = [
   "Tenaga Perkantoran Umum",
 ];
 
-export default function AdminMasterDataTU() {
+// Satu komponen untuk dua modul yang berdiri sendiri: Master Data Pegawai
+// (/pegawai) dan Kendaraan Dinas (/kendaraan). Di VPS keduanya punya port
+// sendiri dan masing-masing hanya membuka API-nya sendiri, jadi halaman ini
+// hanya memuat data modul yang sedang dibuka.
+export default function AdminMasterDataTU({ modul = "pegawai" }) {
   // ==========================================
   // STATE DATA MASTER
   // ==========================================
-  const [activeTab, setActiveTab] = useState("pegawai");
+  const activeTab = modul;
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -90,10 +89,9 @@ export default function AdminMasterDataTU() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const resPegawai = await apiTU({ url: "api/pegawai" });
-      const resKendaraan = await apiTU({ url: "api/kendaraan" });
-      setDataPegawai(resPegawai || []);
-      setDataKendaraan(resKendaraan || []);
+      const hasil = await apiTU({ url: `api/${modul}` });
+      if (modul === "pegawai") setDataPegawai(hasil || []);
+      else setDataKendaraan(hasil || []);
     } catch (err) {
       console.error("Gagal menarik data:", err);
     }
@@ -101,9 +99,10 @@ export default function AdminMasterDataTU() {
   };
 
   useEffect(() => {
-    document.title = "Master Data - Biro Keuangan dan BMN";
+    document.title = `${modul === "pegawai" ? "Master Data Pegawai" : "Kendaraan Dinas"} - Biro Keuangan dan BMN`;
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modul]);
 
   // =========================================================
   // JENIS NOMOR IDENTITAS
@@ -256,50 +255,20 @@ export default function AdminMasterDataTU() {
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
-                    Master Data
+                    {modul === "pegawai" ? "Master Data Pegawai" : "Kendaraan Dinas"}
                   </h1>
                   <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold bg-brand/10 text-brand uppercase tracking-wider">
                     Portal TU
                   </span>
                 </div>
                 <p className="text-xs text-slate-500 font-medium truncate">
-                  Biro Keuangan dan BMN • Data Pegawai & Kendaraan
+                  Biro Keuangan dan BMN
                 </p>
               </div>
             </div>
 
-            {/* Quick Switcher & Refresh */}
+            {/* Refresh */}
             <div className="flex items-center gap-2 shrink-0">
-              <a
-                href={getUrlPresensi()}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden md:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-paper hover:bg-mist border border-mist transition-all active:scale-95 shadow-2xs"
-                title="Buka Aplikasi Presensi Non-ASN"
-              >
-                <Calendar className="w-3.5 h-3.5 text-teal" />
-                <span>Presensi</span>
-                <ExternalLink className="w-3 h-3 text-slate-400" />
-              </a>
-
-              <a
-                href="/barang"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-paper hover:bg-mist border border-mist transition-all active:scale-95 shadow-2xs"
-                title="Buka Dashboard Stok ATK"
-              >
-                <Package className="w-3.5 h-3.5 text-brand" />
-                <span>Stok ATK</span>
-              </a>
-
-              <a
-                href="/"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-700 bg-paper hover:bg-mist border border-mist transition-all active:scale-95 shadow-2xs"
-                title="Buka Katalog Permintaan ATK"
-              >
-                <Layers className="w-3.5 h-3.5 text-green" />
-                <span>Katalog ATK</span>
-              </a>
-
               <button
                 onClick={() => fetchData()}
                 disabled={loading}
@@ -319,73 +288,20 @@ export default function AdminMasterDataTU() {
           2. KONTEN UTAMA
       ===================================================== */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-8">
-        {/* TAB NAVIGATION: PEGAWAI VS KENDARAAN */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 mb-6">
-          {/* Segmented Control */}
-          <div className="inline-flex p-1.5 bg-white border border-mist rounded-2xl shadow-2xs">
-            <button
-              onClick={() => {
-                setActiveTab("pegawai");
-                setSearchTerm("");
-              }}
-              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-                activeTab === "pegawai"
-                  ? "bg-navy text-white shadow-sm"
-                  : "text-slate-600 hover:text-navy hover:bg-paper"
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              <span>Pegawai</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${
-                  activeTab === "pegawai"
-                    ? "bg-white/20 text-white"
-                    : "bg-paper text-slate-600"
-                }`}
-              >
-                {dataPegawai.length}
-              </span>
-            </button>
-
-            <button
-              onClick={() => {
-                setActiveTab("kendaraan");
-                setSearchTerm("");
-              }}
-              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-                activeTab === "kendaraan"
-                  ? "bg-navy text-white shadow-sm"
-                  : "text-slate-600 hover:text-navy hover:bg-paper"
-              }`}
-            >
-              <Car className="w-4 h-4" />
-              <span>Kendaraan Dinas</span>
-              <span
-                className={`text-xs px-2 py-0.5 rounded-full font-extrabold ${
-                  activeTab === "kendaraan"
-                    ? "bg-white/20 text-white"
-                    : "bg-paper text-slate-600"
-                }`}
-              >
-                {dataKendaraan.length}
-              </span>
-            </button>
+          <div className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-mist rounded-2xl shadow-2xs font-bold text-sm">
+            {modul === "pegawai" ? <Users className="w-4 h-4 text-brand" /> : <Car className="w-4 h-4 text-brand" />}
+            <span>{modul === "pegawai" ? "Pegawai" : "Kendaraan Dinas"}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full font-extrabold bg-paper text-slate-600">
+              {modul === "pegawai" ? dataPegawai.length : dataKendaraan.length}
+            </span>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2">
-            {/* Kwitansi perjalanan dinas */}
-            <a
-              href="/admin/kwitansi"
-              className="inline-flex items-center justify-center gap-2 bg-white hover:bg-paper text-navy border border-mist px-5 py-3 rounded-2xl font-bold text-sm shadow-2xs transition-all active:scale-95"
-            >
-              <ReceiptText className="w-4 h-4 text-brand" />
-              <span>Kwitansi Perdin</span>
-            </a>
-
             {/* Rekap pemeliharaan / service kendaraan */}
             {activeTab === "kendaraan" && (
               <a
-                href="/admin/servis-kendaraan"
+                href="/kendaraan/pemeliharaan"
                 className="inline-flex items-center justify-center gap-2 bg-white hover:bg-paper text-navy border border-mist px-5 py-3 rounded-2xl font-bold text-sm shadow-2xs transition-all active:scale-95"
               >
                 <Wrench className="w-4 h-4 text-brand" />

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import {
   Plus,
   Search,
@@ -9,18 +9,13 @@ import {
   RefreshCw,
   X,
   Minus,
-  Users,
-  Calendar,
-  ExternalLink,
   CheckCircle2,
   AlertCircle,
   PackageOpen,
   Boxes,
   ClipboardList,
-  LayoutGrid,
-  ChevronDown,
 } from "lucide-react";
-import { apiTU, getUrlPresensi } from "./services/ApiTU";
+import { apiTU } from "./services/ApiTU";
 import { headerOperator } from "./services/operatorBarang";
 import RekapBarang from "./RekapBarang";
 import logoKemnaker from "./assets/logo-kemnaker.png";
@@ -381,7 +376,6 @@ const DashboardBarang = () => {
                 ))}
               </nav>
 
-              <MenuPintasan />
 
               <button
                 onClick={() => loadData(true)}
@@ -976,84 +970,4 @@ const StatusBadge = ({ stok }) => {
     </span>
   );
 };
-
-// Satu tombol untuk pindah ke aplikasi lain, supaya navbar tidak penuh
-// tombol yang jarang dipakai operator barang.
-function MenuPintasan() {
-  const [buka, setBuka] = useState(false);
-  const wadah = useRef(null);
-
-  useEffect(() => {
-    if (!buka) return;
-
-    const klikLuar = (e) => {
-      if (!wadah.current?.contains(e.target)) setBuka(false);
-    };
-    const tombol = (e) => {
-      if (e.key === "Escape") setBuka(false);
-    };
-
-    document.addEventListener("mousedown", klikLuar);
-    document.addEventListener("keydown", tombol);
-    return () => {
-      document.removeEventListener("mousedown", klikLuar);
-      document.removeEventListener("keydown", tombol);
-    };
-  }, [buka]);
-
-  const kelasPilihan =
-    "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-paper";
-
-  return (
-    <div ref={wadah} className="relative">
-      <button
-        type="button"
-        onClick={() => setBuka((b) => !b)}
-        aria-expanded={buka}
-        aria-haspopup="menu"
-        className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl border border-mist bg-paper px-3 py-2 text-xs font-bold text-slate-700 shadow-2xs transition-all hover:bg-mist active:scale-95"
-        title="Pindah ke Master Data atau Presensi"
-      >
-        <LayoutGrid className="h-3.5 w-3.5 text-brand" />
-        <span className="hidden sm:inline">Pintasan</span>
-        <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${buka ? "rotate-180" : ""}`} />
-      </button>
-
-      {buka && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full z-50 mt-2 w-64 animate-muncul rounded-2xl border border-mist bg-white p-1.5 shadow-xl"
-        >
-          <a href="/admin" role="menuitem" className={kelasPilihan} onClick={() => setBuka(false)}>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand/10">
-              <Users className="h-4 w-4 text-brand" />
-            </span>
-            <span className="min-w-0">
-              <span className="block text-sm font-bold text-navy">Master Data</span>
-              <span className="block text-[11px] text-slate-500">Pegawai & kendaraan</span>
-            </span>
-          </a>
-          <a
-            href={getUrlPresensi()}
-            target="_blank"
-            rel="noopener noreferrer"
-            role="menuitem"
-            className={kelasPilihan}
-            onClick={() => setBuka(false)}
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal/15">
-              <Calendar className="h-4 w-4 text-teal" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-bold text-navy">Presensi</span>
-              <span className="block text-[11px] text-slate-500">Aplikasi presensi Non-ASN</span>
-            </span>
-            <ExternalLink className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-          </a>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default DashboardBarang;

@@ -15,6 +15,7 @@ const { tulisKwitansiPdf } = require("./kwitansiPdf");
 const { tulisSuratBatalPdf } = require("./suratBatalPdf");
 const auth = require("./kwitansiAuth");
 const db = require("../db/perjalananDinas");
+const dbPegawai = require("../db/pegawai");
 
 const tanggalHariIni = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
@@ -62,6 +63,18 @@ function pasangRuteKwitansi(app) {
   app.post("/api/kwitansi/login", auth.login);
   app.get("/api/kwitansi/saya", auth.wajibLogin, (req, res) => {
     res.json({ operator: req.operator, bidang: auth.BIDANG });
+  });
+
+  // Daftar pegawai untuk isian peserta: hanya nama, NIP, dan jabatan.
+  // Modul perjalanan dinas punya port sendiri di VPS dan tidak membuka
+  // /api/pegawai (Master Data, berisi nomor WA dan data pribadi lain).
+  app.get("/api/kwitansi/pegawai", auth.wajibLogin, async (req, res) => {
+    try {
+      const semua = await dbPegawai.semua();
+      res.json(semua.map((p) => ({ nama: p.nama, nip: p.nip || "", jabatan: p.jabatan || "" })));
+    } catch (err) {
+      balasGalat(res, err, "Gagal memuat daftar pegawai");
+    }
   });
 
   // Tarif PMK, daftar akun, tingkat pegawai, dan penandatangan.

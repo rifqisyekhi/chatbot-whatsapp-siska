@@ -169,7 +169,7 @@ async function main() {
   }
 
   console.log(
-    "Betulkan lewat http://192.168.221.44:8002/admin, lalu jalankan:\n" +
+    "Betulkan lewat http://192.168.221.44:8003/pegawai, lalu jalankan:\n" +
       "  node scripts/perbaiki-index-nip.js --apply",
   );
 
