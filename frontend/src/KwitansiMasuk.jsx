@@ -122,7 +122,7 @@ function FormMasuk({ onMasuk }) {
             <div className="text-3xl text-yellow mb-2">✦</div>
             <h1 className="text-3xl lg:text-4xl font-black text-white leading-[1.15] tracking-tight">
               Halo <br />
-              Operator! <span className="inline-block animate-bounce">👋</span>
+              Pegawai! <span className="inline-block animate-bounce">👋</span>
             </h1>
             <p className="text-white/80 text-xs lg:text-sm mt-4 leading-relaxed max-w-xs font-normal">
               Sistem perjalanan dinas Biro Keuangan dan BMN. Susun kwitansi, SPD, dan daftar nominatif per bidang
@@ -172,10 +172,6 @@ function FormMasuk({ onMasuk }) {
           <div className="my-auto py-2">
             <div className="mb-6">
               <h2 className="text-2xl lg:text-3xl font-extrabold text-navy tracking-tight">Selamat Datang!</h2>
-              <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                Masuk dengan nomor WhatsApp yang terdaftar di Master Data. Untuk sementara, password sama dengan
-                nomor tersebut.
-              </p>
             </div>
 
             {galat && (
