@@ -627,7 +627,7 @@ function halamanSpd(doc, k, p) {
   // Nama tebal, NIP tebal — dua baris di kolom isi.
   baris("2.", "Nama /NIP pegawai yang melaksanakan perjalanan dinas", `${p.nama}\nNIP. ${p.nip || "-"}`, { tebalIsi: true });
   baris("3.", "a. Pangkat dan Golongan\nb. Jabatan/Instansi\nc. Tingkat Biaya Perjalanan Dinas",
-    `a. ${p.golongan || "-"}\nb. ${p.jabatan || "-"}\nc. ${p.tingkatBiaya}`, { ukuranIsi: HURUF + 1 });
+    `a. ${p.golongan || "-"}\nb. ${[p.jabatan, p.unit].filter(Boolean).join(" / ") || "-"}\nc. ${p.tingkatBiaya}`, { ukuranIsi: HURUF + 1 });
   baris("4", "a. Maksud Perjalanan Dinas", untukPembayaran(k), { minTinggi: 56, ukuranIsi: HURUF + 1 });
 
   // Baris 5: alat angkut yang tidak dipakai dicoret, seperti di templat.

@@ -29,7 +29,7 @@ import {
 const KUNCI_DRAF = "kwitansi-perdin-draf";
 
 const PESERTA_KOSONG = {
-  nama: "", nip: "", jabatan: "", golongan: "", tingkat: "es4", menginap: false,
+  nama: "", nip: "", jabatan: "", golongan: "", tingkat: "es4", menginap: false, luar_biro: false, unit: "",
   tiket: "", malam: "", tarif_hotel: "", taksi_asal: "", taksi_tujuan: "", transport: "", transport_darat: "",
 };
 
@@ -464,13 +464,23 @@ export default function KwitansiPerdin({ operator }) {
             <section className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6">
               <div className="flex items-center justify-between mb-4 gap-3">
                 <h2 className="text-base font-extrabold">Peserta ({form.peserta.length})</h2>
-                <button
-                  type="button"
-                  onClick={() => setForm((f) => ({ ...f, peserta: [...f.peserta, { ...PESERTA_KOSONG }] }))}
-                  className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" /> Tambah peserta
-                </button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, peserta: [...f.peserta, { ...PESERTA_KOSONG, luar_biro: true }] }))}
+                    className="inline-flex items-center gap-2 border-2 border-brand text-brand hover:bg-brand hover:text-white px-3.5 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 cursor-pointer"
+                    title="Peserta dari luar Biro Keuangan dan BMN — semua data diisi manual"
+                  >
+                    <Plus className="w-4 h-4" /> Peserta luar biro
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, peserta: [...f.peserta, { ...PESERTA_KOSONG }] }))}
+                    className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Tambah peserta
+                  </button>
+                </div>
               </div>
 
               <datalist id="daftar-pegawai">
@@ -487,7 +497,14 @@ export default function KwitansiPerdin({ operator }) {
                   return (
                     <div key={i} className="rounded-2xl border border-mist p-4 bg-paper/30">
                       <div className="flex items-center justify-between mb-3">
-                        <span className="text-xs font-black text-brand">PESERTA {i + 1}</span>
+                        <span className="text-xs font-black text-brand">
+                          PESERTA {i + 1}
+                          {p.luar_biro && (
+                            <span className="ml-2 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold align-middle">
+                              LUAR BIRO • isi manual
+                            </span>
+                          )}
+                        </span>
                         {form.peserta.length > 1 && (
                           <button
                             type="button"
@@ -501,20 +518,31 @@ export default function KwitansiPerdin({ operator }) {
                       </div>
 
                       <div className="grid sm:grid-cols-2 gap-3">
-                        <Medan label="Nama" petunjuk="Ketik untuk mencari dari data pegawai">
-                          <input
-                            list="daftar-pegawai"
-                            className={kelasInput}
-                            value={p.nama}
-                            onChange={(e) => pilihNama(i, e.target.value)}
-                          />
-                        </Medan>
+                        {p.luar_biro ? (
+                          <Medan label="Nama lengkap dan gelar">
+                            <input className={kelasInput} value={p.nama} onChange={(e) => ubahPeserta(i, "nama", e.target.value)} />
+                          </Medan>
+                        ) : (
+                          <Medan label="Nama" petunjuk="Ketik untuk mencari dari data pegawai">
+                            <input
+                              list="daftar-pegawai"
+                              className={kelasInput}
+                              value={p.nama}
+                              onChange={(e) => pilihNama(i, e.target.value)}
+                            />
+                          </Medan>
+                        )}
                         <Medan label="NIP">
                           <input className={kelasInput} value={p.nip} onChange={(e) => ubahPeserta(i, "nip", e.target.value.replace(/\s+/g, ""))} />
                         </Medan>
-                        <Medan label="Jabatan" className="sm:col-span-2">
+                        <Medan label="Jabatan" className={p.luar_biro ? "" : "sm:col-span-2"}>
                           <input className={kelasInput} value={p.jabatan} onChange={(e) => ubahPeserta(i, "jabatan", e.target.value)} />
                         </Medan>
+                        {p.luar_biro && (
+                          <Medan label="Unit kerja / instansi" petunjuk='Contoh: "Biro Perencanaan Setjen"'>
+                            <input className={kelasInput} value={p.unit} onChange={(e) => ubahPeserta(i, "unit", e.target.value)} />
+                          </Medan>
+                        )}
                         <Medan label="Pangkat / golongan" petunjuk='Contoh: "Penata (III/c)"'>
                           <input className={kelasInput} value={p.golongan} onChange={(e) => ubahPeserta(i, "golongan", e.target.value)} />
                         </Medan>

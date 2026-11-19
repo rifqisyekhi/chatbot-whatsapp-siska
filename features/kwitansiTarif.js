@@ -277,6 +277,10 @@ function hitungKegiatan(input = {}) {
       nip: nipRapat(p.nip),
       jabatan: teks(p.jabatan),
       golongan: teks(p.golongan),
+      // Peserta dari luar Biro Keuangan dan BMN: data diketik manual,
+      // unit kerjanya ikut tercetak di SPD dan surat pembatalan.
+      luarBiro: p.luar_biro === true || p.luar_biro === "true",
+      unit: teks(p.unit),
       tingkat: tingkat.kode,
       tingkatLabel: tingkat.label,
       tingkatBiaya: teks(p.tingkat_biaya) || tingkat.tingkatBiaya,

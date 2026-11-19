@@ -108,7 +108,7 @@ const dataPegawai = (p) => [
   ["Nama", p.nama],
   ["NIP", nipRapat(p.nip)],
   ["Jabatan", p.jabatan],
-  ["Unit Organisasi", UNIT],
+  ["Unit Organisasi", String(p.unit || "").trim() || UNIT], // peserta luar biro: unit diketik manual
   ["Kementerian/Lembaga", KL],
 ];
 
