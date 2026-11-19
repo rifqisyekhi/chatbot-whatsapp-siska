@@ -471,7 +471,7 @@ export default function KwitansiPerdin({ operator }) {
                     className="inline-flex items-center gap-2 border-2 border-brand text-brand hover:bg-brand hover:text-white px-3.5 py-2 rounded-xl font-bold text-sm transition-all active:scale-95 cursor-pointer"
                     title="Peserta dari luar Biro Keuangan dan BMN — semua data diisi manual"
                   >
-                    <Plus className="w-4 h-4" /> Peserta luar biro
+                    <Plus className="w-4 h-4" /> Peserta External
                   </button>
                   <button
                     type="button"
@@ -501,7 +501,7 @@ export default function KwitansiPerdin({ operator }) {
                           PESERTA {i + 1}
                           {p.luar_biro && (
                             <span className="ml-2 px-2 py-0.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold align-middle">
-                              LUAR BIRO • isi manual
+                              EXTERNAL • isi manual
                             </span>
                           )}
                         </span>
