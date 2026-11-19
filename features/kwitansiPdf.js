@@ -6,7 +6,8 @@
 //   1. Per peserta: Kwitansi, Rincian Biaya + Perhitungan SPD
 //      Rampung, SPD lembar depan, dan Daftar Pengeluaran Riil berkop
 //      (hanya kalau ada biaya tanpa bukti, mis. transport dalam kota).
-//   2. Daftar Nominatif (landscape) — semua peserta, di akhir.
+//   2. Form Bukti Kehadiran (dalam kota s.d. 8 jam saja).
+//   3. Daftar Nominatif (landscape) — semua peserta, di akhir.
 //
 // Data masuk sudah dihitung oleh kwitansiTarif.hitungKegiatan(), jadi
 // berkas ini hanya menata letak — tidak ada aturan PMK di sini.
@@ -31,6 +32,8 @@ let TEBAL = "Tahoma-Tebal";
 const NARROW = "Narrow";
 const NARROW_TEBAL = "Narrow-Tebal";
 const JUDUL_KWITANSI = "Times-TebalMiring";
+const ARIAL = "Arial";
+const ARIAL_TEBAL = "Arial-Tebal";
 
 const FONT_DIR = path.join(__dirname, "..", "assets", "fonts");
 
@@ -41,6 +44,8 @@ function pasangFontKwitansi(doc) {
     [NARROW, "arialn.ttf", "Helvetica"],
     [NARROW_TEBAL, "arialnb.ttf", "Helvetica-Bold"],
     [JUDUL_KWITANSI, "timesbi.ttf", "Times-BoldItalic"],
+    [ARIAL, "arial.ttf", "Helvetica"],
+    [ARIAL_TEBAL, "arialbd.ttf", "Helvetica-Bold"],
   ];
   for (const [nama, berkas, cadangan] of daftar) {
     const lokasi = path.join(FONT_DIR, berkas);
@@ -635,6 +640,111 @@ function isiHalamanRiil(doc, k, p) {
   blokTtd(doc, { x: x + kol + 30, y, lebar: kol - 30, align: "left", tebalNip: true, garisNama: false, tinggi: 56, judul: ["", "Pelaksana Surat Perjalanan Dinas", ""], nama: p.nama, nip: p.nip });
 }
 
+// =========================================================
+// FORM BUKTI KEHADIRAN — DALAM KOTA S.D. 8 JAM
+// =========================================================
+//
+// Satu lembar untuk seluruh peserta (landscape, kop Kemnaker). Penugasan
+// lebih dari sehari diisi per hari: tiap hari satu blok berisi semua
+// peserta, dengan Hari, Tanggal, dan kolom pejabat pengesah digabung
+// sepanjang blok seperti templat. Nama/jabatan/tanda tangan pejabat di
+// tempat tujuan dikosongkan untuk diisi tangan.
+
+const NAMA_HARI = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
+
+function daftarTanggal(dari, sampai) {
+  const hasil = [];
+  const t = new Date(`${dari}T00:00:00Z`);
+  const akhir = new Date(`${sampai || dari}T00:00:00Z`);
+  while (t <= akhir && hasil.length < 60) {
+    hasil.push({ iso: t.toISOString().slice(0, 10), hari: NAMA_HARI[t.getUTCDay()] });
+    t.setUTCDate(t.getUTCDate() + 1);
+  }
+  return hasil;
+}
+
+const KOP_GAMBAR = path.join(__dirname, "..", "assets", "images", "kop-kemnaker.png");
+const KOP_RASIO = 178 / 804; // tinggi/lebar kop-kemnaker.png
+
+function halamanBuktiKehadiran(doc, k) {
+  const BARIS = 30;
+  // Lebar kolom mengikuti templat Excel (A..G), diskalakan ke lebar isi.
+  const PROPORSI = [13.8, 29.5, 10.5, 24, 22.5, 18.2, 20.9];
+  let xs;
+  let y;
+
+  const sel = (isi, x0, x1, y0, h, { tebal = true, ukuran = 11 } = {}) => {
+    doc.lineWidth(0.6).rect(x0, y0, x1 - x0, h).stroke();
+    doc.font(tebal ? ARIAL_TEBAL : ARIAL).fontSize(ukuran);
+    const th = doc.heightOfString(isi, { width: x1 - x0 - 6, align: "center" });
+    doc.text(isi, x0 + 3, y0 + (h - th) / 2, { width: x1 - x0 - 6, align: "center" });
+  };
+
+  const kepala = () => {
+    doc.addPage({ size: "A4", layout: "landscape", margins: { top: 28, bottom: 28, left: 40, right: 40 } });
+    const x = doc.page.margins.left;
+    const w = lebarIsi(doc);
+    const total = PROPORSI.reduce((a, b) => a + b, 0);
+    xs = PROPORSI.reduce((a, p) => [...a, a[a.length - 1] + (p / total) * w], [x]);
+    y = doc.page.margins.top;
+    if (fs.existsSync(KOP_GAMBAR)) {
+      const lebarKop = w * 0.8;
+      doc.image(KOP_GAMBAR, x, y, { width: lebarKop });
+      y += lebarKop * KOP_RASIO + 6;
+      doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
+      y += 16;
+    } else {
+      y = kopKemnaker(doc, x, y, w) + 14;
+    }
+    doc.font(ARIAL_TEBAL).fontSize(12);
+    doc.text("Form Bukti Kehadiran Pelaksanaan Perjalanan Dinas Jabatan", x, y, { width: w, align: "center" });
+    doc.text("Dalam Kota sampai dengan 8 (delapan) jam", x, doc.y + 1, { width: w, align: "center" });
+    y = doc.y + 14;
+
+    // Kepala tabel dua tingkat + baris nomor kolom.
+    const t1 = 20;
+    ["No", "Pelaksana SPD", "Hari", "Tanggal"].forEach((s, i) => sel(s, xs[i], xs[i + 1], y, 2 * t1));
+    sel("Pejabat/Petugas yang mengesahkan", xs[4], xs[7], y, t1);
+    ["Nama", "Jabatan", "Tanda Tangan"].forEach((s, i) => sel(s, xs[4 + i], xs[5 + i], y + t1, t1));
+    y += 2 * t1;
+    for (let i = 0; i < 7; i++) sel(`(${i + 1})`, xs[i], xs[i + 1], y, 16, { tebal: false, ukuran: 9 });
+    y += 16;
+  };
+
+  const tulisSel = (isi, i, y0, h, align = "center") => {
+    doc.font(ARIAL).fontSize(10);
+    const lebar = xs[i + 1] - xs[i] - 8;
+    const th = Math.min(h - 4, doc.heightOfString(isi, { width: lebar, align }));
+    doc.text(isi, xs[i] + 4, y0 + Math.max(2, (h - th) / 2), { width: lebar, align, height: h - 2, ellipsis: true });
+  };
+
+  kepala();
+  const batasBawah = () => doc.page.height - doc.page.margins.bottom;
+  let no = 1;
+  for (const hari of daftarTanggal(k.tanggalBerangkat, k.tanggalKembali)) {
+    let sisa = [...k.peserta];
+    while (sisa.length) {
+      if (batasBawah() - y < BARIS) kepala();
+      const muat = Math.floor((batasBawah() - y) / BARIS);
+      const blok = sisa.slice(0, muat);
+      sisa = sisa.slice(muat);
+      const yAwal = y;
+      for (const p of blok) {
+        doc.lineWidth(0.6).rect(xs[0], y, xs[1] - xs[0], BARIS).stroke();
+        doc.rect(xs[1], y, xs[2] - xs[1], BARIS).stroke();
+        tulisSel(String(no++), 0, y, BARIS);
+        tulisSel(p.nama, 1, y, BARIS, "left");
+        y += BARIS;
+      }
+      // Hari, Tanggal, dan pejabat pengesah: satu sel sepanjang blok.
+      for (let i = 2; i < 7; i++) doc.lineWidth(0.6).rect(xs[i], yAwal, xs[i + 1] - xs[i], y - yAwal).stroke();
+      tulisSel(hari.hari, 2, yAwal, y - yAwal);
+      tulisSel(tanggalPanjang(hari.iso), 3, yAwal, y - yAwal);
+    }
+  }
+  doc.font(ISI).fontSize(HURUF);
+}
+
 // SPBY per peserta, memakai halaman yang sama dengan SPBY service
 // kendaraan. Akun 026.01.WA.2158.EBA.994.002.A.524111 dipecah:
 // kegiatan/output/komponen "2158.EBA.994.002.A" dan kode akun "524111".
@@ -680,6 +790,7 @@ function tulisKwitansiPdf(kegiatan, tujuan) {
     halamanSpd(doc, kegiatan, p);
     if (itemRiil(p).length) halamanRiil(doc, kegiatan, p);
   }
+  if (kegiatan.sampai8Jam) halamanBuktiKehadiran(doc, kegiatan);
   halamanNominatif(doc, kegiatan);
 
   doc.end();

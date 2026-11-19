@@ -37,6 +37,7 @@ const hariIni = () => new Date().toISOString().slice(0, 10);
 
 const FORM_AWAL = () => ({
   jenis: "dalam",
+  sampai_8_jam: false,
   akun: "",
   nomor_nota_dinas: "",
   maksud: "",
@@ -186,12 +187,20 @@ export default function KwitansiPerdin({ operator }) {
     }));
   };
 
-  const gantiJenis = (jenis) => {
+  // "dalam8" = dalam kota s.d. 8 jam: jenis tetap "dalam", tanpa uang harian.
+  const gantiJenis = (pilihan) => {
+    const jenis = pilihan === "luar" ? "luar" : "dalam";
     setForm((f) => {
       const akunCocok = ref?.akun.find((a) => a.kode === f.akun)?.jenis === jenis;
-      return { ...f, jenis, akun: akunCocok ? f.akun : ref?.akun.find((a) => a.jenis === jenis)?.kode || "" };
+      return {
+        ...f,
+        jenis,
+        sampai_8_jam: pilihan === "dalam8",
+        akun: akunCocok ? f.akun : ref?.akun.find((a) => a.jenis === jenis)?.kode || "",
+      };
     });
   };
+  const pilihanJenis = form.jenis === "luar" ? "luar" : form.sampai_8_jam ? "dalam8" : "dalam";
 
   const akunTersedia = useMemo(() => (ref?.akun || []).filter((a) => a.jenis === form.jenis), [ref, form.jenis]);
   const provinsiDipilih = ref?.provinsi.find((p) => p.nama === form.provinsi);
@@ -306,9 +315,10 @@ export default function KwitansiPerdin({ operator }) {
             <section className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6">
               <h2 className="text-base font-extrabold mb-4">Data Kegiatan</h2>
 
-              <div className="inline-flex p-1.5 bg-paper border border-mist rounded-2xl mb-5">
+              <div className="inline-flex flex-wrap p-1.5 bg-paper border border-mist rounded-2xl mb-2">
                 {[
                   ["dalam", "Dalam Kota (> 8 jam)"],
+                  ["dalam8", "Dalam Kota (s.d. 8 jam)"],
                   ["luar", "Luar Kota"],
                 ].map(([k, label]) => (
                   <button
@@ -316,13 +326,20 @@ export default function KwitansiPerdin({ operator }) {
                     type="button"
                     onClick={() => gantiJenis(k)}
                     className={`px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
-                      form.jenis === k ? "bg-brand text-white shadow" : "text-slate-600 hover:text-navy"
+                      pilihanJenis === k ? "bg-brand text-white shadow" : "text-slate-600 hover:text-navy"
                     }`}
                   >
                     {label}
                   </button>
                 ))}
               </div>
+              <p className="text-[11px] text-slate-400 mb-5">
+                {pilihanJenis === "dalam8"
+                  ? "Tanpa uang harian, hanya transport. PDF menyertakan Form Bukti Kehadiran untuk ditandatangani pejabat di tempat tujuan."
+                  : pilihanJenis === "dalam"
+                    ? "Uang harian dalam kota + transport."
+                    : "Uang harian, penginapan, tiket, dan transport menurut PMK."}
+              </p>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 {admin && (

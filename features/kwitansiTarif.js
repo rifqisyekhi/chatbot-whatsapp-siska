@@ -200,6 +200,10 @@ function hitungKegiatan(input = {}) {
     ALAT_ANGKUT.find((a) => a.kode === (sekitar ? "umum" : "pesawat"));
   const kotaBandara = alat.darat && rute?.jenis === "provinsi" ? rute.asal : kotaTujuanTeks;
 
+  // Dalam kota sampai dengan 8 jam: hanya biaya transport, tanpa uang
+  // harian/representasi; PDF menyertakan Form Bukti Kehadiran.
+  const sampai8Jam = jenis === "dalam" && (input.sampai_8_jam === true || input.sampai_8_jam === "true");
+
   const peserta = daftar.map((p, i) => {
     const nama = teks(p.nama);
     if (!nama) throw new GalatKwitansi(`Nama peserta ke-${i + 1} kosong.`);
@@ -210,10 +214,10 @@ function hitungKegiatan(input = {}) {
 
     // Uang harian
     const tarifUh = provinsi.uangHarian[kunciKota];
-    rincian.push({ kunci: "harian", uraian: "Uang Harian", volume: hari, satuan: "Hari", tarif: tarifUh, jumlah: hari * tarifUh });
+    if (!sampai8Jam) rincian.push({ kunci: "harian", uraian: "Uang Harian", volume: hari, satuan: "Hari", tarif: tarifUh, jumlah: hari * tarifUh });
 
     // Uang representasi — hanya eselon I/II
-    if (tingkat.representasi) {
+    if (tingkat.representasi && !sampai8Jam) {
       const t = tingkat.representasi[kunciKota];
       rincian.push({ kunci: "representasi", uraian: "Uang Representasi", volume: hari, satuan: "Hari", tarif: t, jumlah: hari * t });
     }
@@ -283,6 +287,7 @@ function hitungKegiatan(input = {}) {
 
   return {
     jenis,
+    sampai8Jam,
     akun,
     maksud: teks(input.maksud),
     provinsi: provinsi.nama,
