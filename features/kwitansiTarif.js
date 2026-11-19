@@ -328,6 +328,8 @@ function referensi() {
     kotaTujuan: pilihanKota(),
     alatAngkut: ALAT_ANGKUT,
     pejabat: pejabat(),
+    // Nomor DIPA untuk Surat Pernyataan Pembebanan Biaya Pembatalan.
+    dipa: process.env.KWITANSI_DIPA || "",
     sumber: "PMK 32 Tahun 2025 (SBM TA 2026)",
   };
 }

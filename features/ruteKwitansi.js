@@ -12,6 +12,7 @@
 
 const { hitungKegiatan, referensi, GalatKwitansi } = require("./kwitansiTarif");
 const { tulisKwitansiPdf } = require("./kwitansiPdf");
+const { tulisSuratBatalPdf } = require("./suratBatalPdf");
 const auth = require("./kwitansiAuth");
 const db = require("../db/perjalananDinas");
 
@@ -135,10 +136,44 @@ function pasangRuteKwitansi(app) {
     try {
       const baris = await ambilMilik(req, res);
       if (!baris) return;
-      const alasan = String(req.body?.alasan || "").trim().slice(0, 500);
+      if (baris.status === "dibatalkan") throw new GalatKwitansi("Perjalanan dinas ini sudah dibatalkan.");
+      const b = req.body || {};
+      const teks = (v, n = 300) => String(v ?? "").trim().slice(0, n);
+      const tanggalAtau = (v, cadangan) => (/^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v : cadangan);
+
+      const alasan = teks(b.alasan, 500);
       if (!alasan) throw new GalatKwitansi("Alasan pembatalan wajib diisi.");
-      const tanggal = /^\d{4}-\d{2}-\d{2}$/.test(req.body?.tanggal || "") ? req.body.tanggal : tanggalHariIni();
-      res.json(await db.batalkan(baris.id, { alasan, tanggal, oleh: req.operator.nama }));
+
+      // Peserta dipilih lewat indeks di isian.peserta; semua = batal seluruhnya.
+      const daftarPeserta = Array.isArray(baris.isian?.peserta) ? baris.isian.peserta : [];
+      const pilih = [...new Set((Array.isArray(b.peserta) ? b.peserta : []).map(Number))]
+        .filter((i) => Number.isInteger(i) && i >= 0 && i < daftarPeserta.length);
+      if (!pilih.length) throw new GalatKwitansi("Pilih peserta yang dibatalkan.");
+      const seluruh = pilih.length === daftarPeserta.length;
+
+      const biaya = b.biaya && typeof b.biaya === "object" ? b.biaya : {};
+      const kejadian = {
+        waktu: new Date().toISOString(),
+        oleh: req.operator.nama,
+        seluruh,
+        alasan,
+        tanggal: tanggalAtau(b.tanggal, tanggalHariIni()),
+        nomor_pernyataan: teks(b.nomor_pernyataan, 200),
+        nomor_surat_tugas: teks(b.nomor_surat_tugas, 200),
+        tanggal_surat_tugas: tanggalAtau(b.tanggal_surat_tugas, ""),
+        uraian_biaya: teks(b.uraian_biaya, 300) || "transport berupa tiket pesawat",
+        sifat_biaya: b.sifat_biaya === "sebagian" ? "sebagian" : "seluruhnya",
+        dipa: teks(b.dipa, 300),
+        peserta: pilih.map((i) => ({
+          ...daftarPeserta[i],
+          biaya_hangus: Math.max(0, Math.floor(Number(String(biaya[i] ?? "").replace(/[^\d]/g, "")) || 0)),
+        })),
+      };
+
+      if (seluruh) return res.json(await db.batalkan(baris.id, { kejadian, oleh: req.operator.nama }));
+      const isian = { ...baris.isian, peserta: daftarPeserta.filter((_, i) => !pilih.includes(i)) };
+      const kegiatan = hitungKegiatan(isian);
+      res.json(await db.batalkan(baris.id, { kejadian, isian, kegiatan, oleh: req.operator.nama }));
     } catch (err) {
       balasGalat(res, err, "Gagal membatalkan perjalanan dinas");
     }
@@ -147,7 +182,14 @@ function pasangRuteKwitansi(app) {
   app.post("/api/kwitansi/perjalanan/:id/pulihkan", auth.wajibLogin, async (req, res) => {
     try {
       const baris = await ambilMilik(req, res);
-      if (baris) res.json(await db.pulihkan(baris.id, { oleh: req.operator.nama }));
+      if (!baris) return;
+      // Peserta yang dibatalkan sebagian dikembalikan ke isian.
+      const kembali = (baris.pembatalan || [])
+        .filter((e) => !e.seluruh)
+        .flatMap((e) => e.peserta.map(({ biaya_hangus: _, ...p }) => p));
+      const isian = { ...baris.isian, peserta: [...(baris.isian?.peserta || []), ...kembali] };
+      const kegiatan = hitungKegiatan(isian);
+      res.json(await db.pulihkan(baris.id, { isian, kegiatan, oleh: req.operator.nama }));
     } catch (err) {
       balasGalat(res, err, "Gagal memulihkan perjalanan dinas");
     }
@@ -176,6 +218,33 @@ function pasangRuteKwitansi(app) {
       return balasGalat(res, err, "Gagal menyusun PDF perjalanan dinas");
     }
     kirimPdf(res, kegiatan);
+  });
+
+  // Surat Pernyataan Pembatalan (+ Pembebanan Biaya bila ada biaya yang
+  // hangus) untuk setiap peserta yang dibatalkan.
+  app.get("/api/kwitansi/perjalanan/:id/surat-batal", auth.wajibLogin, async (req, res) => {
+    let data;
+    try {
+      const baris = await ambilMilik(req, res);
+      if (!baris) return;
+      const pembatalan = baris.pembatalan || [];
+      if (!pembatalan.length) throw new GalatKwitansi("Belum ada pembatalan pada perjalanan dinas ini.");
+      // Maksud, tanggal, tempat, dan SPD diambil dari isian perjalanan.
+      const isian = baris.isian?.peserta?.length ? baris.isian : { ...baris.isian, peserta: pembatalan[0].peserta };
+      data = { kegiatan: hitungKegiatan(isian), pembatalan, kepalaBiro: await db.kepalaBiro() };
+    } catch (err) {
+      return balasGalat(res, err, "Gagal menyusun surat pembatalan");
+    }
+    const nama = `Surat_Pembatalan_${data.kegiatan.kotaTujuan}_${data.kegiatan.tanggalBerangkat}.pdf`.replace(/[^\w.-]+/g, "_");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${nama}"`);
+    try {
+      tulisSuratBatalPdf(data, res);
+    } catch (err) {
+      console.error("[API] Gagal membuat surat pembatalan:", err?.message || err);
+      if (!res.headersSent) res.status(500).json({ error: "Gagal membuat surat pembatalan" });
+      else res.end();
+    }
   });
 }
 

@@ -48,4 +48,13 @@ CREATE TABLE IF NOT EXISTS perjalanan_dinas (
 CREATE INDEX IF NOT EXISTS perjalanan_dinas_bidang_idx
     ON perjalanan_dinas (bidang, tanggal_berangkat DESC);
 
+-- Pembatalan per peserta (dasar Surat Pernyataan Pembatalan dan
+-- Pembebanan Biaya): [{tanggal, alasan, nomor_pernyataan,
+-- nomor_surat_tugas, tanggal_surat_tugas, uraian_biaya, sifat_biaya,
+-- dipa, seluruh, oleh, peserta: [isian peserta + biaya_hangus]}].
+-- Pembatalan sebagian memindahkan peserta dari `isian` ke sini;
+-- pembatalan seluruhnya membiarkan `isian` utuh dan status 'dibatalkan'.
+ALTER TABLE perjalanan_dinas
+    ADD COLUMN IF NOT EXISTS pembatalan JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 COMMIT;

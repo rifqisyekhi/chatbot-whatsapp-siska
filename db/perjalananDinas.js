@@ -18,7 +18,11 @@ const KOLOM_RINGKAS = `
   to_char(tanggal_kembali, 'YYYY-MM-DD') AS tanggal_kembali,
   jumlah_peserta, nama_peserta, total, alasan_batal,
   to_char(tanggal_batal, 'YYYY-MM-DD') AS tanggal_batal,
-  dibatalkan_oleh, dibuat_oleh, diubah_oleh, dibuat_pada, diubah_pada
+  dibatalkan_oleh, dibuat_oleh, diubah_oleh, dibuat_pada, diubah_pada,
+  jsonb_array_length(pembatalan) AS jumlah_pembatalan,
+  (SELECT COALESCE(SUM(jsonb_array_length(e->'peserta')), 0)::int
+     FROM jsonb_array_elements(pembatalan) e
+    WHERE NOT COALESCE((e->>'seluruh')::boolean, false)) AS peserta_batal
 `;
 
 let siap = false;
@@ -79,7 +83,7 @@ async function daftar({ bidang = null, tahun = null } = {}) {
 }
 
 async function satu(id) {
-  return satuBaris(`SELECT ${KOLOM_RINGKAS}, isian, riwayat FROM perjalanan_dinas WHERE id = $1`, [Number(id)]);
+  return satuBaris(`SELECT ${KOLOM_RINGKAS}, isian, riwayat, pembatalan FROM perjalanan_dinas WHERE id = $1`, [Number(id)]);
 }
 
 async function buat({ bidang, isian, kegiatan, oleh }) {
@@ -117,27 +121,64 @@ async function ubah(id, { isian, kegiatan, oleh }) {
   );
 }
 
-async function batalkan(id, { alasan, tanggal, oleh }) {
+// Pembatalan seluruh peserta: status 'dibatalkan', isian utuh.
+// Pembatalan sebagian: status tetap aktif, `isian` dan ringkasan diganti
+// dengan peserta yang tersisa (dihitung ulang oleh pemanggil).
+async function batalkan(id, { kejadian, isian = null, kegiatan = null, oleh }) {
+  const nama = kejadian.peserta.map((p) => p.nama).join(", ");
+  if (kejadian.seluruh) {
+    return satuBaris(
+      `UPDATE perjalanan_dinas SET
+         status = 'dibatalkan', alasan_batal = $2, tanggal_batal = $3,
+         dibatalkan_oleh = $4, diubah_oleh = $4,
+         pembatalan = pembatalan || $5::jsonb,
+         riwayat = riwayat || $6::jsonb, diubah_pada = now()
+       WHERE id = $1
+       RETURNING ${KOLOM_RINGKAS}`,
+      [Number(id), kejadian.alasan, kejadian.tanggal, oleh, JSON.stringify([kejadian]), jejak(oleh, "dibatalkan", kejadian.alasan)],
+    );
+  }
+  const r = ringkasan(kegiatan, isian);
   return satuBaris(
     `UPDATE perjalanan_dinas SET
-       status = 'dibatalkan', alasan_batal = $2, tanggal_batal = $3,
-       dibatalkan_oleh = $4, diubah_oleh = $4,
-       riwayat = riwayat || $5::jsonb, diubah_pada = now()
+       jumlah_peserta = $2, nama_peserta = $3, total = $4, isian = $5,
+       pembatalan = pembatalan || $6::jsonb, diubah_oleh = $7,
+       riwayat = riwayat || $8::jsonb, diubah_pada = now()
      WHERE id = $1
      RETURNING ${KOLOM_RINGKAS}`,
-    [Number(id), alasan, tanggal, oleh, jejak(oleh, "dibatalkan", alasan)],
+    [
+      Number(id), r.jumlah_peserta, r.nama_peserta, r.total, JSON.stringify(isian),
+      JSON.stringify([kejadian]), oleh, jejak(oleh, "peserta dibatalkan", `${nama}: ${kejadian.alasan}`),
+    ],
   );
 }
 
-async function pulihkan(id, { oleh }) {
+// Membatalkan semua pembatalan: peserta yang dipindah dikembalikan ke
+// isian oleh pemanggil, status aktif, daftar pembatalan dikosongkan.
+async function pulihkan(id, { isian, kegiatan, oleh }) {
+  const r = ringkasan(kegiatan, isian);
   return satuBaris(
     `UPDATE perjalanan_dinas SET
        status = 'aktif', alasan_batal = '', tanggal_batal = NULL, dibatalkan_oleh = '',
-       diubah_oleh = $2, riwayat = riwayat || $3::jsonb, diubah_pada = now()
+       jumlah_peserta = $2, nama_peserta = $3, total = $4, isian = $5,
+       pembatalan = '[]'::jsonb,
+       diubah_oleh = $6, riwayat = riwayat || $7::jsonb, diubah_pada = now()
      WHERE id = $1
      RETURNING ${KOLOM_RINGKAS}`,
-    [Number(id), oleh, jejak(oleh, "dipulihkan")],
+    [Number(id), r.jumlah_peserta, r.nama_peserta, r.total, JSON.stringify(isian), oleh, jejak(oleh, "dipulihkan")],
   );
+}
+
+// Kepala Biro Keuangan dan BMN untuk Surat Pernyataan Pembatalan:
+// .env lebih dulu, lalu Master Data pegawai.
+async function kepalaBiro() {
+  if (process.env.KWITANSI_KABIRO_NAMA) {
+    return { nama: process.env.KWITANSI_KABIRO_NAMA, nip: process.env.KWITANSI_KABIRO_NIP || "" };
+  }
+  const r = await satuBaris(
+    `SELECT nama, nip FROM pegawai WHERE jabatan ~* '^kepala biro keuangan' LIMIT 1`,
+  ).catch(() => null);
+  return r || { nama: "", nip: "" };
 }
 
 async function hapus(id) {
@@ -155,4 +196,5 @@ module.exports = {
   batalkan,
   pulihkan,
   hapus,
+  kepalaBiro,
 };

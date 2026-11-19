@@ -6,6 +6,7 @@ import {
   Plus,
   Search,
   FileText,
+  FileX2,
   Pencil,
   Ban,
   RotateCcw,
@@ -109,7 +110,16 @@ export default function KwitansiDashboard({ operator, keluar }) {
     }
   };
 
+  const suratBatal = async (d) => {
+    try {
+      await bukaPdf({ url: `api/kwitansi/perjalanan/${d.id}/surat-batal` });
+    } catch (e) {
+      kabari(e.message || "Gagal membuka surat pembatalan", "error");
+    }
+  };
+
   const pulihkan = async (d) => {
+    if (d.status !== "dibatalkan" && !window.confirm(`Kembalikan ${d.peserta_batal} peserta yang dibatalkan ke perjalanan ini?`)) return;
     try {
       await apiKwitansi({ url: `api/kwitansi/perjalanan/${d.id}/pulihkan`, method: "POST", body: {} });
       kabari("Perjalanan dinas dipulihkan");
@@ -280,20 +290,29 @@ export default function KwitansiDashboard({ operator, keluar }) {
                               <p className="text-[11px] mt-1 max-w-[160px] truncate">{d.alasan_batal}</p>
                             </span>
                           ) : (
-                            <span className="inline-block px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold">Aktif</span>
+                            <>
+                              <span className="inline-block px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 text-[11px] font-bold">Aktif</span>
+                              {d.peserta_batal > 0 && (
+                                <p className="text-[11px] mt-1 font-semibold text-amber-600">{d.peserta_batal} peserta batal</p>
+                              )}
+                            </>
                           )}
                         </td>
                         <td className="py-3 px-3">
                           <div className="flex justify-end gap-1">
                             <Aksi judul="PDF" onClick={() => pdf(d)} ikon={FileText} />
+                            {d.jumlah_pembatalan > 0 && (
+                              <Aksi judul="Surat pembatalan" onClick={() => suratBatal(d)} ikon={FileX2} warna="text-amber-700 hover:bg-amber-50" />
+                            )}
                             {!batalkan && (
                               <Link to={`/admin/kwitansi/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
                                 <Pencil className="w-4 h-4" />
                               </Link>
                             )}
-                            {batalkan ? (
-                              <Aksi judul="Pulihkan" onClick={() => pulihkan(d)} ikon={RotateCcw} />
-                            ) : (
+                            {(batalkan || d.peserta_batal > 0) && (
+                              <Aksi judul={batalkan ? "Pulihkan" : "Pulihkan peserta batal"} onClick={() => pulihkan(d)} ikon={RotateCcw} />
+                            )}
+                            {!batalkan && (
                               <Aksi judul="Batalkan" onClick={() => setBatal(d)} ikon={Ban} warna="text-amber-600 hover:bg-amber-50" />
                             )}
                             <Aksi judul="Hapus" onClick={() => hapus(d)} ikon={Trash2} warna="text-rose-500 hover:bg-rose-50" />
@@ -313,9 +332,9 @@ export default function KwitansiDashboard({ operator, keluar }) {
         <ModalBatal
           baris={batal}
           tutup={() => setBatal(null)}
-          selesai={() => {
+          selesai={(seluruh) => {
             setBatal(null);
-            kabari("Perjalanan dinas dibatalkan");
+            kabari(seluruh ? "Perjalanan dinas dibatalkan" : "Peserta dibatalkan");
             muat();
           }}
         />
@@ -339,17 +358,59 @@ function Aksi({ judul, onClick, ikon: Ikon, warna = "text-slate-600 hover:bg-pap
   );
 }
 
+function Label({ children }) {
+  return <span className="block text-xs font-bold text-slate-600 mb-1.5">{children}</span>;
+}
+
+// Pembatalan per peserta. Semua dicentang = perjalanan dibatalkan
+// seluruhnya; sebagian = peserta itu dikeluarkan dari kwitansi dan
+// perjalanan tetap aktif. Isian di sini mengisi Surat Pernyataan
+// Pembatalan dan (bila ada biaya hangus) Surat Pembebanan Biaya.
 function ModalBatal({ baris, tutup, selesai }) {
-  const [alasan, setAlasan] = useState("");
-  const [tanggal, setTanggal] = useState(hariIni());
+  const [peserta, setPeserta] = useState(null); // dari isian tersimpan
+  const [pilih, setPilih] = useState([]);
+  const [biaya, setBiaya] = useState({});
+  const [f, setF] = useState({
+    alasan: "",
+    tanggal: hariIni(),
+    nomor_pernyataan: "",
+    nomor_surat_tugas: baris.nomor_nota_dinas || "",
+    tanggal_surat_tugas: "",
+    uraian_biaya: "transport berupa tiket pesawat",
+    sifat_biaya: "seluruhnya",
+    dipa: "",
+  });
   const [proses, setProses] = useState(false);
   const [galat, setGalat] = useState("");
+  const ubah = (k, v) => setF((s) => ({ ...s, [k]: v }));
+
+  useEffect(() => {
+    apiKwitansi({ url: `api/kwitansi/perjalanan/${baris.id}` })
+      .then((r) => {
+        const daftar = r.isian?.peserta || [];
+        setPeserta(daftar);
+        setPilih(daftar.length === 1 ? [0] : []);
+        const tSpd = r.isian?.tanggal_spd || r.isian?.tanggal_berangkat || "";
+        setF((s) => ({ ...s, tanggal_surat_tugas: s.tanggal_surat_tugas || tSpd }));
+      })
+      .catch((e) => setGalat(e.message || "Gagal memuat peserta"));
+    apiKwitansi({ url: "api/kwitansi/referensi" })
+      .then((r) => r.dipa && setF((s) => ({ ...s, dipa: s.dipa || r.dipa })))
+      .catch(() => {});
+  }, [baris.id]);
+
+  const seluruh = peserta && pilih.length === peserta.length;
+  const adaBiaya = pilih.some((i) => Number(biaya[i]) > 0);
 
   const kirim = async () => {
     setProses(true);
     try {
-      await apiKwitansi({ url: `api/kwitansi/perjalanan/${baris.id}/batal`, method: "POST", body: { alasan, tanggal } });
-      selesai();
+      await apiKwitansi({
+        url: `api/kwitansi/perjalanan/${baris.id}/batal`,
+        method: "POST",
+        body: { ...f, peserta: pilih, biaya },
+      });
+      selesai(seluruh);
     } catch (e) {
       setGalat(e.message || "Gagal membatalkan");
       setProses(false);
@@ -357,8 +418,8 @@ function ModalBatal({ baris, tutup, selesai }) {
   };
 
   return (
-    <div className="fixed inset-0 z-40 bg-navy/40 flex items-center justify-center px-4" onClick={tutup}>
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-40 bg-navy/40 flex items-center justify-center px-4 py-6" onClick={tutup}>
+      <div className="w-full max-w-lg max-h-full overflow-y-auto bg-white rounded-3xl shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h2 className="text-base font-extrabold">Batalkan perjalanan dinas</h2>
@@ -370,16 +431,111 @@ function ModalBatal({ baris, tutup, selesai }) {
             <X className="w-4 h-4" />
           </button>
         </div>
+
+        <div className="mb-4">
+          <Label>Peserta yang dibatalkan</Label>
+          {!peserta ? (
+            <Loader2 className="w-4 h-4 text-brand animate-spin" />
+          ) : (
+            <div className="space-y-2">
+              {peserta.map((p, i) => {
+                const dipilih = pilih.includes(i);
+                return (
+                  <div key={i} className={`rounded-xl border px-3 py-2.5 ${dipilih ? "border-amber-300 bg-amber-50/50" : "border-mist"}`}>
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-amber-600 cursor-pointer"
+                        checked={dipilih}
+                        onChange={(e) => setPilih((s) => (e.target.checked ? [...s, i] : s.filter((x) => x !== i)))}
+                      />
+                      <span className="text-sm font-semibold">{p.nama}</span>
+                    </label>
+                    {dipilih && (
+                      <label className="block mt-2 pl-6">
+                        <span className="block text-[11px] text-slate-500 mb-1">Biaya terlanjur dibayar & tidak bisa di-refund (kosong = tidak ada)</span>
+                        <input
+                          inputMode="numeric"
+                          className={kelasInput + " w-full"}
+                          placeholder="0"
+                          value={biaya[i] ? Number(biaya[i]).toLocaleString("id-ID") : ""}
+                          onChange={(e) => setBiaya((s) => ({ ...s, [i]: e.target.value.replace(/[^\d]/g, "") }))}
+                        />
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+              {peserta.length > 1 && (
+                <p className="text-[11px] text-slate-500">
+                  {seluruh
+                    ? "Semua peserta dicentang: perjalanan dinas dibatalkan seluruhnya."
+                    : "Peserta yang dicentang dikeluarkan dari kwitansi; perjalanan tetap aktif untuk peserta lain."}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
         <label className="block mb-3">
-          <span className="block text-xs font-bold text-slate-600 mb-1.5">Alasan pembatalan</span>
-          <textarea rows={3} className={kelasInput + " w-full"} value={alasan} onChange={(e) => setAlasan(e.target.value)} autoFocus />
+          <Label>Alasan pembatalan</Label>
+          <textarea
+            rows={2}
+            className={kelasInput + " w-full"}
+            placeholder="mis. sakit dan diharuskan rawat inap di rumah sakit"
+            value={f.alasan}
+            onChange={(e) => ubah("alasan", e.target.value)}
+          />
         </label>
-        <label className="block mb-3">
-          <span className="block text-xs font-bold text-slate-600 mb-1.5">Tanggal pembatalan</span>
-          <input type="date" className={kelasInput + " w-full"} value={tanggal} onChange={(e) => setTanggal(e.target.value)} />
-        </label>
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <label className="block">
+            <Label>Tanggal surat pernyataan</Label>
+            <input type="date" className={kelasInput + " w-full"} value={f.tanggal} onChange={(e) => ubah("tanggal", e.target.value)} />
+          </label>
+          <label className="block">
+            <Label>Nomor surat pernyataan</Label>
+            <input className={kelasInput + " w-full"} placeholder="kosong = diisi tangan" value={f.nomor_pernyataan} onChange={(e) => ubah("nomor_pernyataan", e.target.value)} />
+          </label>
+          <label className="block">
+            <Label>Nomor surat tugas</Label>
+            <input className={kelasInput + " w-full"} value={f.nomor_surat_tugas} onChange={(e) => ubah("nomor_surat_tugas", e.target.value)} />
+          </label>
+          <label className="block">
+            <Label>Tanggal surat tugas</Label>
+            <input type="date" className={kelasInput + " w-full"} value={f.tanggal_surat_tugas} onChange={(e) => ubah("tanggal_surat_tugas", e.target.value)} />
+          </label>
+        </div>
+
+        {adaBiaya && (
+          <div className="rounded-2xl bg-paper border border-mist p-3 mb-3 space-y-3">
+            <p className="text-[11px] font-bold text-slate-600">Surat Pernyataan Pembebanan Biaya (ditandatangani PPK)</p>
+            <label className="block">
+              <Label>Biaya yang hangus</Label>
+              <input className={kelasInput + " w-full"} value={f.uraian_biaya} onChange={(e) => ubah("uraian_biaya", e.target.value)} />
+            </label>
+            <div className="grid sm:grid-cols-[1fr_2fr] gap-3">
+              <label className="block">
+                <Label>Tidak bisa di-refund</Label>
+                <select className={kelasInput + " w-full"} value={f.sifat_biaya} onChange={(e) => ubah("sifat_biaya", e.target.value)}>
+                  <option value="seluruhnya">Seluruhnya</option>
+                  <option value="sebagian">Sebagian</option>
+                </select>
+              </label>
+              <label className="block">
+                <Label>Nomor DIPA</Label>
+                <input
+                  className={kelasInput + " w-full"}
+                  placeholder="SP DIPA-026.01.1.450938/2026 tanggal …"
+                  value={f.dipa}
+                  onChange={(e) => ubah("dipa", e.target.value)}
+                />
+              </label>
+            </div>
+          </div>
+        )}
+
         <p className="text-[11px] text-slate-400 mb-4">
-          Data tetap tersimpan dan bisa dipulihkan. Surat pembatalan perjalanan dinas menyusul setelah contoh dokumennya ada.
+          Setelah dibatalkan, surat pernyataan bisa dicetak dari tombol surat di daftar. Bisa dipulihkan kembali bila keliru.
         </p>
         {galat && <p className="mb-3 text-xs font-semibold text-rose-600">{galat}</p>}
         <div className="flex justify-end gap-2">
@@ -388,10 +544,10 @@ function ModalBatal({ baris, tutup, selesai }) {
           </button>
           <button
             onClick={kirim}
-            disabled={proses || !alasan.trim()}
+            disabled={proses || !f.alasan.trim() || !pilih.length}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white text-sm font-bold cursor-pointer"
           >
-            {proses && <Loader2 className="w-4 h-4 animate-spin" />} Batalkan
+            {proses && <Loader2 className="w-4 h-4 animate-spin" />} {seluruh || !peserta || peserta.length < 2 ? "Batalkan" : `Batalkan ${pilih.length} peserta`}
           </button>
         </div>
       </div>
