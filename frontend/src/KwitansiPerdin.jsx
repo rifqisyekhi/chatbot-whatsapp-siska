@@ -215,7 +215,7 @@ export default function KwitansiPerdin({ operator }) {
   // kendaraannya bebas (taksi, taksi/ojek online mobil, bus bandara).
   const simpul = (hasil?.alatAngkut?.simpul || "Bandara").toLowerCase();
   const petunjukKota = !form.kota_tujuan
-    ? "Pilih dari daftar PMK atau ketik sendiri"
+    ? undefined
     : !rute
       ? "Belum ada di tabel PMK — transport darat diisi riil bila ada"
       : rute.jenis === "ibukota"
@@ -362,7 +362,7 @@ export default function KwitansiPerdin({ operator }) {
                   </select>
                 </Medan>
 
-                <Medan label="Dalam rangka" className="sm:col-span-2" petunjuk='Contoh: "Rapat Penyusunan Laporan Keuangan Triwulan III"'>
+                <Medan label="Dalam rangka" className="sm:col-span-2">
                   <textarea
                     rows={2}
                     className={kelasInput}
@@ -371,14 +371,19 @@ export default function KwitansiPerdin({ operator }) {
                   />
                 </Medan>
 
-                <Medan label="Tempat kegiatan" petunjuk='Contoh: "Balai K3 Jakarta"'>
+                <Medan label="Tempat kegiatan">
                   <input className={kelasInput} value={form.tempat} onChange={(e) => ubah("tempat", e.target.value)} />
                 </Medan>
 
                 {luar ? (
                   <>
                     <Medan label="Provinsi tujuan" petunjuk="Menentukan tarif uang harian, hotel, dan transport bandara/stasiun">
-                      <select className={kelasInput} value={form.provinsi} onChange={(e) => ubah("provinsi", e.target.value)}>
+                      <select
+                        className={kelasInput}
+                        value={form.provinsi}
+                        // Ganti provinsi = kota lama tidak berlaku lagi.
+                        onChange={(e) => setForm((f) => ({ ...f, provinsi: e.target.value, kota_tujuan: e.target.value === f.provinsi ? f.kota_tujuan : "" }))}
+                      >
                         <option value="">— Pilih provinsi —</option>
                         {(ref?.provinsi || []).map((p) => (
                           <option key={p.nama} value={p.nama}>{p.nama}</option>
@@ -388,8 +393,9 @@ export default function KwitansiPerdin({ operator }) {
                     <Medan label="Kota / kabupaten tujuan" petunjuk={petunjukKota}>
                       <input
                         list="daftar-kota-pmk"
-                        className={kelasInput}
+                        className={`${kelasInput} disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed`}
                         value={form.kota_tujuan}
+                        disabled={!form.provinsi}
                         placeholder={form.provinsi ? "" : "Pilih provinsi dulu"}
                         onChange={(e) => ubah("kota_tujuan", e.target.value)}
                       />
@@ -402,12 +408,12 @@ export default function KwitansiPerdin({ operator }) {
                       </datalist>
                     </Medan>
                     <Medan
-                      label="Alat angkut"
+                      label="Transportasi"
                       className="sm:col-span-2"
                       petunjuk={
                         alat?.kode === "dinas"
                           ? "Tanpa tiket dan transport bandara — BBM, tol, dan parkir diisi riil per peserta"
-                          : "Menentukan isian tiket, transport bandara/stasiun/terminal, dan transport darat"
+                          : undefined
                       }
                     >
                       <select className={kelasInput} value={form.alat_angkut} onChange={(e) => ubah("alat_angkut", e.target.value)}>
@@ -539,7 +545,7 @@ export default function KwitansiPerdin({ operator }) {
                           <input className={kelasInput} value={p.jabatan} onChange={(e) => ubahPeserta(i, "jabatan", e.target.value)} />
                         </Medan>
                         {p.luar_biro && (
-                          <Medan label="Unit kerja / instansi" petunjuk='Contoh: "Biro Perencanaan Setjen"'>
+                          <Medan label="Unit kerja / instansi">
                             <input className={kelasInput} value={p.unit} onChange={(e) => ubahPeserta(i, "unit", e.target.value)} />
                           </Medan>
                         )}
@@ -571,7 +577,7 @@ export default function KwitansiPerdin({ operator }) {
                                 bawaan?.darat
                                   ? `PMK 2 × ${rupiah(rute.tarif)} — kosong = tarif PMK, 0 = tidak dipakai`
                                   : rute?.tarif
-                                    ? `Tarif PMK ${rupiah(2 * rute.tarif)} PP — tidak otomatis untuk alat angkut ini`
+                                    ? `Tarif PMK ${rupiah(2 * rute.tarif)} PP — tidak otomatis untuk transportasi ini`
                                     : "Kosong = tidak ada; isi riil bila ada"
                               }
                             >
@@ -617,7 +623,7 @@ export default function KwitansiPerdin({ operator }) {
                               label={`Transport ${simpul} Jakarta PP`}
                               petunjuk={
                                 bawaan && !bawaan.taksiAsal
-                                  ? "Tidak otomatis untuk alat angkut/tujuan ini"
+                                  ? "Tidak otomatis untuk transportasi/tujuan ini"
                                   : taksiJkt
                                     ? `Lumpsum PMK 2 × ${rupiah(taksiJkt)} — taksi, online, atau bus ${simpul}`
                                     : undefined
@@ -633,7 +639,7 @@ export default function KwitansiPerdin({ operator }) {
                               label={`Transport ${simpul} kota tujuan PP`}
                               petunjuk={
                                 bawaan && !bawaan.taksiTujuan && provinsiDipilih?.taksi
-                                  ? "Tidak otomatis untuk alat angkut/tujuan ini"
+                                  ? "Tidak otomatis untuk transportasi/tujuan ini"
                                   : provinsiDipilih
                                   ? provinsiDipilih.taksi
                                     ? `Lumpsum PMK 2 × ${rupiah(provinsiDipilih.taksi)}`
