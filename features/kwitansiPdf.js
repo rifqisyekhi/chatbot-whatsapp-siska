@@ -320,27 +320,29 @@ function halamanNominatifNomi(doc, k) {
   doc.lineWidth(1).moveTo(x, y).lineTo(x + w, y).stroke();
   tutupKolom(y);
 
-  // Tanda tangan: PPK (setuju dibayar) dan operator pembuat daftar.
+  // Tanda tangan tiga kolom: PPK (setuju dibayar) di kiri, Bendahara
+  // Pengeluaran di tengah, operator yang mencetak sebagai pembuat daftar
+  // di kanan.
   if (y + 130 > doc.page.height - doc.page.margins.bottom) {
     halaman();
     y = doc.page.margins.top;
   }
   const pembuat = k.pembuat || {};
-  const lebarTtd = 280;
-  const xKanan = x + w - lebarTtd;
-  doc.font(TEBAL).fontSize(10).text(`Jakarta, ${tanggalPanjang(k.tanggalKembali)}`, xKanan, y + 14, { width: lebarTtd, align: "center" });
+  const lebarTtd = w / 3;
+  const xKol = [x, x + lebarTtd, x + 2 * lebarTtd];
+  doc.font(TEBAL).fontSize(10).text(`Jakarta, ${tanggalPanjang(k.tanggalKembali)}`, xKol[2], y + 14, { width: lebarTtd, align: "center" });
   const yTtd = y + 42;
   const asli = [ISI, HURUF];
   [ISI, HURUF] = [TEBAL, 10];
   try {
-    blokTtd(doc, {
-      x: x + 20, y: yTtd, lebar: lebarTtd, tinggi: 56, tebalNip: true,
-      judul: ["Setuju dibayar :", "Pejabat Pembuat Komitmen", "Biro Keuangan dan BMN Setjen Kemnaker"], ...k.pejabat.ppk,
-    });
-    blokTtd(doc, {
-      x: xKanan, y: yTtd, lebar: lebarTtd, tinggi: 56, tebalNip: true,
-      judul: ["", "Pembuat daftar,", ""], nama: pembuat.nama || "", nip: pembuat.nip || "",
-    });
+    const blok = [
+      { judul: ["Setuju dibayar :", "Pejabat Pembuat Komitmen", "Biro Keuangan dan BMN Setjen Kemnaker"], ...k.pejabat.ppk },
+      { judul: ["Lunas dibayar :", "Bendahara Pengeluaran", "Setjen Kemnaker"], ...k.pejabat.bendahara },
+      { judul: ["", "Pembuat daftar,", ""], nama: pembuat.nama || "", nip: pembuat.nip || "" },
+    ];
+    // Nama satu baris; nama yang terlalu panjang untuk kolomnya dikecilkan.
+    const ukuranNama = Math.min(...blok.map((b) => ukuranSatuBaris(doc, [b.nama], lebarTtd - 8, TEBAL, 10)));
+    blok.forEach((b, i) => blokTtd(doc, { x: xKol[i], y: yTtd, lebar: lebarTtd, tinggi: 56, tebalNip: true, ukuranNama, ...b }));
   } finally {
     [ISI, HURUF] = asli;
   }
