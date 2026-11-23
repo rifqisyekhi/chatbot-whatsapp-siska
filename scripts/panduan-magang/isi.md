@@ -103,3 +103,46 @@ server menyala, aman dijalankan berulang, `IF NOT EXISTS`) dan
 4. Buat halaman daftar dan form.
 5. Buat PDF: SPBY (pakai `halamanSpby`) + kwitansi sesuai contoh.
 6. Uji sebagai operator dan bendahara, lalu buat Pull Request.
+
+## 6. Kalau memakai AI (Claude, Copilot, ChatGPT, dll.)
+
+Repo ini sudah punya berkas aturan untuk AI: `AGENTS.md` (dibaca otomatis
+oleh Claude Code, Copilot, Cursor, Codex). Isinya membatasi AI hanya
+mengubah folder fiturmu. Untuk AI di browser (ChatGPT, Gemini, dll.) yang
+tidak membaca berkas itu, **tempel prompt di bawah di awal setiap
+percakapan baru**, lalu baru tulis permintaanmu.
+
+Prompt awal untuk `magang/konsumsi`:
+
+```
+Kamu membantu saya mengerjakan fitur KONSUMSI di repo SisKA
+(branch magang/konsumsi). Aturan WAJIB, tidak boleh dilanggar:
+
+1. Hanya boleh membuat/mengubah berkas di:
+   - frontend/src/administrasi/fitur/konsumsi/
+   - features/fitur/konsumsi/
+   - db/008-konsumsi.sql dan db/konsumsi.js
+2. JANGAN mengubah berkas lain (App.jsx, index.js, menu.js,
+   Kerangka.jsx, Kwitansi*.jsx, ruteKwitansi.js, package.json,
+   deploy/, .gitignore). Kalau menurutmu perlu, BERHENTI dan
+   jelaskan dulu alasannya, jangan langsung diubah.
+3. Jangan membaca atau menulis .env, kata sandi, token, NIP,
+   atau nomor WA asli.
+4. Jangan menyarankan git push --force, git reset --hard,
+   menghapus berkas lain, atau npm install paket baru.
+5. Semua rute API berawalan /api/kwitansi/konsumsi/ dan dibuat
+   di features/fitur/konsumsi/rute.js lewat pasang(app, alat).
+6. Ikuti gaya kode yang sudah ada; teks dan komentar Bahasa
+   Indonesia.
+7. Di akhir setiap jawaban, sebutkan berkas apa saja yang diubah.
+```
+
+Untuk `magang/langganan-aplikasi`, pakai prompt yang sama dengan mengganti:
+`KONSUMSI` jadi `LANGGANAN APLIKASI`, `magang/konsumsi` jadi
+`magang/langganan-aplikasi`, folder `konsumsi` jadi `langganan-aplikasi`,
+`db/008-konsumsi.sql dan db/konsumsi.js` jadi
+`db/009-langganan-aplikasi.sql dan db/langgananAplikasi.js`, dan
+`/api/kwitansi/konsumsi/` jadi `/api/kwitansi/langganan-aplikasi/`.
+
+Tetap periksa hasil AI sebelum commit: `git status` harus hanya
+menunjukkan berkas di folder fiturmu (dan `public/` hasil build).
