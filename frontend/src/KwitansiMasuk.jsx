@@ -7,7 +7,7 @@ import { apiKwitansi, bacaSesi, hapusSesi, masuk, simpanSesi } from "./services/
 // GERBANG LOGIN PERJALANAN DINAS
 // =========================================================
 //
-// Membungkus halaman perjalanan dinas: tanpa sesi sah, yang tampil form
+// Membungkus Dashboard Tata Usaha Rokeu: tanpa sesi sah, yang tampil form
 // login. Akun sementara: nomor telepon (WhatsApp) di Master Data SISKA
 // sebagai nama pengguna sekaligus kata sandi. Hanya operator bidang yang
 // bisa masuk. Anak menerima `operator` dan `keluar` lewat fungsi render.
@@ -125,8 +125,8 @@ function FormMasuk({ onMasuk }) {
               Pegawai! <span className="inline-block animate-bounce">👋</span>
             </h1>
             <p className="text-white/80 text-xs lg:text-sm mt-4 leading-relaxed max-w-xs font-normal">
-              Sistem perjalanan dinas Biro Keuangan dan BMN. Susun kwitansi, SPD, dan daftar nominatif per bidang
-              sesuai PMK, langsung jadi PDF.
+              Dashboard Tata Usaha Biro Keuangan dan BMN. Susun SPBY, kwitansi, dan SPJ perjalanan dinas maupun
+              pengeluaran lain per bidang, langsung jadi PDF.
             </p>
           </div>
 
@@ -143,13 +143,13 @@ function FormMasuk({ onMasuk }) {
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-white/80 bg-white/15 px-2 py-0.5 rounded-full inline-block">
-                Perjalanan Dinas
+                Tata Usaha Rokeu
               </span>
               <p className="text-[11px] text-white/75 font-medium mt-0.5">Biro Keuangan dan BMN</p>
             </div>
           </div>
           <h1 className="text-2xl font-bold mt-1">Selamat Datang 👋</h1>
-          <p className="text-xs text-white/80 mt-0.5">Masuk untuk mengelola perjalanan dinas bidang Anda.</p>
+          <p className="text-xs text-white/80 mt-0.5">Masuk untuk mengelola SPJ dan pengeluaran bidang Anda.</p>
         </div>
 
         {/* ---------- Sisi kanan: form ---------- */}
@@ -160,7 +160,7 @@ function FormMasuk({ onMasuk }) {
                 <img src={logoKemnaker} alt="Logo Kemnaker" className="w-full h-full object-contain" />
               </div>
               <div>
-                <h2 className="text-xs font-bold text-navy leading-tight">Perjalanan Dinas</h2>
+                <h2 className="text-xs font-bold text-navy leading-tight">Dashboard Tata Usaha</h2>
                 <p className="text-[10px] text-slate-400">Biro Keuangan dan BMN</p>
               </div>
             </div>

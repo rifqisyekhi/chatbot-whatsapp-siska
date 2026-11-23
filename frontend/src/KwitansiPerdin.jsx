@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiTU } from "./services/ApiTU";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
+import { jalur } from "./tataUsaha/jalur";
 import {
   ArrowLeft,
   ReceiptText,
@@ -253,7 +254,7 @@ export default function KwitansiPerdin({ operator }) {
       } else {
         await apiKwitansi({ url: `api/kwitansi/perjalanan/${id}`, method: "PUT", body: { isian: form } });
       }
-      navigate("/perjalanan-dinas");
+      navigate(jalur("perjalanan-dinas"));
     } catch (e) {
       kabari(e.message || "Gagal menyimpan", "error");
       setMenyimpan(false);
@@ -272,7 +273,7 @@ export default function KwitansiPerdin({ operator }) {
           <div className="flex items-center justify-between h-20 gap-3">
             <div className="flex items-center gap-3 min-w-0">
               <Link
-                to="/perjalanan-dinas"
+                to={jalur("perjalanan-dinas")}
                 className="p-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 transition-all active:scale-95 shadow-2xs"
                 title="Kembali ke daftar perjalanan dinas"
               >

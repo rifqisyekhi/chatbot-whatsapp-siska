@@ -2,7 +2,8 @@
   "scripts": {
     "deploy": "cd frontend && npm run build && cd .. && pm2 restart bot-siska",
     "reset-wa": "bash scripts/reset-sesi-wa.sh",
-    "postinstall": "node scripts/tambal-wwebjs.js"
+    "postinstall": "node scripts/tambal-wwebjs.js",
+    "dev:tu": "node scripts/server-dev-tu.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

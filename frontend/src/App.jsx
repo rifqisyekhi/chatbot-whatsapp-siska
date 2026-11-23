@@ -3,11 +3,10 @@ import InventoryTaking from './InventoryTaking'
 import AdminMasterDataTU from './MasterDataTU'
 import DashboardBarang from './DashboardBarang'
 import RekapServis from './RekapServis'
-import KwitansiPerdin from './KwitansiPerdin'
-import KwitansiDashboard from './KwitansiDashboard'
 import KwitansiMasuk from './KwitansiMasuk'
-import KeuanganShell, { SegeraHadir } from './KeuanganShell'
-import { MENU_KEUANGAN } from './menuKeuangan'
+import KerangkaTataUsaha from './tataUsaha/Kerangka'
+import { MENU_TU } from './tataUsaha/menu'
+import { DASAR, jalur } from './tataUsaha/jalur'
 
 // =========================================================
 // SATU PATH PER MODUL
@@ -19,8 +18,9 @@ import { MENU_KEUANGAN } from './menuKeuangan'
 //   Stok ATK (katalog)        /atk, /atk/kelola          8002
 //   Master Data Pegawai       /pegawai                   8006
 //   Kendaraan Dinas           /kendaraan, /kendaraan/... 8004
-//   SPBY & Kwitansi           /perjalanan-dinas, /langganan-aplikasi,
-//                             /fotokopi, /bbm-kepala-biro, /konsumsi  8005
+//   Dashboard Tata Usaha      /tata-usaha/<fitur>/...    8005
+//     (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro,
+//      konsumsi — daftar fitur di tataUsaha/menu.js)
 //   (Presensi non ASN: aplikasi terpisah di 8001)
 //
 // Di lokal semuanya dibuka dari satu alamat (localhost:3000/<modul>). Di VPS
@@ -48,14 +48,13 @@ function App() {
         <Route path="/kendaraan" element={<AdminMasterDataTU modul="kendaraan" />} />
         <Route path="/kendaraan/pemeliharaan" element={<RekapServis />} />
 
-        {/* ---------- SPBY & Kwitansi (login operator/bendahara, sidebar) ----------
-            Satu login dan satu sidebar untuk semua jenis pengeluaran; di VPS
-            semuanya di port 8005. */}
-        <Route element={<LayoutKeuangan />}>
-          <Route path="/perjalanan-dinas" element={<Halaman komponen={KwitansiDashboard} />} />
-          <Route path="/perjalanan-dinas/:id" element={<Halaman komponen={KwitansiPerdin} />} />
-          {MENU_KEUANGAN.filter((m) => m.path !== "/perjalanan-dinas").map((m) => (
-            <Route key={m.path} path={m.path} element={<SegeraHadir path={m.path} />} />
+        {/* ---------- Dashboard Tata Usaha Rokeu (login, sidebar) ----------
+            Satu login dan satu sidebar untuk semua fitur; tiap fitur mengatur
+            sub-halamannya sendiri di tataUsaha/fitur/<slug>/. Di VPS :8005. */}
+        <Route path={DASAR} element={<LayoutTataUsaha />}>
+          <Route index element={<Navigate to={MENU_TU[0].slug} replace />} />
+          {MENU_TU.map((m) => (
+            <Route key={m.slug} path={`${m.slug}/*`} element={<Halaman komponen={m.Halaman} />} />
           ))}
         </Route>
 
@@ -65,7 +64,9 @@ function App() {
         <Route path="/admin/barang" element={<Navigate to="/atk/kelola" replace />} />
         <Route path="/admin" element={<Navigate to="/pegawai" replace />} />
         <Route path="/admin/servis-kendaraan" element={<Navigate to="/kendaraan/pemeliharaan" replace />} />
-        <Route path="/admin/kwitansi" element={<Navigate to="/perjalanan-dinas" replace />} />
+        <Route path="/perjalanan-dinas" element={<Navigate to={jalur('perjalanan-dinas')} replace />} />
+        <Route path="/perjalanan-dinas/:id" element={<AliasPerjalanan />} />
+        <Route path="/admin/kwitansi" element={<Navigate to={jalur('perjalanan-dinas')} replace />} />
         <Route path="/admin/kwitansi/:id" element={<AliasPerjalanan />} />
 
         <Route path="*" element={<TidakDitemukan />} />
@@ -75,13 +76,13 @@ function App() {
 }
 
 // Login sekali, lalu sidebar membungkus halaman mana pun di modul ini.
-function LayoutKeuangan() {
+function LayoutTataUsaha() {
   return (
     <KwitansiMasuk>
       {(sesi) => (
-        <KeuanganShell {...sesi}>
+        <KerangkaTataUsaha {...sesi}>
           <Outlet context={sesi} />
-        </KeuanganShell>
+        </KerangkaTataUsaha>
       )}
     </KwitansiMasuk>
   )
@@ -94,7 +95,7 @@ function Halaman({ komponen: Komponen }) {
 
 function AliasPerjalanan() {
   const { id } = useParams()
-  return <Navigate to={`/perjalanan-dinas/${id}`} replace />
+  return <Navigate to={jalur('perjalanan-dinas', id)} replace />
 }
 
 // Alamat asing: halaman sederhana, bukan dialihkan ke modul lain (di VPS

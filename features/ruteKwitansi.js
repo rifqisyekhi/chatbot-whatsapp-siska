@@ -16,6 +16,7 @@ const { tulisSuratBatalPdf } = require("./suratBatalPdf");
 const auth = require("./kwitansiAuth");
 const db = require("../db/perjalananDinas");
 const dbPegawai = require("../db/pegawai");
+const { pasangSemuaFitur } = require("./fitur");
 
 const tanggalHariIni = () =>
   new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
@@ -261,6 +262,20 @@ function pasangRuteKwitansi(app) {
       if (!res.headersSent) res.status(500).json({ error: "Gagal membuat surat pembatalan" });
       else res.end();
     }
+  });
+
+  // Fitur Dashboard Tata Usaha lain (konsumsi, langganan aplikasi, ...),
+  // masing-masing di features/fitur/<slug>/rute.js.
+  const spby = require("./spbyServisPdf");
+  pasangSemuaFitur(app, {
+    auth,
+    GalatKwitansi,
+    balasGalat,
+    pejabat: referensi().pejabat,
+    halamanSpby: spby.halamanSpby,
+    pasangFontSpby: spby.pasangFont,
+    terbilangRupiah: spby.terbilangRupiah,
+    tanggalPanjang: spby.tanggalPanjang,
   });
 }
 

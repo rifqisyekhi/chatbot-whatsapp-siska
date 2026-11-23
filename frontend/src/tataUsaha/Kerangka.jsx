@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
-import logoKemnaker from "./assets/logo-kemnaker.png";
+import logoKemnaker from "../assets/logo-kemnaker.png";
 import { LogOut, Menu, PanelLeftClose } from "lucide-react";
-import { MENU_KEUANGAN } from "./menuKeuangan";
+import { MENU_TU } from "./menu";
 
 // =========================================================
-// KERANGKA DASHBOARD SPBY & KWITANSI (SIDEBAR ALA GAJIHUB)
+// KERANGKA DASHBOARD TATA USAHA ROKEU (SIDEBAR ALA GAJIHUB)
 // =========================================================
 //
 // Satu modul di VPS (:8005), satu login operator/bendahara. Sidebar navy
-// berisi jenis pengeluaran; tiap jenis punya path sendiri. Meniru AppShell
+// berisi fitur dari ./menu.js; tiap fitur di /tata-usaha/<slug>/.... Meniru AppShell
 // GajiHub: pil putih untuk menu aktif, bisa diciutkan jadi rel ikon di
 // layar lebar, jadi laci (drawer) di HP, akun & keluar di kaki sidebar.
 
@@ -25,11 +25,11 @@ const inisial = (nama) =>
     .map((w) => w[0].toUpperCase())
     .join("");
 
-export default function KeuanganShell({ operator, keluar, children }) {
+export default function KerangkaTataUsaha({ operator, keluar, children }) {
   const [buka, setBuka] = useState(false); // laci di HP
   const [ciut, setCiut] = useState(false); // rel ikon di layar lebar
   const { pathname } = useLocation();
-  const aktif = MENU_KEUANGAN.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
+  const aktif = MENU_TU.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
 
   return (
     <div className={`min-h-screen bg-paper md:grid ${ciut ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"}`}>
@@ -43,7 +43,7 @@ export default function KeuanganShell({ operator, keluar, children }) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <span className="text-sm font-extrabold text-navy truncate">{aktif?.label || "SPBY & Kwitansi"}</span>
+        <span className="text-sm font-extrabold text-navy truncate">{aktif?.label || "Dashboard Tata Usaha"}</span>
       </div>
 
       {buka && <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setBuka(false)} />}
@@ -61,7 +61,7 @@ export default function KeuanganShell({ operator, keluar, children }) {
           {!ciut && (
             <div className="min-w-0 flex-1">
               <p className="text-[15px] font-extrabold leading-tight text-white whitespace-nowrap">
-                SPBY <span className="font-semibold text-white/70">&amp; Kwitansi</span>
+                Tata Usaha <span className="font-semibold text-white/70">Rokeu</span>
               </p>
               <p className="text-[11px] font-semibold text-white/60 truncate">Biro Keuangan dan BMN</p>
             </div>
@@ -78,8 +78,8 @@ export default function KeuanganShell({ operator, keluar, children }) {
         </div>
 
         <nav className={`flex-1 overflow-y-auto pt-2 pb-3 ${ciut ? "px-2.5" : "px-3"}`}>
-          {!ciut && <p className="px-3.5 pb-2 text-[10px] font-bold uppercase tracking-wider text-white/40">Pengeluaran</p>}
-          {MENU_KEUANGAN.map((m) => (
+          {!ciut && <p className="px-3.5 pb-2 text-[10px] font-bold uppercase tracking-wider text-white/40">Menu</p>}
+          {MENU_TU.map((m) => (
             <div key={m.path}>
               {m.pisah && <div className={`border-t border-white/10 ${ciut ? "mx-2 my-2.5" : "my-2"}`} />}
               <NavLink
@@ -133,31 +133,6 @@ export default function KeuanganShell({ operator, keluar, children }) {
       </aside>
 
       <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-// Halaman sementara untuk fitur yang menunggu contoh dokumen.
-export function SegeraHadir({ path }) {
-  const m = MENU_KEUANGAN.find((x) => x.path === path);
-  return (
-    <div className="min-h-screen bg-paper font-sans text-navy">
-      <header className="bg-white border-b border-mist">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center">
-          <div>
-            <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">{m?.label}</h1>
-            <p className="text-xs text-slate-500 font-medium">Biro Keuangan dan BMN</p>
-          </div>
-        </div>
-      </header>
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-        <div className="bg-white rounded-3xl border border-mist shadow-2xs p-8 text-center max-w-xl mx-auto">
-          {m && <m.Ikon className="w-10 h-10 mx-auto text-brand" />}
-          <h2 className="mt-4 text-lg font-extrabold">Segera hadir</h2>
-          <p className="mt-2 text-sm text-slate-500">{m?.keterangan}</p>
-          <p className="mt-1 text-sm text-slate-500">Fitur ini sedang disiapkan mengikuti format dokumen yang dipakai Biro.</p>
-        </div>
-      </main>
     </div>
   );
 }

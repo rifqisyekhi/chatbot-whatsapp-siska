@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
 import StatistikPerdin from "./StatistikPerdin";
+import { jalur } from "./tataUsaha/jalur";
 
 // =========================================================
 // DASHBOARD PERJALANAN DINAS PER BIDANG
@@ -214,7 +215,7 @@ export default function KwitansiDashboard({ operator }) {
               </select>
               {!bendahara && (
                 <Link
-                  to="/perjalanan-dinas/baru"
+                  to={jalur("perjalanan-dinas", "baru")}
                   className="inline-flex items-center gap-2 bg-brand hover:bg-navy text-white px-4 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all active:scale-95"
                 >
                   <Plus className="w-4 h-4" /> Perjalanan baru
@@ -309,7 +310,7 @@ export default function KwitansiDashboard({ operator }) {
                             {!bendahara && (
                               <>
                                 {!batalkan && (
-                                  <Link to={`/perjalanan-dinas/${d.id}`} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
+                                  <Link to={jalur("perjalanan-dinas", d.id)} title="Buka / ubah" className="p-2 rounded-lg text-slate-600 hover:bg-paper">
                                     <Pencil className="w-4 h-4" />
                                   </Link>
                                 )}
