@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import logoKemnaker from "../assets/logo-kemnaker.png";
-import { LogOut, Menu, PanelLeftClose } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, PanelLeftClose } from "lucide-react";
 import { MENU_TU } from "./menu";
+import { DASAR } from "./jalur";
+
+// Menu Dashboard (halaman awal) di atas daftar fitur.
+const MENU_DASBOR = { path: DASAR, label: "Dashboard", Ikon: LayoutDashboard, akhir: true };
 
 // =========================================================
 // KERANGKA DASHBOARD TATA USAHA ROKEU (SIDEBAR ALA GAJIHUB)
@@ -29,7 +33,8 @@ export default function KerangkaTataUsaha({ operator, keluar, children }) {
   const [buka, setBuka] = useState(false); // laci di HP
   const [ciut, setCiut] = useState(false); // rel ikon di layar lebar
   const { pathname } = useLocation();
-  const aktif = MENU_TU.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
+  const aktif =
+    pathname.replace(/\/$/, "") === DASAR ? MENU_DASBOR : MENU_TU.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
 
   return (
     <div className={`min-h-screen bg-paper md:grid ${ciut ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"}`}>
@@ -79,11 +84,12 @@ export default function KerangkaTataUsaha({ operator, keluar, children }) {
 
         <nav className={`flex-1 overflow-y-auto pt-2 pb-3 ${ciut ? "px-2.5" : "px-3"}`}>
           {!ciut && <p className="px-3.5 pb-2 text-[10px] font-bold uppercase tracking-wider text-white/40">Menu</p>}
-          {MENU_TU.map((m) => (
+          {[MENU_DASBOR, ...MENU_TU].map((m, i) => (
             <div key={m.path}>
-              {m.pisah && <div className={`border-t border-white/10 ${ciut ? "mx-2 my-2.5" : "my-2"}`} />}
+              {(m.pisah || i === 1) && <div className={`border-t border-white/10 ${ciut ? "mx-2 my-2.5" : "my-2"}`} />}
               <NavLink
                 to={m.path}
+                end={m.akhir}
                 onClick={() => setBuka(false)}
                 title={ciut ? m.label : undefined}
                 aria-label={ciut ? m.label : undefined}

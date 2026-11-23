@@ -35,7 +35,8 @@ function kelompok(daftar, kunci) {
   return [...peta.values()];
 }
 
-export default function StatistikPerdin({ daftar, tahun }) {
+// tampilBidang=false (operator satu bidang): pie per bidang tidak berarti, disembunyikan.
+export default function StatistikPerdin({ daftar, tahun, tampilBidang = true }) {
   const aktif = useMemo(() => daftar.filter((d) => d.status === "aktif"), [daftar]);
 
   const perBidang = useMemo(() => kelompok(aktif, (d) => d.bidang).sort((a, b) => b.total - a.total), [aktif]);
@@ -76,16 +77,18 @@ export default function StatistikPerdin({ daftar, tahun }) {
 
   return (
     <section className="grid lg:grid-cols-2 gap-4">
-      <Kartu judul="Porsi biaya per bidang" sub="Dari total biaya perjalanan aktif">
-        <Pie
-          data={perBidang.map((g) => ({
-            label: g.kunci,
-            nilai: g.total,
-            warna: warnaBidang(g.kunci),
-            keterangan: `${g.perjalanan} perjalanan • ${g.peserta} peserta`,
-          }))}
-        />
-      </Kartu>
+      {tampilBidang && (
+        <Kartu judul="Porsi biaya per bidang" sub="Dari total biaya perjalanan aktif">
+          <Pie
+            data={perBidang.map((g) => ({
+              label: g.kunci,
+              nilai: g.total,
+              warna: warnaBidang(g.kunci),
+              keterangan: `${g.perjalanan} perjalanan • ${g.peserta} peserta`,
+            }))}
+          />
+        </Kartu>
+      )}
 
       <Kartu judul="Dalam kota vs luar kota" sub="Dari total biaya perjalanan aktif">
         <Pie

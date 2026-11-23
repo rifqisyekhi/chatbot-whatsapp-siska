@@ -6,6 +6,7 @@ import RekapServis from './RekapServis'
 import KwitansiMasuk from './KwitansiMasuk'
 import KerangkaTataUsaha from './tataUsaha/Kerangka'
 import { MENU_TU } from './tataUsaha/menu'
+import Beranda from './tataUsaha/Beranda'
 import { DASAR, jalur } from './tataUsaha/jalur'
 
 // =========================================================
@@ -52,7 +53,7 @@ function App() {
             Satu login dan satu sidebar untuk semua fitur; tiap fitur mengatur
             sub-halamannya sendiri di tataUsaha/fitur/<slug>/. Di VPS :8005. */}
         <Route path={DASAR} element={<LayoutTataUsaha />}>
-          <Route index element={<Navigate to={MENU_TU[0].slug} replace />} />
+          <Route index element={<Halaman komponen={Beranda} />} />
           {MENU_TU.map((m) => (
             <Route key={m.slug} path={`${m.slug}/*`} element={<Halaman komponen={m.Halaman} />} />
           ))}
