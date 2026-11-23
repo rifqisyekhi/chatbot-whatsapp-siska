@@ -21,6 +21,7 @@ const {
   calculateDuration,
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
+const { tanggalDariLamaCuti, ringkasTanggalCuti } = require("./features/tanggalCuti");
 const pengingatGajihub = require("./features/pengingatGajihub");
 const pengingatNonASN = require("./features/pengingatNonASN");
 const profilWA = require("./features/profilWA");
@@ -6343,10 +6344,29 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         return;
       }
 
+      // Rekap presensi membaca hari cuti dari teks ini (riwayat_cuti
+      // tidak punya kolom tanggal). Kalau tanggalnya tidak terbaca,
+      // hari cutinya akan tampil Alpha di web — jadi ditolak di sini.
+      const tanggalCuti = tanggalDariLamaCuti(lamaCuti);
+      if (!tanggalCuti.length) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Tanggal cuti belum terbaca. Mohon tuliskan *tanggal dan nama bulannya*.\n\n` +
+            `Contoh:\n` +
+            `• *2 hari (20 - 21 Oktober 2026)*\n` +
+            `• *30 Oktober - 2 November 2026*\n` +
+            `• *20, 21 dan 23 Oktober 2026*\n\n` +
+            `_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
       pengajuanBySender[chatId] = {
         ...flow,
         step: "cuti-alamat",
         lamaCuti,
+        tanggalCuti,
       };
 
       await kirimDenganTyping(
@@ -6434,6 +6454,9 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         `🌴 *Jenis Cuti:* ${flow.jenisCuti}\n` +
         `📝 *Alasan:* ${flow.alasan}\n` +
         `⏳ *Lamanya:* ${flow.lamaCuti}\n` +
+        (flow.tanggalCuti?.length
+          ? `📅 *Tanggal Terbaca:* ${ringkasTanggalCuti(flow.tanggalCuti)} (${flow.tanggalCuti.length} hari kalender)\n`
+          : "") +
         `🏠 *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
         `📞 *Kontak:* ${kontakCuti}\n` +
         `👔 *Atasan Langsung:* ${namaAtasan}\n` +
