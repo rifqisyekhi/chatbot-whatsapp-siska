@@ -4,6 +4,7 @@
     "reset-wa": "bash scripts/reset-sesi-wa.sh",
     "postinstall": "node scripts/tambal-wwebjs.js",
     "dev:administrasi": "node scripts/server-dev-administrasi.js",
+    "dev:tanpa-login": "node scripts/server-dev-administrasi.js --tanpa-login",
     "cek-login": "node scripts/cek-login.js"
   },
   "dependencies": {

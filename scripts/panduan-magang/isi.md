@@ -69,6 +69,18 @@ VITE_PROXY_TARGET=http://localhost:3999 npm run dev
 lalu buka alamat yang dicetak Vite (biasanya http://localhost:5173/administrasi).
 Biarkan kedua terminal tetap menyala selama bekerja; berhenti dengan Ctrl+C.
 
+Supaya tidak perlu login sama sekali di laptopmu, pakai mode tanpa login
+(halaman langsung terbuka sebagai admin; tetap butuh `DATABASE_URL`):
+
+```
+npm run dev:tanpa-login
+npm run dev:tanpa-login -- --peran=operator --bidang=BMN
+npm run dev:tanpa-login -- --peran=bendahara
+```
+
+Mode ini hanya ada di server pengembangan, tidak di VPS. Uji fiturmu
+sebagai operator dan bendahara sebelum membuat Pull Request.
+
 Kalau login ditolak, periksa penyebabnya (database, nomor, atau peran):
 
 ```
