@@ -69,6 +69,15 @@ VITE_PROXY_TARGET=http://localhost:3999 npm run dev
 lalu buka alamat yang dicetak Vite (biasanya http://localhost:5173/administrasi).
 Biarkan kedua terminal tetap menyala selama bekerja; berhenti dengan Ctrl+C.
 
+Kalau login ditolak, periksa penyebabnya (database, nomor, atau peran):
+
+```
+npm run cek-login -- 08123456789
+```
+
+Untuk mencoba semua bidang, minta pembimbing menambahkan NIP-mu ke
+`KWITANSI_ADMIN` di `.env` laptopmu (bukan di VPS).
+
 Sebelum commit: `cd frontend && npx eslint src/administrasi && npm run build`.
 Hasil build (`public/`) ikut di-commit.
 

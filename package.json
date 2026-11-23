@@ -3,7 +3,8 @@
     "deploy": "cd frontend && npm run build && cd .. && pm2 restart bot-siska",
     "reset-wa": "bash scripts/reset-sesi-wa.sh",
     "postinstall": "node scripts/tambal-wwebjs.js",
-    "dev:administrasi": "node scripts/server-dev-administrasi.js"
+    "dev:administrasi": "node scripts/server-dev-administrasi.js",
+    "cek-login": "node scripts/cek-login.js"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

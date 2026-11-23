@@ -156,4 +156,4 @@ function wajibPengubah(req, res, next) {
   next();
 }
 
-module.exports = { OPERATOR, BIDANG, login, wajibLogin, wajibPengubah, lihatSemua, bolehBidang, buatToken, nomorBaku };
+module.exports = { OPERATOR, BIDANG, login, wajibLogin, wajibPengubah, lihatSemua, bolehBidang, buatToken, nomorBaku, peranPegawai };
