@@ -47,9 +47,9 @@ port nginx masing-masing yang hanya membuka modul itu
 | Stok ATK (katalog, kelola) | `localhost:3000/atk`, `/atk/kelola` | `:8002` |
 | Master Data Pegawai | `localhost:3000/pegawai` | `:8006` |
 | Kendaraan Dinas (+ pemeliharaan) | `localhost:3000/kendaraan` | `:8004` |
-| Dashboard Tata Usaha Rokeu (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro, konsumsi) | `localhost:3000/tata-usaha` | `:8005` |
+| Administrasi Rokeu (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro, konsumsi) | `localhost:3000/administrasi` | `:8005` |
 
-Port 8003 sudah dipakai aplikasi lain di VPS. Fitur baru Dashboard Tata Usaha cukup menambah menu (panduan:
+Port 8003 sudah dipakai aplikasi lain di VPS. Fitur baru Administrasi Rokeu cukup menambah menu (panduan:
 `PANDUAN-MAGANG.md`). Modul baru melanjutkan ke
 `:8007` dan seterusnya (cek dulu dengan `sudo ss -tlnp | grep :80`).
 

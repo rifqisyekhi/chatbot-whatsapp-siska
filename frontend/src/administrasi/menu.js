@@ -1,14 +1,14 @@
 // =========================================================
-// DAFTAR FITUR DASHBOARD TATA USAHA ROKEU
+// DAFTAR FITUR ADMINISTRASI ROKEU
 // =========================================================
 //
-// Satu baris = satu menu sidebar + satu route /tata-usaha/<slug>/*.
+// Satu baris = satu menu sidebar + satu route /administrasi/<slug>/*.
 // Halaman tiap fitur ada di folder ./fitur/<slug>/index.jsx dan mengatur
 // sub-halamannya sendiri (daftar, form baru, ubah) dengan <Routes>.
 //
 // Anak magang cukup mengerjakan folder fiturnya; baris di sini sudah
 // tersambung. Fitur baru: tambah folder + satu baris di bawah. nginx tidak
-// perlu diubah — :8005 sudah meneruskan semua /tata-usaha/....
+// perlu diubah — :8005 sudah meneruskan semua /administrasi/....
 
 import { AppWindow, Coffee, Fuel, Plane, Printer } from "lucide-react";
 import { jalur } from "./jalur";
@@ -18,7 +18,7 @@ import Fotokopi from "./fitur/fotokopi";
 import BbmKepalaBiro from "./fitur/bbm-kepala-biro";
 import Konsumsi from "./fitur/konsumsi";
 
-export const MENU_TU = [
+export const MENU_ADMINISTRASI = [
   {
     slug: "perjalanan-dinas",
     label: "Perjalanan Dinas",

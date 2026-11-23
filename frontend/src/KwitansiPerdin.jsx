@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiTU } from "./services/ApiTU";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
-import { jalur } from "./tataUsaha/jalur";
+import { jalur } from "./administrasi/jalur";
 import {
   ArrowLeft,
   ReceiptText,

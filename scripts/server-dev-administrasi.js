@@ -1,14 +1,14 @@
 // =========================================================
-// SERVER PENGEMBANGAN DASHBOARD TATA USAHA (TANPA BOT WHATSAPP)
+// SERVER PENGEMBANGAN ADMINISTRASI ROKEU (TANPA BOT WHATSAPP)
 // =========================================================
 //
-// Menyalakan hanya API Dashboard Tata Usaha (/api/kwitansi/..., termasuk
+// Menyalakan hanya API Administrasi Rokeu (/api/kwitansi/..., termasuk
 // fitur di features/fitur/) dan halaman web hasil build (public/), tanpa
 // WhatsApp, Chromium, atau pengingat. Untuk anak magang yang mengerjakan
 // fitur di laptop sendiri.
 //
-//   npm run dev:tu                → http://localhost:3999/tata-usaha
-//   PORT_DEV_TU=4000 npm run dev:tu
+//   npm run dev:administrasi                → http://localhost:3999/administrasi
+//   PORT_DEV_ADMINISTRASI=4000 npm run dev:administrasi
 //
 // Butuh DATABASE_URL di .env (database Postgres SisKA). Untuk mengubah
 // tampilan sambil melihat hasilnya langsung, jalankan juga
@@ -19,7 +19,7 @@ const path = require("path");
 const express = require("express");
 const { pasangRuteKwitansi } = require("../features/ruteKwitansi");
 
-const PORT = Number(process.env.PORT_DEV_TU || 3999);
+const PORT = Number(process.env.PORT_DEV_ADMINISTRASI || 3999);
 const PUBLIK = path.join(__dirname, "..", "public");
 
 const app = express();
@@ -35,5 +35,5 @@ app.use((req, res, next) => {
 });
 
 app.listen(PORT, "127.0.0.1", () => {
-  console.log(`[DEV TU] Dashboard Tata Usaha: http://localhost:${PORT}/tata-usaha`);
+  console.log(`[DEV ADMINISTRASI] Administrasi Rokeu: http://localhost:${PORT}/administrasi`);
 });

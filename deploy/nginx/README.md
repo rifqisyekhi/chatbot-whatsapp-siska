@@ -12,7 +12,7 @@ port perjalanan dinas walaupun alamatnya diketik manual.
 | 8002 | Stok ATK | `/atk` (katalog), `/atk/kelola` | `/api/barang`, `/api/mutasi-barang` | `siska-8002-atk.conf` |
 | 8003 | (dipakai aplikasi lain di VPS) | — | — | — |
 | 8004 | Kendaraan Dinas | `/kendaraan`, `/kendaraan/pemeliharaan` | `/api/kendaraan`, `/api/servis-kendaraan` | `siska-8004-kendaraan.conf` |
-| 8005 | Dashboard Tata Usaha Rokeu | `/tata-usaha/<fitur>/...` (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro, konsumsi) | `/api/kwitansi` | `siska-8005-tata-usaha.conf` |
+| 8005 | Administrasi Rokeu | `/administrasi/<fitur>/...` (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro, konsumsi) | `/api/kwitansi` | `siska-8005-administrasi.conf` |
 | 8006 | Master Data Pegawai | `/pegawai` | `/api/pegawai` | `siska-8006-pegawai.conf` |
 
 `/` di tiap port langsung dialihkan ke halaman modulnya. Di :8002, `/`
@@ -22,8 +22,8 @@ terkirim ke WhatsApp tidak perlu diubah.
 Alamat lama (dulu semua di :8002) dialihkan ke port barunya:
 `:8002/admin` → `:8006/pegawai`, `:8002/admin/servis-kendaraan` →
 `:8004/kendaraan/pemeliharaan`, `:8002/admin/kwitansi` →
-`:8005/tata-usaha/perjalanan-dinas`, `:8002/barang` → `:8002/atk/kelola`.
-Di :8005, `/perjalanan-dinas/...` lama dialihkan ke `/tata-usaha/perjalanan-dinas/...`.
+`:8005/administrasi/perjalanan-dinas`, `:8002/barang` → `:8002/atk/kelola`.
+Di :8005, `/perjalanan-dinas/...` lama dialihkan ke `/administrasi/perjalanan-dinas/...`.
 
 ## Di lokal
 
@@ -32,7 +32,7 @@ Tidak perlu nginx. Jalankan Node SisKA, lalu buka modul lewat path-nya:
 - http://localhost:3000/atk dan http://localhost:3000/atk/kelola
 - http://localhost:3000/pegawai
 - http://localhost:3000/kendaraan dan http://localhost:3000/kendaraan/pemeliharaan
-- http://localhost:3000/tata-usaha (atau `npm run dev:tu` → http://localhost:3999/tata-usaha, tanpa bot WhatsApp)
+- http://localhost:3000/administrasi (atau `npm run dev:administrasi` → http://localhost:3999/administrasi, tanpa bot WhatsApp)
 
 Dengan `npm run dev` di `frontend/` (Vite), tiap `/api/...` diteruskan ke
 port modulnya di VPS, atau ke satu server kalau diisi
@@ -56,7 +56,7 @@ for f in deploy/nginx/siska-800*.conf; do
 done
 
 # 3. Blok lama yang sudah diganti — buang supaya tidak berebut port:
-#    siska-8002 → siska-8002-atk, siska-8005-perjalanan-dinas → siska-8005-tata-usaha
+#    siska-8002 → siska-8002-atk, siska-8005-perjalanan-dinas → siska-8005-administrasi
 sudo rm -f /etc/nginx/sites-enabled/siska-8002 /etc/nginx/sites-enabled/siska-8005-perjalanan-dinas
 
 # 4. WAJIB uji dulu, baru muat ulang

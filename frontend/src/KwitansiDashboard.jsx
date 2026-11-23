@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
 import StatistikPerdin from "./StatistikPerdin";
-import { jalur } from "./tataUsaha/jalur";
+import { jalur } from "./administrasi/jalur";
 
 // =========================================================
 // DASHBOARD PERJALANAN DINAS PER BIDANG

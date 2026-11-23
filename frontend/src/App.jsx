@@ -4,10 +4,10 @@ import AdminMasterDataTU from './MasterDataTU'
 import DashboardBarang from './DashboardBarang'
 import RekapServis from './RekapServis'
 import KwitansiMasuk from './KwitansiMasuk'
-import KerangkaTataUsaha from './tataUsaha/Kerangka'
-import { MENU_TU } from './tataUsaha/menu'
-import Beranda from './tataUsaha/Beranda'
-import { DASAR, jalur } from './tataUsaha/jalur'
+import KerangkaAdministrasi from './administrasi/Kerangka'
+import { MENU_ADMINISTRASI } from './administrasi/menu'
+import Beranda from './administrasi/Beranda'
+import { DASAR, jalur } from './administrasi/jalur'
 
 // =========================================================
 // SATU PATH PER MODUL
@@ -19,9 +19,9 @@ import { DASAR, jalur } from './tataUsaha/jalur'
 //   Stok ATK (katalog)        /atk, /atk/kelola          8002
 //   Master Data Pegawai       /pegawai                   8006
 //   Kendaraan Dinas           /kendaraan, /kendaraan/... 8004
-//   Dashboard Tata Usaha      /tata-usaha/<fitur>/...    8005
+//   Administrasi Rokeu      /administrasi/<fitur>/...    8005
 //     (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro,
-//      konsumsi — daftar fitur di tataUsaha/menu.js)
+//      konsumsi — daftar fitur di administrasi/menu.js)
 //   (Presensi non ASN: aplikasi terpisah di 8001)
 //
 // Di lokal semuanya dibuka dari satu alamat (localhost:3000/<modul>). Di VPS
@@ -49,12 +49,12 @@ function App() {
         <Route path="/kendaraan" element={<AdminMasterDataTU modul="kendaraan" />} />
         <Route path="/kendaraan/pemeliharaan" element={<RekapServis />} />
 
-        {/* ---------- Dashboard Tata Usaha Rokeu (login, sidebar) ----------
+        {/* ---------- Administrasi Rokeu (login, sidebar) ----------
             Satu login dan satu sidebar untuk semua fitur; tiap fitur mengatur
-            sub-halamannya sendiri di tataUsaha/fitur/<slug>/. Di VPS :8005. */}
-        <Route path={DASAR} element={<LayoutTataUsaha />}>
+            sub-halamannya sendiri di administrasi/fitur/<slug>/. Di VPS :8005. */}
+        <Route path={DASAR} element={<LayoutAdministrasi />}>
           <Route index element={<Halaman komponen={Beranda} />} />
-          {MENU_TU.map((m) => (
+          {MENU_ADMINISTRASI.map((m) => (
             <Route key={m.slug} path={`${m.slug}/*`} element={<Halaman komponen={m.Halaman} />} />
           ))}
         </Route>
@@ -77,13 +77,13 @@ function App() {
 }
 
 // Login sekali, lalu sidebar membungkus halaman mana pun di modul ini.
-function LayoutTataUsaha() {
+function LayoutAdministrasi() {
   return (
     <KwitansiMasuk>
       {(sesi) => (
-        <KerangkaTataUsaha {...sesi}>
+        <KerangkaAdministrasi {...sesi}>
           <Outlet context={sesi} />
-        </KerangkaTataUsaha>
+        </KerangkaAdministrasi>
       )}
     </KwitansiMasuk>
   )

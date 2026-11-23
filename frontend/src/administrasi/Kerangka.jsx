@@ -2,18 +2,18 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import logoKemnaker from "../assets/logo-kemnaker.png";
 import { LayoutDashboard, LogOut, Menu, PanelLeftClose } from "lucide-react";
-import { MENU_TU } from "./menu";
+import { MENU_ADMINISTRASI } from "./menu";
 import { DASAR } from "./jalur";
 
 // Menu Dashboard (halaman awal) di atas daftar fitur.
 const MENU_DASBOR = { path: DASAR, label: "Dashboard", Ikon: LayoutDashboard, akhir: true };
 
 // =========================================================
-// KERANGKA DASHBOARD TATA USAHA ROKEU (SIDEBAR ALA GAJIHUB)
+// KERANGKA ADMINISTRASI ROKEU (SIDEBAR ALA GAJIHUB)
 // =========================================================
 //
 // Satu modul di VPS (:8005), satu login operator/bendahara. Sidebar navy
-// berisi fitur dari ./menu.js; tiap fitur di /tata-usaha/<slug>/.... Meniru AppShell
+// berisi fitur dari ./menu.js; tiap fitur di /administrasi/<slug>/.... Meniru AppShell
 // GajiHub: pil putih untuk menu aktif, bisa diciutkan jadi rel ikon di
 // layar lebar, jadi laci (drawer) di HP, akun & keluar di kaki sidebar.
 
@@ -29,12 +29,12 @@ const inisial = (nama) =>
     .map((w) => w[0].toUpperCase())
     .join("");
 
-export default function KerangkaTataUsaha({ operator, keluar, children }) {
+export default function KerangkaAdministrasi({ operator, keluar, children }) {
   const [buka, setBuka] = useState(false); // laci di HP
   const [ciut, setCiut] = useState(false); // rel ikon di layar lebar
   const { pathname } = useLocation();
   const aktif =
-    pathname.replace(/\/$/, "") === DASAR ? MENU_DASBOR : MENU_TU.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
+    pathname.replace(/\/$/, "") === DASAR ? MENU_DASBOR : MENU_ADMINISTRASI.find((m) => pathname === m.path || pathname.startsWith(`${m.path}/`));
 
   return (
     <div className={`min-h-screen bg-paper md:grid ${ciut ? "md:grid-cols-[68px_1fr]" : "md:grid-cols-[264px_1fr]"}`}>
@@ -48,7 +48,7 @@ export default function KerangkaTataUsaha({ operator, keluar, children }) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <span className="text-sm font-extrabold text-navy truncate">{aktif?.label || "Dashboard Tata Usaha"}</span>
+        <span className="text-sm font-extrabold text-navy truncate">{aktif?.label || "Administrasi Rokeu"}</span>
       </div>
 
       {buka && <div className="fixed inset-0 z-40 bg-black/40 md:hidden" onClick={() => setBuka(false)} />}
@@ -65,10 +65,8 @@ export default function KerangkaTataUsaha({ operator, keluar, children }) {
           </div>
           {!ciut && (
             <div className="min-w-0 flex-1">
-              <p className="text-[15px] font-extrabold leading-tight text-white whitespace-nowrap">
-                Tata Usaha <span className="font-semibold text-white/70">Rokeu</span>
-              </p>
-              <p className="text-[11px] font-semibold text-white/60 truncate">Biro Keuangan dan BMN</p>
+              <p className="text-[16px] font-extrabold leading-tight text-white truncate">Administrasi</p>
+              <p className="text-[11px] font-semibold text-white/60 truncate">Rokeu Kemnaker</p>
             </div>
           )}
           <button
@@ -84,7 +82,7 @@ export default function KerangkaTataUsaha({ operator, keluar, children }) {
 
         <nav className={`flex-1 overflow-y-auto pt-2 pb-3 ${ciut ? "px-2.5" : "px-3"}`}>
           {!ciut && <p className="px-3.5 pb-2 text-[10px] font-bold uppercase tracking-wider text-white/40">Menu</p>}
-          {[MENU_DASBOR, ...MENU_TU].map((m, i) => (
+          {[MENU_DASBOR, ...MENU_ADMINISTRASI].map((m, i) => (
             <div key={m.path}>
               {(m.pisah || i === 1) && <div className={`border-t border-white/10 ${ciut ? "mx-2 my-2.5" : "my-2"}`} />}
               <NavLink

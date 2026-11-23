@@ -3,15 +3,15 @@
 // =========================================================
 //
 // Halaman ini sudah tersambung ke menu sidebar "Konsumsi" dan alamat
-// /tata-usaha/konsumsi/... . Kerjakan SEMUA tampilan fitur ini di folder
-// ini saja (frontend/src/tataUsaha/fitur/konsumsi/), dan API-nya di
+// /administrasi/konsumsi/... . Kerjakan SEMUA tampilan fitur ini di folder
+// ini saja (frontend/src/administrasi/fitur/konsumsi/), dan API-nya di
 // features/fitur/konsumsi/. Panduan lengkap: PANDUAN-MAGANG.md
 //
 // Props `sesi` berisi `operator` — operator.peran: "operator" |
 // "bendahara" | "admin", operator.bidang: "BMN" | "PTUK" | "TU" | ...
 // Bendahara hanya boleh melihat (sembunyikan tombol ubah/hapus).
 //
-// Sub-halaman diatur dengan <Routes> RELATIF terhadap /tata-usaha/konsumsi:
+// Sub-halaman diatur dengan <Routes> RELATIF terhadap /administrasi/konsumsi:
 //   index  → daftar        "baru" → form baru        ":id" → ubah
 //
 // Contoh lengkap yang sudah jadi: ../perjalanan-dinas (KwitansiDashboard

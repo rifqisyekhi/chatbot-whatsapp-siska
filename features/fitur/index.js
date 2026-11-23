@@ -1,5 +1,5 @@
 // =========================================================
-// API FITUR DASHBOARD TATA USAHA ROKEU
+// API FITUR ADMINISTRASI ROKEU
 // =========================================================
 //
 // Tiap fitur punya folder sendiri: features/fitur/<slug>/rute.js yang
@@ -25,7 +25,7 @@ function pasangSemuaFitur(app, alat) {
       require(`./${slug}/rute`).pasang(app, alat);
     } catch (err) {
       // Satu fitur yang rusak tidak boleh menjatuhkan bot dan fitur lain.
-      console.error(`[TATA USAHA] Fitur ${slug} gagal dipasang:`, err?.message || err);
+      console.error(`[ADMINISTRASI] Fitur ${slug} gagal dipasang:`, err?.message || err);
     }
   }
 }

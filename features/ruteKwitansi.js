@@ -264,7 +264,7 @@ function pasangRuteKwitansi(app) {
     }
   });
 
-  // Fitur Dashboard Tata Usaha lain (konsumsi, langganan aplikasi, ...),
+  // Fitur Administrasi Rokeu lain (konsumsi, langganan aplikasi, ...),
   // masing-masing di features/fitur/<slug>/rute.js.
   const spby = require("./spbyServisPdf");
   pasangSemuaFitur(app, {

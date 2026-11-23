@@ -1,6 +1,6 @@
-# Panduan Magang — Fitur Dashboard Tata Usaha Rokeu
+# Panduan Magang — Fitur Administrasi Rokeu
 
-Dashboard Tata Usaha Rokeu (`/tata-usaha`, di VPS port **8005**) berisi
+Administrasi Rokeu (`/administrasi`, di VPS port **8005**) berisi
 fitur pembuatan SPJ: SPBY, kwitansi, dan dokumen pendukungnya. Satu fitur =
 satu menu di sidebar.
 
@@ -14,12 +14,12 @@ satu menu di sidebar.
 ## 1. Aturan main
 
 1. **Kerjakan hanya folder fiturmu:**
-   - tampilan: `frontend/src/tataUsaha/fitur/<slug>/`
+   - tampilan: `frontend/src/administrasi/fitur/<slug>/`
    - API: `features/fitur/<slug>/`
    - tabel: `db/<nomor>-<slug>.sql` + modul `db/<namaFitur>.js`
      (nomor dipesan: **008 konsumsi**, **009 langganan-aplikasi**)
 2. Menu sidebar, alamat, dan sambungan API **sudah dibuat** — tidak perlu
-   mengubah `App.jsx`, `index.js`, `tataUsaha/menu.js`, atau nginx.
+   mengubah `App.jsx`, `index.js`, `administrasi/menu.js`, atau nginx.
    Kalau benar-benar perlu mengubah berkas di luar foldermu, tanyakan dulu.
 3. Kerja di branch masing-masing, commit sering, lalu buat **Pull Request
    ke `main`**. Jangan push langsung ke `main`.
@@ -43,10 +43,10 @@ Bot asli (`index.js`) ikut menyalakan WhatsApp, jadi untuk fitur ini pakai
 server pengembangan:
 
 ```bash
-npm run dev:tu
+npm run dev:administrasi
 ```
 
-Buka http://localhost:3999/tata-usaha, login dengan nomor WA operator
+Buka http://localhost:3999/administrasi, login dengan nomor WA operator
 (username = password = nomor WA di Master Data).
 
 Supaya perubahan tampilan langsung terlihat tanpa build ulang, jalankan
@@ -57,14 +57,14 @@ cd frontend
 VITE_PROXY_TARGET=http://localhost:3999 npm run dev
 ```
 
-lalu buka alamat yang dicetak Vite (biasanya http://localhost:5173/tata-usaha).
+lalu buka alamat yang dicetak Vite (biasanya http://localhost:5173/administrasi).
 
-Sebelum commit: `cd frontend && npx eslint src/tataUsaha && npm run build`.
+Sebelum commit: `cd frontend && npx eslint src/administrasi && npm run build`.
 Hasil build (`public/`) ikut di-commit.
 
 ## 4. Kerangka yang sudah ada
 
-**Tampilan** — `frontend/src/tataUsaha/fitur/<slug>/index.jsx`
+**Tampilan** — `frontend/src/administrasi/fitur/<slug>/index.jsx`
 
 - Menerima `sesi` → `sesi.operator` (`nama`, `nip`, `peran`, `bidang`).
   `peran`: `operator` (hanya bidangnya), `bendahara` (lihat semua, **tidak

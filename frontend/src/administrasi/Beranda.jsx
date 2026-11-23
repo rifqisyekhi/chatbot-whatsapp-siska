@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Loader2, Plus } from "lucide-react";
 import { apiKwitansi } from "../services/sesiKwitansi";
-import { MENU_TU } from "./menu";
+import { MENU_ADMINISTRASI } from "./menu";
 import { jalur } from "./jalur";
 import StatistikPerdin from "../StatistikPerdin";
 
 // =========================================================
-// DASHBOARD (HALAMAN AWAL /tata-usaha)
+// DASHBOARD (HALAMAN AWAL /administrasi)
 // =========================================================
 //
 // Ringkasan tahun berjalan, grafik monitoring, dan pintu ke tiap fitur. Angka saat ini baru dari
@@ -69,7 +69,7 @@ export default function Beranda({ operator }) {
           <div className="min-w-0">
             <h1 className="text-lg sm:text-xl font-extrabold tracking-tight truncate">Dashboard</h1>
             <p className="text-xs text-slate-500 font-medium truncate">
-              Dashboard Tata Usaha Rokeu • {semuaBidang ? "Semua bidang" : `Bidang ${operator.bidang}`} • Tahun {tahun}
+              Administrasi Rokeu • {semuaBidang ? "Semua bidang" : `Bidang ${operator.bidang}`} • Tahun {tahun}
             </p>
           </div>
         </div>
@@ -138,7 +138,7 @@ export default function Beranda({ operator }) {
           <section>
             <h3 className="text-sm font-extrabold mb-3">Fitur</h3>
             <div className="grid sm:grid-cols-2 gap-3 sm:gap-4">
-              {MENU_TU.map((m) => {
+              {MENU_ADMINISTRASI.map((m) => {
                 const jadi = SUDAH_JADI.has(m.slug);
                 return (
                   <Link

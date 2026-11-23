@@ -8,7 +8,7 @@ export default function SegeraHadir({ judul, keterangan, Ikon }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center">
           <div>
             <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">{judul}</h1>
-            <p className="text-xs text-slate-500 font-medium">Dashboard Tata Usaha Rokeu</p>
+            <p className="text-xs text-slate-500 font-medium">Administrasi Rokeu</p>
           </div>
         </div>
       </header>
