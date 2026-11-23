@@ -50,7 +50,7 @@ port nginx masing-masing yang hanya membuka modul itu
 | Administrasi Rokeu (perjalanan dinas, langganan aplikasi, fotokopi, BBM Kepala Biro, konsumsi) | `localhost:3000/administrasi` | `:8005` |
 
 Port 8003 sudah dipakai aplikasi lain di VPS. Fitur baru Administrasi Rokeu cukup menambah menu (panduan:
-`PANDUAN-MAGANG.md`). Modul baru melanjutkan ke
+`PANDUAN-MAGANG.pdf`). Modul baru melanjutkan ke
 `:8007` dan seterusnya (cek dulu dengan `sudo ss -tlnp | grep :80`).
 
 ## Menu 9 — Absensi Non-ASN

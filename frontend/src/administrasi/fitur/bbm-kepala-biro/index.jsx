@@ -1,6 +1,6 @@
 // Fitur BBM Kepala Biro — BELUM DIBUAT (menunggu contoh dokumen).
 // Pola yang dipakai sama dengan ../konsumsi dan ../langganan-aplikasi;
-// lihat PANDUAN-MAGANG.md.
+// lihat PANDUAN-MAGANG.pdf.
 
 import { Fuel } from "lucide-react";
 import SegeraHadir from "../../SegeraHadir";

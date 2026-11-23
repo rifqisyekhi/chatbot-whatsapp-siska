@@ -3,7 +3,7 @@
 // =========================================================
 //
 // Semua rute fitur ini di /api/kwitansi/konsumsi/... (nginx :8005 hanya
-// membuka /api/kwitansi). Panduan: PANDUAN-MAGANG.md
+// membuka /api/kwitansi). Panduan: PANDUAN-MAGANG.pdf
 //
 // Rencana umum (sesuaikan dengan contoh dokumen dari Tata Usaha):
 //   GET    /api/kwitansi/konsumsi            daftar (per bidang)

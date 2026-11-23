@@ -7,7 +7,7 @@
 // alamat /administrasi/langganan-aplikasi/... . Kerjakan SEMUA tampilan fitur
 // ini di folder ini saja (frontend/src/administrasi/fitur/langganan-aplikasi/),
 // dan API-nya di features/fitur/langganan-aplikasi/.
-// Panduan lengkap: PANDUAN-MAGANG.md
+// Panduan lengkap: PANDUAN-MAGANG.pdf
 //
 // Props `sesi` berisi `operator` — operator.peran: "operator" |
 // "bendahara" | "admin", operator.bidang: "BMN" | "PTUK" | "TU" | ...

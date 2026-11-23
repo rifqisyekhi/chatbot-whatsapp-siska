@@ -5,7 +5,7 @@
 // Halaman ini sudah tersambung ke menu sidebar "Konsumsi" dan alamat
 // /administrasi/konsumsi/... . Kerjakan SEMUA tampilan fitur ini di folder
 // ini saja (frontend/src/administrasi/fitur/konsumsi/), dan API-nya di
-// features/fitur/konsumsi/. Panduan lengkap: PANDUAN-MAGANG.md
+// features/fitur/konsumsi/. Panduan lengkap: PANDUAN-MAGANG.pdf
 //
 // Props `sesi` berisi `operator` — operator.peran: "operator" |
 // "bendahara" | "admin", operator.bidang: "BMN" | "PTUK" | "TU" | ...
