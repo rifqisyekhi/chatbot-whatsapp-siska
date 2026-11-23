@@ -52,12 +52,22 @@ Buka http://localhost:3999/administrasi, login dengan nomor WA operator
 Supaya perubahan tampilan langsung terlihat tanpa build ulang, jalankan
 juga Vite di terminal kedua:
 
-```bash
+Windows (PowerShell, terminal bawaan VS Code):
+
+```
+cd frontend
+$env:VITE_PROXY_TARGET="http://localhost:3999"; npm run dev
+```
+
+Mac/Linux atau Git Bash:
+
+```
 cd frontend
 VITE_PROXY_TARGET=http://localhost:3999 npm run dev
 ```
 
 lalu buka alamat yang dicetak Vite (biasanya http://localhost:5173/administrasi).
+Biarkan kedua terminal tetap menyala selama bekerja; berhenti dengan Ctrl+C.
 
 Sebelum commit: `cd frontend && npx eslint src/administrasi && npm run build`.
 Hasil build (`public/`) ikut di-commit.
