@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import logoKemnaker from "./assets/logo-kemnaker.png";
 import {
   Plus,
   Search,
@@ -10,7 +9,6 @@ import {
   Ban,
   RotateCcw,
   Trash2,
-  LogOut,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -40,7 +38,7 @@ const hariIni = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta
 const kelasInput =
   "px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
 
-export default function KwitansiDashboard({ operator, keluar }) {
+export default function KwitansiDashboard({ operator }) {
   // Bendahara memantau semua bidang (statistik + daftar + PDF) tanpa
   // tombol ubah/batal/hapus; server juga menolak perubahannya.
   const bendahara = operator.peran === "bendahara";
@@ -151,9 +149,6 @@ export default function KwitansiDashboard({ operator, keluar }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20 gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-paper border border-mist hidden sm:flex items-center justify-center p-1.5 shrink-0">
-                <img src={logoKemnaker} alt="Logo Kemnaker" className="w-full h-full object-contain" />
-              </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
                   {bendahara
@@ -165,13 +160,6 @@ export default function KwitansiDashboard({ operator, keluar }) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={keluar}
-              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl border border-mist bg-white hover:bg-paper text-slate-600 text-sm font-bold transition-all active:scale-95 shadow-2xs cursor-pointer shrink-0"
-            >
-              <LogOut className="w-4 h-4 text-brand" />
-              <span className="hidden sm:inline">Keluar</span>
-            </button>
           </div>
         </div>
       </header>

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiTU } from "./services/ApiTU";
 import { apiKwitansi, bukaPdf } from "./services/sesiKwitansi";
-import logoKemnaker from "./assets/logo-kemnaker.png";
 import {
   ArrowLeft,
   ReceiptText,
@@ -279,9 +278,6 @@ export default function KwitansiPerdin({ operator }) {
               >
                 <ArrowLeft className="w-4 h-4" />
               </Link>
-              <div className="w-11 h-11 rounded-2xl bg-paper border border-mist hidden sm:flex items-center justify-center p-1.5 shrink-0">
-                <img src={logoKemnaker} alt="Logo Kemnaker" className="w-full h-full object-contain" />
-              </div>
               <div className="min-w-0">
                 <h1 className="text-lg sm:text-xl font-extrabold text-navy tracking-tight truncate">
                   {baru ? "Perjalanan Dinas Baru" : "Ubah Perjalanan Dinas"}

@@ -12,7 +12,7 @@ port perjalanan dinas walaupun alamatnya diketik manual.
 | 8002 | Stok ATK | `/atk` (katalog), `/atk/kelola` | `/api/barang`, `/api/mutasi-barang` | `siska-8002-atk.conf` |
 | 8003 | (dipakai aplikasi lain di VPS) | — | — | — |
 | 8004 | Kendaraan Dinas | `/kendaraan`, `/kendaraan/pemeliharaan` | `/api/kendaraan`, `/api/servis-kendaraan` | `siska-8004-kendaraan.conf` |
-| 8005 | Perjalanan Dinas | `/perjalanan-dinas`, `/perjalanan-dinas/<id>` | `/api/kwitansi` | `siska-8005-perjalanan-dinas.conf` |
+| 8005 | SPBY & Kwitansi | `/perjalanan-dinas`, `/langganan-aplikasi`, `/fotokopi`, `/bbm-kepala-biro`, `/konsumsi` | `/api/kwitansi` | `siska-8005-perjalanan-dinas.conf` |
 | 8006 | Master Data Pegawai | `/pegawai` | `/api/pegawai` | `siska-8006-pegawai.conf` |
 
 `/` di tiap port langsung dialihkan ke halaman modulnya. Di :8002, `/`

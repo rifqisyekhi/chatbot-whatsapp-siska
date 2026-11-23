@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useOutletContext, useParams } from 'react-router-dom'
 import InventoryTaking from './InventoryTaking'
 import AdminMasterDataTU from './MasterDataTU'
 import DashboardBarang from './DashboardBarang'
@@ -6,6 +6,8 @@ import RekapServis from './RekapServis'
 import KwitansiPerdin from './KwitansiPerdin'
 import KwitansiDashboard from './KwitansiDashboard'
 import KwitansiMasuk from './KwitansiMasuk'
+import KeuanganShell, { SegeraHadir } from './KeuanganShell'
+import { MENU_KEUANGAN } from './menuKeuangan'
 
 // =========================================================
 // SATU PATH PER MODUL
@@ -17,7 +19,8 @@ import KwitansiMasuk from './KwitansiMasuk'
 //   Stok ATK (katalog)        /atk, /atk/kelola          8002
 //   Master Data Pegawai       /pegawai                   8006
 //   Kendaraan Dinas           /kendaraan, /kendaraan/... 8004
-//   Perjalanan Dinas          /perjalanan-dinas/...      8005
+//   SPBY & Kwitansi           /perjalanan-dinas, /langganan-aplikasi,
+//                             /fotokopi, /bbm-kepala-biro, /konsumsi  8005
 //   (Presensi non ASN: aplikasi terpisah di 8001)
 //
 // Di lokal semuanya dibuka dari satu alamat (localhost:3000/<modul>). Di VPS
@@ -45,15 +48,16 @@ function App() {
         <Route path="/kendaraan" element={<AdminMasterDataTU modul="kendaraan" />} />
         <Route path="/kendaraan/pemeliharaan" element={<RekapServis />} />
 
-        {/* ---------- Perjalanan Dinas (login operator per bidang) ---------- */}
-        <Route
-          path="/perjalanan-dinas"
-          element={<KwitansiMasuk>{(s) => <KwitansiDashboard {...s} />}</KwitansiMasuk>}
-        />
-        <Route
-          path="/perjalanan-dinas/:id"
-          element={<KwitansiMasuk>{(s) => <KwitansiPerdin {...s} />}</KwitansiMasuk>}
-        />
+        {/* ---------- SPBY & Kwitansi (login operator/bendahara, sidebar) ----------
+            Satu login dan satu sidebar untuk semua jenis pengeluaran; di VPS
+            semuanya di port 8005. */}
+        <Route element={<LayoutKeuangan />}>
+          <Route path="/perjalanan-dinas" element={<Halaman komponen={KwitansiDashboard} />} />
+          <Route path="/perjalanan-dinas/:id" element={<Halaman komponen={KwitansiPerdin} />} />
+          {MENU_KEUANGAN.filter((m) => m.path !== "/perjalanan-dinas").map((m) => (
+            <Route key={m.path} path={m.path} element={<SegeraHadir path={m.path} />} />
+          ))}
+        </Route>
 
         {/* ---------- Alamat lama → alamat baru ----------
             Supaya tautan dan bookmark yang terlanjur tersebar tidak mati. */}
@@ -68,6 +72,24 @@ function App() {
       </Routes>
     </BrowserRouter>
   )
+}
+
+// Login sekali, lalu sidebar membungkus halaman mana pun di modul ini.
+function LayoutKeuangan() {
+  return (
+    <KwitansiMasuk>
+      {(sesi) => (
+        <KeuanganShell {...sesi}>
+          <Outlet context={sesi} />
+        </KeuanganShell>
+      )}
+    </KwitansiMasuk>
+  )
+}
+
+function Halaman({ komponen: Komponen }) {
+  const sesi = useOutletContext()
+  return <Komponen {...sesi} />
 }
 
 function AliasPerjalanan() {
