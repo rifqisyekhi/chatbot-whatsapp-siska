@@ -35,39 +35,21 @@ const BIDANG_BAWAAN = ["BMN", "PTUK", "TU", "AKLAP", "PA"];
 
 const AKUN_BAWAAN = [
   {
-    kode: "026.01.WA.2158.EBA.994.002.A.522191",
-    uraian: "522191 — Belanja Jasa Lainnya (Langganan Aplikasi / Layanan Daring)",
-  },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.521111",
-    uraian: "521111 — Belanja Keperluan Perkantoran",
-  },
-  {
     kode: "026.01.WA.2158.EBA.994.002.A.522119",
     uraian: "522119 — Belanja Langganan Daya dan Jasa Lainnya",
-  },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.524111",
-    uraian: "524111 — Belanja Perjalanan / Operasional",
-  },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.521211",
-    uraian: "521211 — Belanja Bahan / Operasional Kegiatan",
   },
 ];
 
 const APLIKASI_POPULER_BAWAAN = [
-  { nama: "Zoom Workplace" },
-  { nama: "Canva" },
-  { nama: "Google Workspace / Google One" },
-  { nama: "Adobe Creative Cloud" },
-  { nama: "Microsoft 365" },
+  { nama: "Adobe", penyedia: "ADOBE" },
+  { nama: "Zoom", penyedia: "Zoom" },
+  { nama: "Google", penyedia: "Google" },
+  { nama: "Google One", penyedia: "Google One" },
+  { nama: "Google Workspace", penyedia: "Google Workspace" },
+  { nama: "Open AI", penyedia: "OpenAI OpCo,LLC" },
+  { nama: "Canva", penyedia: "CANVA" },
 ];
 
-const PENYEDIA_LAMA =
-  /zoom video communications|canva pty|google asia pacific|adobe systems software|microsoft operations|openai|bytedance|grammarly|penyedia layanan cloud/i;
-
-const DIHAPUS_APLIKASI = /capcut|grammarly|chatgpt|gpt|vps|cloud hosting/i;
 
 const REF_BAWAAN = {
   bidang: BIDANG_BAWAAN,
@@ -93,7 +75,7 @@ const FORM_AWAL = () => {
   return {
     akun: AKUN_BAWAAN[0].kode,
     kegiatan_mak: "2158.EBA.994",
-    kode_akun: "522191",
+    kode_akun: "522119",
     nama_aplikasi: "",
     penyedia: "",
     paket: "",
@@ -117,7 +99,6 @@ function bacaDraf() {
   try {
     const d = JSON.parse(localStorage.getItem(KUNCI_DRAF) || "null");
     if (d && Array.isArray(d.rincian)) {
-      if (PENYEDIA_LAMA.test(String(d.penyedia || ""))) d.penyedia = "";
       return { ...FORM_AWAL(), ...d, lampiran: [] };
     }
   } catch {
@@ -315,7 +296,7 @@ export default function FormLangganan({ operator }) {
       .then((r) => {
         if (r && typeof r === "object") {
           const daftarAplikasi = Array.isArray(r.aplikasiPopuler)
-            ? r.aplikasiPopuler.filter((a) => !DIHAPUS_APLIKASI.test(a.nama))
+            ? r.aplikasiPopuler
             : APLIKASI_POPULER_BAWAAN;
           setRef((lama) => ({
             ...lama,
@@ -382,7 +363,7 @@ export default function FormLangganan({ operator }) {
 
   const gantiAkun = (kodeLengkap) => {
     const bagian = String(kodeLengkap || "").split(".");
-    const kodeUjung = bagian[bagian.length - 1] || "522191";
+    const kodeUjung = bagian[bagian.length - 1] || "522119";
     const kegiatan = bagian.length >= 6 ? bagian.slice(3, 6).join(".") : "2158.EBA.994";
     setForm((f) => ({
       ...f,
@@ -395,7 +376,6 @@ export default function FormLangganan({ operator }) {
   const daftarSaranAplikasi = useMemo(
     () =>
       (ref?.aplikasiPopuler || APLIKASI_POPULER_BAWAAN)
-        .filter((a) => !DIHAPUS_APLIKASI.test(a.nama))
         .map((a) => ({
           utama: a.nama,
           sub: [a.penyedia, a.paket].filter(Boolean).join(" • "),
@@ -651,7 +631,7 @@ export default function FormLangganan({ operator }) {
                   />
                 </Medan>
 
-                <Medan label="Penyedia / vendor" className="sm:col-span-2">
+                <Medan label="Penyedia (Kepada di SPBY)" className="sm:col-span-2" petunjuk='Mis. "ADOBE", "OpenAI OpCo,LLC". Kosong = nama aplikasi'>
                   <input
                     className={kelasInput}
                     value={form.penyedia}
@@ -662,7 +642,7 @@ export default function FormLangganan({ operator }) {
                 <Medan
                   label="Dalam rangka / untuk pembayaran"
                   className="sm:col-span-2"
-                  petunjuk='Otomatis diakhiri ", sesuai dengan bukti terlampir" pada cetak SPBY'
+                  petunjuk='Kosong = otomatis "Biaya Langganan … untuk kebutuhan operasional perkantoran Biro Keuangan dan BMN bulan …, sesuai bukti/faktur terlampir"'
                 >
                   <textarea
                     rows={2}
@@ -719,10 +699,10 @@ export default function FormLangganan({ operator }) {
 
             {/* ---------- Kepada / Penerima ---------- */}
             <section className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6">
-              <h2 className="text-base font-extrabold mb-4">Kepada / Penerima</h2>
+              <h2 className="text-base font-extrabold mb-4">Penerima Uang</h2>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <Medan label="Kepada (Nama Penerima)" petunjuk="Ketik nama pegawai atau penerima di SPBY">
+                <Medan label="Nama pegawai" petunjuk="Pegawai yang membayarkan langganan; menandatangani kwitansi">
                   <InputSaranPutih
                     value={form.penerima_nama}
                     onChange={(v) => ubah("penerima_nama", v)}
@@ -919,7 +899,7 @@ export default function FormLangganan({ operator }) {
                       {hasil.paket ? ` (${hasil.paket})` : ""}
                     </p>
                     <p className="text-xs text-slate-500 truncate">
-                      Kepada: {hasil.penerima.nama}
+                      Kepada: {hasil.penyedia || hasil.namaAplikasi} • Penerima uang: {hasil.penerima.nama}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       MAK: {hasil.kegiatanMak} • Kode: {hasil.kodeAkun}

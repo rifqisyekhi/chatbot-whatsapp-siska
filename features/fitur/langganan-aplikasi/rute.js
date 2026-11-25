@@ -16,35 +16,23 @@ const db = require("../../../db/langgananAplikasi");
 const { tulisLanggananPdf } = require("./pdf");
 
 // Kode akun (MAK) — perlu dipastikan ke Tata Usaha sebelum dipakai resmi.
+// Akun mengikuti contoh SPBY langganan dari Tata Usaha (SPBY Open AI Oktober).
 const AKUN_LANGGANAN = [
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.522191",
-    uraian: "522191 — Belanja Jasa Lainnya (Langganan Aplikasi / Layanan Daring)",
-  },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.521111",
-    uraian: "521111 — Belanja Keperluan Perkantoran",
-  },
   {
     kode: "026.01.WA.2158.EBA.994.002.A.522119",
     uraian: "522119 — Belanja Langganan Daya dan Jasa Lainnya",
   },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.524111",
-    uraian: "524111 — Belanja Perjalanan / Operasional",
-  },
-  {
-    kode: "026.01.WA.2158.EBA.994.002.A.521211",
-    uraian: "521211 — Belanja Bahan / Operasional Kegiatan",
-  },
 ];
 
+// Penyedia = "Kepada" di SPBY, persis seperti di contoh Tata Usaha.
 const APLIKASI_POPULER = [
-  { nama: "Zoom Workplace" },
-  { nama: "Canva" },
-  { nama: "Google Workspace / Google One" },
-  { nama: "Adobe Creative Cloud" },
-  { nama: "Microsoft 365" },
+  { nama: "Adobe", penyedia: "ADOBE" },
+  { nama: "Zoom", penyedia: "Zoom" },
+  { nama: "Google", penyedia: "Google" },
+  { nama: "Google One", penyedia: "Google One" },
+  { nama: "Google Workspace", penyedia: "Google Workspace" },
+  { nama: "Open AI", penyedia: "OpenAI OpCo,LLC" },
+  { nama: "Canva", penyedia: "CANVA" },
 ];
 
 const PERIODE = ["Bulanan", "Triwulanan", "Semesteran", "Tahunan", "Sekali Bayar"];
@@ -110,7 +98,7 @@ function periksaLampiran(mentah, GalatKwitansi) {
 
 function pecahAkunSpby(kodeLengkap, kegiatanInput, kodeInput) {
   const bagian = String(kodeLengkap || "").split(".");
-  const kodeBawaan = bagian[bagian.length - 1] || "522191";
+  const kodeBawaan = bagian[bagian.length - 1] || "522119";
   const kegiatanBawaan = bagian.length >= 6 ? bagian.slice(3, 6).join(".") : "2158.EBA.994";
   return {
     kegiatanMak: teks(kegiatanInput, 100) || kegiatanBawaan,
@@ -142,7 +130,7 @@ function hitungLangganan(mentah, GalatKwitansi, pejabat) {
   const { kegiatanMak, kodeAkun } = pecahAkunSpby(akun.kode, isian.kegiatan_mak, isian.kode_akun);
 
   const penerimaNama = teks(isian.penerima_nama, 200);
-  if (!penerimaNama) throw new GalatKwitansi("Nama penerima (Kepada) wajib diisi.");
+  if (!penerimaNama) throw new GalatKwitansi("Nama pegawai penerima uang (penanda tangan kwitansi) wajib diisi.");
   const penerimaNip = teks(isian.penerima_nip, 50).replace(/\s+/g, "");
   const penerimaJabatan = teks(isian.penerima_jabatan, 200);
 
