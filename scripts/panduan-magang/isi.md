@@ -9,7 +9,8 @@ satu menu di sidebar.
 | Perjalanan Dinas | (sudah jadi, `main`) | — |
 | Konsumsi | `magang/konsumsi` | anak magang 1 |
 | Langganan Aplikasi | `magang/langganan-aplikasi` | anak magang 2 |
-| Fotokopi, BBM Kepala Biro | (belum dibagi) | — |
+| BBM Kepala Biro (bensin) | `magang/bbm-kepala-biro` | anak magang 3 |
+| Fotokopi | (belum dibagi) | — |
 
 ## 1. Aturan main
 
@@ -17,7 +18,8 @@ satu menu di sidebar.
    - tampilan: `frontend/src/administrasi/fitur/<slug>/`
    - API: `features/fitur/<slug>/`
    - tabel: `db/<nomor>-<slug>.sql` + modul `db/<namaFitur>.js`
-     (nomor dipesan: **008 konsumsi**, **009 langganan-aplikasi**)
+     (nomor dipesan: **008 konsumsi**, **009 langganan-aplikasi**,
+     **010 bbm-kepala-biro**)
 2. Menu sidebar, alamat, dan sambungan API **sudah dibuat** — tidak perlu
    mengubah `App.jsx`, `index.js`, `administrasi/menu.js`, atau nginx.
    Kalau benar-benar perlu mengubah berkas di luar foldermu, tanyakan dulu.
@@ -30,7 +32,7 @@ satu menu di sidebar.
 ```bash
 git clone https://github.com/rifqisyekhi/chatbot-whatsapp-siska.git
 cd chatbot-whatsapp-siska
-git checkout magang/konsumsi          # atau magang/langganan-aplikasi
+git checkout magang/konsumsi     # atau magang/langganan-aplikasi / magang/bbm-kepala-biro
 npm install
 cd frontend && npm install && cd ..
 ```
@@ -155,6 +157,7 @@ branch saya (tertulis di bagian paling bawah):
   Branch                      Fitur (slug)         Nomor tabel
   magang/konsumsi             konsumsi             008
   magang/langganan-aplikasi   langganan-aplikasi   009
+  magang/bbm-kepala-biro      bbm-kepala-biro      010
 
 Aturan WAJIB, tidak boleh dilanggar:
 1. Hanya boleh membuat/mengubah berkas milik fitur saya:
@@ -185,8 +188,9 @@ Aturan WAJIB, tidak boleh dilanggar:
 Branch saya: ____________
 ```
 
-Ganti `____________` dengan `magang/konsumsi` atau
-`magang/langganan-aplikasi`. Kalau nanti ada fitur magang baru, cukup
+Ganti `____________` dengan `magang/konsumsi`,
+`magang/langganan-aplikasi`, atau `magang/bbm-kepala-biro`. Kalau nanti ada
+fitur magang baru, cukup
 tambahkan satu baris di tabel prompt (branch, slug, nomor tabel).
 
 Tetap periksa hasil AI sebelum commit: `git status` harus hanya
