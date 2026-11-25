@@ -15,16 +15,9 @@ import {
   Camera,
   X,
 } from "lucide-react";
-import { apiKwitansi } from "../../../services/sesiKwitansi";
+import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import {
-  batalkanLokal,
-  daftarLokal,
-  hapusLokal,
-  pulihkanLokal,
-  satuLokal,
-} from "./simpananLokal";
-import { bukaPdfLanggananLokal } from "./cetakPdfLokal";
+import StatistikLangganan from "./StatistikLangganan";
 
 // =========================================================
 // DASHBOARD LANGGANAN APLIKASI PER BIDANG
@@ -32,7 +25,8 @@ import { bukaPdfLanggananLokal } from "./cetakPdfLokal";
 //
 // Daftar langganan aplikasi bidang operator yang masuk (admin/bendahara:
 // semua bidang), dengan aksi lihat bukti, cetak PDF SPBY, buka/ubah,
-// batalkan/pulihkan, dan hapus.
+// batalkan/pulihkan, dan hapus. Semua data lewat API (Postgres); galat API
+// ditampilkan sebagai pesan merah, tidak pernah dianggap berhasil.
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 const hariIni = () => new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date());
@@ -72,28 +66,25 @@ export default function DaftarLangganan({ operator }) {
 
   useEffect(() => {
     let usang = false;
-    const bidangSaring = admin ? bidang || null : operator.bidang;
     const q = new URLSearchParams();
     if (tahun) q.set("tahun", tahun);
     if (admin && bidang) q.set("bidang", bidang);
     apiKwitansi({ url: `api/kwitansi/langganan-aplikasi?${q}` })
       .then((r) => {
         if (usang) return;
-        const dariServer = Array.isArray(r) ? r : [];
-        const dariLokal = daftarLokal({ bidang: bidangSaring, tahun: tahun || null });
-        setDaftar(dariServer.length ? dariServer : dariLokal);
+        setDaftar(Array.isArray(r) ? r : []);
         setGalat("");
       })
-      .catch(() => {
+      .catch((e) => {
         if (usang) return;
-        setDaftar(daftarLokal({ bidang: bidangSaring, tahun: tahun || null }));
-        setGalat("");
+        setDaftar([]);
+        setGalat(e.message || "Gagal memuat daftar langganan aplikasi");
       })
       .finally(() => !usang && setMemuat(false));
     return () => {
       usang = true;
     };
-  }, [tahun, bidang, admin, operator.bidang, putaran]);
+  }, [tahun, bidang, admin, putaran]);
 
   useEffect(() => {
     if (admin) {
@@ -126,48 +117,16 @@ export default function DaftarLangganan({ operator }) {
     total: aktif.reduce((a, d) => a + (Number(d.total) || 0), 0),
   };
 
+  // PDF selalu disusun server dari data tersimpan.
   const pdf = async (d) => {
     try {
-      let isian = d.isian || satuLokal(d.id)?.isian;
-      if (!isian && !d.lokal) {
-        const detail = await apiKwitansi({ url: `api/kwitansi/langganan-aplikasi/${d.id}` }).catch(() => null);
-        isian = detail?.isian;
-      }
-      if (!isian) {
-        isian = {
-          nama_aplikasi: d.nama_aplikasi,
-          penyedia: d.penyedia,
-          paket: d.paket,
-          periode: d.periode,
-          keperluan: d.keperluan,
-          tanggal_mulai: d.tanggal_mulai,
-          tanggal_selesai: d.tanggal_selesai,
-          tanggal_bayar: d.tanggal_bayar,
-          penerima_nama: d.penerima_nama,
-          penerima_nip: d.penerima_nip,
-          rincian: [
-            {
-              uraian: `Langganan ${d.nama_aplikasi || ""}`,
-              volume: String(d.jumlah_lisensi || 1),
-              satuan: "Lisensi",
-              harga_satuan: String(d.total || 0),
-              pajak: "0",
-            },
-          ],
-        };
-      }
-      bukaPdfLanggananLokal(isian);
+      await bukaPdf({ url: `api/kwitansi/langganan-aplikasi/${d.id}/pdf` });
     } catch (e) {
       kabari(e.message || "Gagal membuka PDF", "error");
     }
   };
 
   const bukaModalBukti = async (d) => {
-    const lokal = d.isian?.lampiran?.length ? d : satuLokal(d.id);
-    if (lokal?.isian?.lampiran?.length) {
-      setLihatBukti({ baris: d, lampiran: lokal.isian.lampiran });
-      return;
-    }
     try {
       const detail = await apiKwitansi({ url: `api/kwitansi/langganan-aplikasi/${d.id}` });
       const lampiran = detail?.isian?.lampiran || [];
@@ -176,31 +135,23 @@ export default function DaftarLangganan({ operator }) {
         return;
       }
       setLihatBukti({ baris: d, lampiran });
-    } catch {
-      kabari("Belum ada foto bukti yang diunggah pada data ini", "error");
+    } catch (e) {
+      kabari(e.message || "Gagal memuat foto bukti", "error");
     }
   };
 
   const pulihkan = async (d) => {
     if (!window.confirm(`Pulihkan langganan aplikasi "${d.nama_aplikasi}"?`)) return;
     try {
-      if (d.lokal) {
-        pulihkanLokal(d.id, { oleh: operator.nama });
-      } else {
-        try {
-          await apiKwitansi({
-            url: `api/kwitansi/langganan-aplikasi/${d.id}/pulihkan`,
-            method: "POST",
-            body: {},
-          });
-        } catch {
-          pulihkanLokal(d.id, { oleh: operator.nama });
-        }
-      }
+      await apiKwitansi({
+        url: `api/kwitansi/langganan-aplikasi/${d.id}/pulihkan`,
+        method: "POST",
+        body: {},
+      });
       kabari("Langganan aplikasi dipulihkan");
       muat();
     } catch (e) {
-      kabari(e.message, "error");
+      kabari(e.message || "Gagal memulihkan langganan aplikasi", "error");
     }
   };
 
@@ -212,19 +163,11 @@ export default function DaftarLangganan({ operator }) {
     )
       return;
     try {
-      if (d.lokal) {
-        hapusLokal(d.id);
-      } else {
-        try {
-          await apiKwitansi({ url: `api/kwitansi/langganan-aplikasi/${d.id}`, method: "DELETE" });
-        } catch {
-          hapusLokal(d.id);
-        }
-      }
+      await apiKwitansi({ url: `api/kwitansi/langganan-aplikasi/${d.id}`, method: "DELETE" });
       kabari("Langganan aplikasi dihapus");
       muat();
     } catch (e) {
-      kabari(e.message, "error");
+      kabari(e.message || "Gagal menghapus langganan aplikasi", "error");
     }
   };
 
@@ -263,6 +206,8 @@ export default function DaftarLangganan({ operator }) {
             </div>
           ))}
         </div>
+
+        {admin && !memuat && !galat && <StatistikLangganan daftar={daftar} tahun={tahun} />}
 
         <section className="bg-white rounded-3xl border border-mist shadow-2xs overflow-hidden">
           <div className="p-4 sm:p-5 border-b border-mist/70">
@@ -653,20 +598,13 @@ function ModalBatal({ baris, tutup, selesai }) {
 
   const kirim = async () => {
     setProses(true);
+    setGalat("");
     try {
-      if (baris.lokal) {
-        batalkanLokal(baris.id, { alasan, tanggal });
-      } else {
-        try {
-          await apiKwitansi({
-            url: `api/kwitansi/langganan-aplikasi/${baris.id}/batal`,
-            method: "POST",
-            body: { alasan, tanggal },
-          });
-        } catch {
-          batalkanLokal(baris.id, { alasan, tanggal });
-        }
-      }
+      await apiKwitansi({
+        url: `api/kwitansi/langganan-aplikasi/${baris.id}/batal`,
+        method: "POST",
+        body: { alasan, tanggal },
+      });
       selesai();
     } catch (e) {
       setGalat(e.message || "Gagal membatalkan langganan aplikasi");

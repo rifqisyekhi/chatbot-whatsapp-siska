@@ -38,15 +38,6 @@ function pasangFontDokumen(doc) {
   }
 }
 
-// Memastikan nama PPK menggunakan gelar "Alpha Sandro Adithyaswara, S.Sos."
-function namaPpkResmi(nama) {
-  const s = String(nama || "").trim();
-  if (!s || /alpha\s+sandro/i.test(s)) {
-    return "Alpha Sandro Adithyaswara, S.Sos.";
-  }
-  return s;
-}
-
 // Memformat 18 digit NIP dengan spasi (8 - 6 - 1 - 3) untuk halaman SPBY.
 function formatNipSpby(nip) {
   const bersih = String(nip || "").replace(/\s+/g, "");
@@ -294,7 +285,7 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   const yNama = yTtdAtas + 105;
   const namaBendahara = h.pejabat?.bendahara?.nama || "";
   const nipBendahara = formatNipSpby(h.pejabat?.bendahara?.nip);
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
+  const namaPpk = h.pejabat?.ppk?.nama || "";
   const nipPpk = formatNipSpby(h.pejabat?.ppk?.nip);
 
   const uBendahara = ukuranSatuBaris(doc, [namaBendahara], wKolKiri - 4, ARIAL, H);
@@ -371,7 +362,7 @@ function halamanKwitansiLangganan(doc, h, { terbilangRupiah, tanggalPanjang }) {
   garisGanda(doc, x, y, w);
   y += 12;
 
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
+  const namaPpk = h.pejabat?.ppk?.nama || "";
   const tglJakarta = `Jakarta, ${tanggalPanjang(h.tanggalBayar)}`;
 
   // Tanggal "Jakarta, ..." dimasukkan langsung sebagai baris pertama judul
@@ -495,7 +486,8 @@ function halamanRincianLangganan(doc, h, { terbilangRupiah, tanggalPanjang }) {
     lebar: kol,
     tebalNip: true,
     judul: ["Telah dibayar sejumlah", rp(h.total), "", "Bendahara Pengeluaran"],
-    ...h.pejabat.bendahara,
+    nama: h.pejabat?.bendahara?.nama || "",
+    nip: h.pejabat?.bendahara?.nip || "",
   });
   const yAkhir = blokTtd(doc, {
     x: x + kol,
@@ -507,7 +499,7 @@ function halamanRincianLangganan(doc, h, { terbilangRupiah, tanggalPanjang }) {
     nip: h.penerima.nip,
   });
 
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
+  const namaPpk = h.pejabat?.ppk?.nama || "";
   y = yAkhir + 24;
   doc.lineWidth(0.8).moveTo(x, y).lineTo(x + w, y).stroke();
   blokTtd(doc, {
@@ -581,7 +573,6 @@ function tulisLanggananPdf(hitungan, tujuan, alat) {
   });
   pasangFontDokumen(doc);
   if (alat?.pasangFontSpby) alat.pasangFontSpby(doc);
-  doc.pipe(tujuan);
 
   halamanSpbyPersis(doc, hitungan, alat);
   halamanKwitansiLangganan(doc, hitungan, alat);
@@ -590,6 +581,9 @@ function tulisLanggananPdf(hitungan, tujuan, alat) {
     halamanLampiranBukti(doc, hitungan.lampiran);
   }
 
+  // Dialirkan setelah semua halaman tergambar: galat saat menggambar
+  // terjadi sebelum header terkirim sehingga rute bisa membalas JSON.
+  doc.pipe(tujuan);
   doc.end();
   return doc;
 }

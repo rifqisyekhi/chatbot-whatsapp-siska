@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { apiKwitansi } from "../../../services/sesiKwitansi";
+import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { buatLokal, satuLokal, ubahLokal } from "./simpananLokal";
-import { bukaPdfLanggananLokal } from "./cetakPdfLokal";
 import {
   ArrowLeft,
   ReceiptText,
@@ -27,6 +25,9 @@ import {
 // Operator mengisi data langganan aplikasi, penerima (Kepada),
 // rincian biaya, serta mengunggah bukti/nota pembelian. Server
 // menyusun PDF Surat Perintah Bayar (SPBY) beserta lampiran bukti.
+// Simpan/ubah hanya lewat API; angka pratinjau dihitung server
+// (POST .../hitung). localStorage hanya untuk draf form baru yang belum
+// disimpan.
 
 const KUNCI_DRAF = "kwitansi-langganan-draf";
 
@@ -164,63 +165,10 @@ function kompresGambarKeDataUrl(berkas) {
   });
 }
 
-const angkaBulat = (v) => Math.max(0, Math.floor(Number(String(v ?? "").replace(/[^\d]/g, "")) || 0));
-
-function hitungLokal(isian) {
-  const namaAplikasi = String(isian.nama_aplikasi || "").trim();
-  if (!namaAplikasi) throw new Error("Nama aplikasi atau layanan daring wajib diisi.");
-
-  const penyedia = String(isian.penyedia || "").trim();
-  const paket = String(isian.paket || "").trim();
-  const periode = isian.periode || "Bulanan";
-  const keperluan = String(isian.keperluan || "").trim();
-  const tanggalMulai = isian.tanggal_mulai || hariIni();
-  const tanggalSelesai = isian.tanggal_selesai || tanggalMulai;
-  if (tanggalSelesai < tanggalMulai) {
-    throw new Error("Tanggal batas akhir tidak boleh sebelum tanggal pembelian.");
-  }
-
-  const penerimaNama = String(isian.penerima_nama || "").trim();
-  if (!penerimaNama) throw new Error("Nama penerima (Kepada) wajib diisi.");
-
-  const daftarRincian = Array.isArray(isian.rincian) && isian.rincian.length ? isian.rincian : [{}];
-  const rincian = daftarRincian.map((item, idx) => {
-    const uraianDefault =
-      idx === 0
-        ? `Langganan ${namaAplikasi}${paket ? ` (${paket})` : ""}`
-        : `Item langganan ${idx + 1}`;
-    const uraian = String(item.uraian || "").trim() || uraianDefault;
-    const volume = Math.max(1, angkaBulat(item.volume || 1));
-    const satuan = String(item.satuan || "").trim() || "Lisensi";
-    const hargaSatuan = angkaBulat(item.harga_satuan);
-    const pajak = angkaBulat(item.pajak);
-    const keterangan = String(item.keterangan || "").trim();
-    const jumlah = volume * hargaSatuan + pajak;
-    return { uraian, volume, satuan, hargaSatuan, pajak, keterangan, jumlah };
-  });
-
-  const total = rincian.reduce((a, r) => a + r.jumlah, 0);
-  if (total <= 0) {
-    throw new Error("Isi harga satuan pada rincian biaya (total harus lebih dari Rp 0).");
-  }
-
-  return {
-    namaAplikasi,
-    penyedia,
-    paket,
-    periode,
-    keperluan,
-    kegiatanMak: String(isian.kegiatan_mak || "2158.EBA.994").trim(),
-    kodeAkun: String(isian.kode_akun || "522191").trim(),
-    penerima: {
-      nama: penerimaNama,
-      nip: String(isian.penerima_nip || "").trim(),
-      jabatan: String(isian.penerima_jabatan || "").trim(),
-    },
-    rincian,
-    total,
-  };
-}
+// Batas lampiran (disamakan dengan server; nilai dari referensi bila ada).
+const MAKS_LAMPIRAN = 5;
+const MAKS_BYTE_LAMPIRAN = 1024 * 1024;
+const ukuranDataUrl = (dataUrl) => Math.floor((String(dataUrl).split(",")[1] || "").length * 0.75);
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 
@@ -340,6 +288,7 @@ export default function FormLangganan({ operator }) {
   const baru = !id || id === "baru";
   const navigate = useNavigate();
   const admin = operator?.peran === "admin";
+  const bendahara = operator?.peran === "bendahara";
   const [ref, setRef] = useState(REF_BAWAAN);
   const [pegawai, setPegawai] = useState([]);
   const [galatMuat, setGalatMuat] = useState("");
@@ -392,17 +341,7 @@ export default function FormLangganan({ operator }) {
         setBidang(b.bidang);
         setForm({ ...FORM_AWAL(), ...b.isian });
       })
-      .catch((e) => {
-        const lokal = satuLokal(id);
-        if (lokal) {
-          setTersimpan(lokal);
-          setBidang(lokal.bidang);
-          setForm({ ...FORM_AWAL(), ...lokal.isian });
-          setGalatMuat("");
-        } else {
-          setGalatMuat(e.message || "Gagal memuat data langganan aplikasi");
-        }
-      });
+      .catch((e) => setGalatMuat(e.message || "Gagal memuat data langganan aplikasi"));
   }, [id, baru]);
 
   // Simpan draf tanpa gambar lampiran agar tidak melebihi batas localStorage.
@@ -423,21 +362,15 @@ export default function FormLangganan({ operator }) {
         const h = await apiKwitansi({
           url: "api/kwitansi/langganan-aplikasi/hitung",
           method: "POST",
-          body: { ...form, lampiran: undefined },
+          body: { isian: { ...form, lampiran: undefined } },
         });
         if (nomor !== urutanHitung.current) return;
         setHasil(h);
         setGalatHitung("");
-      } catch {
+      } catch (e) {
         if (nomor !== urutanHitung.current) return;
-        try {
-          const lokal = hitungLokal(form);
-          setHasil(lokal);
-          setGalatHitung("");
-        } catch (errLokal) {
-          setHasil(null);
-          setGalatHitung(errLokal.message || "Gagal menghitung");
-        }
+        setHasil(null);
+        setGalatHitung(e.message || "Gagal menghitung");
       } finally {
         if (nomor === urutanHitung.current) setMenghitung(false);
       }
@@ -516,17 +449,32 @@ export default function FormLangganan({ operator }) {
   const pilihBerkasBukti = async (e) => {
     const daftarBerkas = Array.from(e.target.files || []);
     if (!daftarBerkas.length) return;
+    const maks = Number(ref?.maksLampiran) || MAKS_LAMPIRAN;
+    const maksByte = Number(ref?.maksByteLampiran) || MAKS_BYTE_LAMPIRAN;
+    const sisa = maks - (Array.isArray(form.lampiran) ? form.lampiran.length : 0);
+    if (sisa <= 0) {
+      kabari(`Lampiran gambar paling banyak ${maks} berkas`, "error");
+      if (inputBerkasRef.current) inputBerkasRef.current.value = "";
+      return;
+    }
     setMengunggah(true);
     try {
       const hasilUnggah = [];
-      for (const berkas of daftarBerkas.slice(0, 10)) {
+      for (const berkas of daftarBerkas.slice(0, sisa)) {
         const terkompres = await kompresGambarKeDataUrl(berkas);
+        if (ukuranDataUrl(terkompres.dataUrl) > maksByte) {
+          throw new Error(`Gambar ${berkas.name} terlalu besar (maksimal 1 MB setelah dikompres)`);
+        }
         hasilUnggah.push(terkompres);
       }
       setForm((f) => ({
         ...f,
-        lampiran: [...(Array.isArray(f.lampiran) ? f.lampiran : []), ...hasilUnggah].slice(0, 10),
+        lampiran: [...(Array.isArray(f.lampiran) ? f.lampiran : []), ...hasilUnggah].slice(0, maks),
       }));
+      if (daftarBerkas.length > sisa) {
+        kabari(`Hanya ${sisa} berkas ditambahkan (maksimal ${maks} lampiran)`, "error");
+        return;
+      }
       kabari(`${hasilUnggah.length} bukti pembayaran ditambahkan`);
     } catch (err) {
       kabari(err.message || "Gagal memuat berkas bukti", "error");
@@ -546,7 +494,17 @@ export default function FormLangganan({ operator }) {
   const buatPdf = async () => {
     setMembuatPdf(true);
     try {
-      bukaPdfLanggananLokal(form);
+      // Bendahara hanya membuka PDF data tersimpan; selain itu pratinjau
+      // dari isian form disusun server (angka dihitung ulang di sana).
+      if (bendahara && !baru) {
+        await bukaPdf({ url: `api/kwitansi/langganan-aplikasi/${id}/pdf` });
+      } else {
+        await bukaPdf({
+          url: "api/kwitansi/langganan-aplikasi/pdf",
+          method: "POST",
+          body: { isian: form },
+        });
+      }
       kabari("PDF SPBY & Kwitansi dibuka");
     } catch (e) {
       kabari(e.message || "Gagal membuat PDF", "error");
@@ -559,43 +517,22 @@ export default function FormLangganan({ operator }) {
     setMenyimpan(true);
     try {
       if (baru) {
-        try {
-          await apiKwitansi({
-            url: "api/kwitansi/langganan-aplikasi",
-            method: "POST",
-            body: { isian: form, bidang },
-          });
-        } catch (errApi) {
-          // Jika kegagalan berasal dari koneksi database lokal (500), simpan ke penyimpanan lokal browser.
-          const hitungan = hasil || hitungLokal(form);
-          if (admin && !bidang) throw errApi;
-          buatLokal({
-            bidang: bidang || operator?.bidang || "TU",
-            isian: form,
-            hasil: hitungan,
-            oleh: operator?.nama || "Operator",
-          });
-        }
+        await apiKwitansi({
+          url: "api/kwitansi/langganan-aplikasi",
+          method: "POST",
+          body: { isian: form, bidang },
+        });
         try {
           localStorage.removeItem(KUNCI_DRAF);
         } catch {
           // abaikan
         }
       } else {
-        try {
-          await apiKwitansi({
-            url: `api/kwitansi/langganan-aplikasi/${id}`,
-            method: "PUT",
-            body: { isian: form },
-          });
-        } catch {
-          const hitungan = hasil || hitungLokal(form);
-          ubahLokal(id, {
-            isian: form,
-            hasil: hitungan,
-            oleh: operator?.nama || "Operator",
-          });
-        }
+        await apiKwitansi({
+          url: `api/kwitansi/langganan-aplikasi/${id}`,
+          method: "PUT",
+          body: { isian: form },
+        });
       }
       navigate(jalur("langganan-aplikasi"));
     } catch (e) {
@@ -1019,12 +956,13 @@ export default function FormLangganan({ operator }) {
               <button
                 type="button"
                 onClick={buatPdf}
-                disabled={!hasil || !!galatHitung || membuatPdf}
+                disabled={membuatPdf || (!(bendahara && !baru) && (!hasil || !!galatHitung))}
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand hover:bg-navy disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 {membuatPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 Lihat PDF
               </button>
+              {!bendahara && (
               <button
                 type="button"
                 onClick={simpan}
@@ -1040,6 +978,7 @@ export default function FormLangganan({ operator }) {
                 {menyimpan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {baru ? "Simpan ke daftar" : "Simpan perubahan"}
               </button>
+              )}
               <p className="text-[11px] text-slate-400 mt-2 text-center">
                 Surat Perintah Bayar (SPBY) + lampiran bukti pembelian
               </p>
