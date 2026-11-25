@@ -5,7 +5,6 @@
 // Format tampilan mengikuti persis dokumen Kwitansi & SPBY Perjalanan Dinas (PERDIN):
 //   1. Halaman 1: KWITANSI (format resmi 1:1 sesuai gambar acuan templat NOMI)
 //   2. Halaman 2: SURAT PERINTAH BAYAR (SPBY — format bingkai kotak baku Setjen Kemnaker)
-//   3. Halaman 3: RINCIAN BIAYA PEMBELIAN KONSUMSI (Lampiran item menu, SBM, PPh 23, Netto)
 //
 // Semua isian dinamis diambil dari isian form khusus konsumsi.
 
@@ -17,8 +16,6 @@ const FONT_DIR = path.join(__dirname, "..", "..", "..", "assets", "fonts");
 
 const JUDUL_KWITANSI = "Times-TebalMiring";
 const ISI = "Tahoma";
-const TEBAL = "Tahoma-Tebal";
-const HURUF = 10;
 
 function pasangFontSemua(doc) {
   const daftar = [
@@ -39,7 +36,6 @@ function pasangFontSemua(doc) {
 }
 
 const angka = (n) => Math.floor(Number(n) || 0).toLocaleString("id-ID");
-const rupiah = (n) => `Rp ${angka(n)}`;
 
 const BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -146,7 +142,7 @@ function uraikanAkunDipa(akunRaw) {
 // HALAMAN 1: KWITANSI KONSUMSI
 // Format 1:1 persis gambar acuan lembar Kwitansi (media_1795495110191_e41d653f.png)
 // =========================================================
-function halamanKwitansiKonsumsi(doc, data) {
+function halamanKwitansiKonsumsi(doc, data, pejabat) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 45, right: 45 } });
   bingkai(doc);
   const x = doc.page.margins.left;
@@ -161,14 +157,9 @@ function halamanKwitansiKonsumsi(doc, data) {
   const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Ruang Rapat Rokeu, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Katering";
 
-  const ppk = {
-    nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk?.nip || isian.ppk_nip || "",
-  };
-  const bendahara = {
-    nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-    nip: isian.bendahara?.nip || isian.bendahara_nip || "",
-  };
+  // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
+  const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
+  const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
   const { kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
 
@@ -300,7 +291,7 @@ function halamanKwitansiKonsumsi(doc, data) {
 // HALAMAN 2: SURAT PERINTAH BAYAR (SPBY KONSUMSI)
 // Mengikuti format resmi SPBY Perjalanan Dinas (media_1795485223066_2983f6b2.jpg)
 // =========================================================
-function halamanSpbyKonsumsi(doc, data) {
+function halamanSpbyKonsumsi(doc, data, pejabat) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 32, bottom: 32, left: 32, right: 32 } });
 
   const isian = data.isian || {};
@@ -311,14 +302,9 @@ function halamanSpbyKonsumsi(doc, data) {
   const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Ruang Rapat Rokeu, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Katering";
 
-  const ppk = {
-    nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk?.nip || isian.ppk_nip || "",
-  };
-  const bendahara = {
-    nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-    nip: isian.bendahara?.nip || isian.bendahara_nip || "",
-  };
+  // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
+  const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
+  const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
   const { makKegiatan, kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
   const nomorSpbyVal = isian.nomor_spby || data.nomor_spby || "";
@@ -438,173 +424,29 @@ function halamanSpbyKonsumsi(doc, data) {
 
   ySekarang += 58;
   doc.font("Arial-Tebal").fontSize(9.5);
-  doc.text(bendahara.nama || "Siti Rahmawati, S.E.", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
-  doc.text(ppk.nama || "Drs. Hendra Wijaya, M.M.", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
+  doc.text(bendahara.nama, xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
+  doc.text(ppk.nama, xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
 
   ySekarang += 12;
   doc.font("Arial").fontSize(9);
-  doc.text(bendahara.nip ? `NIP. ${bendahara.nip}` : "NIP. 198304152006041002", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
-  doc.text(ppk.nip ? `NIP. ${ppk.nip}` : "NIP. 197508121998032001", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
+  doc.text(bendahara.nip ? `NIP. ${bendahara.nip}` : "NIP.", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
+  doc.text(ppk.nip ? `NIP. ${ppk.nip}` : "NIP.", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
 
   // Bingkai luar pembungkus seluruh formulir SPBY
   doc.lineWidth(1).rect(xKiri, yAtas, lebar, tinggiSpby).stroke();
 }
-
-// =========================================================
-// HALAMAN 3: RINCIAN BIAYA PEMBELIAN KONSUMSI (LAMPIRAN)
-// =========================================================
-function halamanRincianKonsumsi(doc, data) {
-  const isian = data.isian || {};
-  const items = Array.isArray(isian.items) ? isian.items : [];
-  if (!items.length) return;
-
-  doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 40, right: 40 } });
-  bingkai(doc);
-  const x = doc.page.margins.left;
-  const w = lebarIsi(doc);
-
-  const tglKegiatan = data.tanggal_kegiatan || isian.tanggal_kegiatan || new Date().toISOString().slice(0, 10);
-  const tglCetak = tanggalPanjang(tglKegiatan);
-  const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Rapat Internal";
-  const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Katering";
-  const nomorSpbyVal = isian.nomor_spby || data.nomor_spby || "-";
-
-  const ppk = isian.ppk || {
-    nama: isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk_nip || "",
-  };
-
-  doc.font(TEBAL).fontSize(13).text("RINCIAN BIAYA PEMBELIAN KONSUMSI", x, 34, { width: w, align: "center" });
-  let y = doc.y + 14;
-
-  const xTitikMeta = x + 160;
-  const xIsiMeta = x + 175;
-  const wIsiMeta = w - 175;
-
-  const baris = (lbl, val) => {
-    doc.font(ISI).fontSize(10);
-    doc.text(lbl, x, y, { lineBreak: false });
-    doc.text(":", xTitikMeta, y, { lineBreak: false });
-    doc.font(TEBAL);
-    doc.text(String(val ?? "-"), xIsiMeta, y, { width: wIsiMeta });
-    y = Math.max(doc.y, y + doc.currentLineHeight()) + 4;
-  };
-
-  baris("Nama Kegiatan", namaKegiatan);
-  baris("Nomor SPBY", nomorSpbyVal);
-  baris("Penyedia / Rekanan", penyedia);
-  baris("Tanggal Pelaksanaan", tglCetak);
-  y += 6;
-
-  // Tabel Rincian Menu
-  const colTable = [30, 205, 50, 55, 85, 90];
-  const headerLabels = ["No", "Rincian Menu / Paket", "Vol", "Satuan", "Harga Satuan (Rp)", "Jumlah Harga (Rp)"];
-
-  doc.font(TEBAL).fontSize(8.5);
-  doc.rect(x, y, w, 20).fillAndStroke("#E5E9EE", "#9CA3AF");
-  doc.fillColor("#000000");
-
-  let hX = x;
-  headerLabels.forEach((lbl, idx) => {
-    const align = idx === 0 ? "center" : idx >= 2 ? "right" : "left";
-    doc.text(lbl, hX + 4, y + 5, { width: colTable[idx] - 8, align });
-    hX += colTable[idx];
-  });
-  y += 20;
-
-  // Baris Item Pesanan
-  doc.font(ISI).fontSize(9);
-  items.forEach((it, idx) => {
-    const vol = Number(it.volume || it.porsi) || 0;
-    const hrg = Number(it.hargaSatuan || it.harga_satuan) || 0;
-    const sub = Number(it.subtotal || it.jumlah_harga) || vol * hrg;
-    const namaMenu = it.uraianMenu || it.namaItem || it.uraian || it.jenis || "-";
-
-    doc.rect(x, y, w, 18).stroke("#D1D5DB");
-    let rowX = x;
-
-    doc.text(String(idx + 1), rowX + 4, y + 4, { width: colTable[0] - 8, align: "center" });
-    rowX += colTable[0];
-    doc.text(namaMenu, rowX + 4, y + 4, { width: colTable[1] - 8, align: "left" });
-    rowX += colTable[1];
-    doc.text(String(vol), rowX + 4, y + 4, { width: colTable[2] - 8, align: "right" });
-    rowX += colTable[2];
-    doc.text(it.satuan || "Pax", rowX + 4, y + 4, { width: colTable[3] - 8, align: "right" });
-    rowX += colTable[3];
-    doc.text(rupiah(hrg), rowX + 4, y + 4, { width: colTable[4] - 8, align: "right" });
-    rowX += colTable[4];
-    doc.text(rupiah(sub), rowX + 4, y + 4, { width: colTable[5] - 8, align: "right" });
-
-    y += 18;
-  });
-
-  const totalBiaya = Number(data.total || isian.total) || 0;
-  const pph23 = Number(data.pajak_pph23 || isian.pajak_pph23) || 0;
-  const netto = Number(data.netto || isian.netto) || totalBiaya - pph23;
-
-  // Baris Total Bruto
-  doc.font(TEBAL);
-  doc.rect(x, y, w, 18).fillAndStroke("#F3F4F6", "#9CA3AF");
-  doc.fillColor("#000000");
-  doc.text("TOTAL BIAYA (BRUTO)", x + 10, y + 4, {
-    width: colTable[0] + colTable[1] + colTable[2] + colTable[3] - 20,
-    align: "right",
-  });
-  doc.text(rupiah(totalBiaya), x + colTable[0] + colTable[1] + colTable[2] + colTable[3] + colTable[4] + 4, y + 4, {
-    width: colTable[5] - 8,
-    align: "right",
-  });
-  y += 18;
-
-  // Baris PPh 23
-  doc.rect(x, y, w, 18).fillAndStroke("#FFFFFF", "#D1D5DB");
-  doc.fillColor("#000000");
-  doc.text("POTONGAN PPh PASAL 23", x + 10, y + 4, {
-    width: colTable[0] + colTable[1] + colTable[2] + colTable[3] - 20,
-    align: "right",
-  });
-  doc.text(rupiah(pph23), x + colTable[0] + colTable[1] + colTable[2] + colTable[3] + colTable[4] + 4, y + 4, {
-    width: colTable[5] - 8,
-    align: "right",
-  });
-  y += 18;
-
-  // Baris Netto
-  doc.rect(x, y, w, 18).fillAndStroke("#E5E9EE", "#9CA3AF");
-  doc.fillColor("#000000");
-  doc.text("JUMLAH BERSIH (NETTO)", x + 10, y + 4, {
-    width: colTable[0] + colTable[1] + colTable[2] + colTable[3] - 20,
-    align: "right",
-  });
-  doc.text(rupiah(netto), x + colTable[0] + colTable[1] + colTable[2] + colTable[3] + colTable[4] + 4, y + 4, {
-    width: colTable[5] - 8,
-    align: "right",
-  });
-  y += 28;
-
-  // Tanda tangan Lampiran: PPK & Rekanan
-  const colW = w / 2;
-  doc.font(ISI).fontSize(9.5);
-  doc.text("Mengetahui,", x, y, { width: colW, align: "center" });
-  doc.text("Pejabat Pembuat Komitmen", x, y + 12, { width: colW, align: "center" });
-
-  doc.text("Penyedia Rekanan Konsumsi,", x + colW, y, { width: colW, align: "center" });
-  doc.text(penyedia, x + colW, y + 12, { width: colW, align: "center" });
-
-  const ttdY = y + 54;
-  doc.text(ppk.nama || "", x, ttdY, { width: colW, align: "center", underline: true });
-  doc.text(ppk.nip ? `NIP. ${ppk.nip}` : "NIP. -", x, ttdY + 14, { width: colW, align: "center" });
-
-  doc.text(penyedia, x + colW, ttdY, { width: colW, align: "center", underline: true });
-  doc.text("(Penanggung Jawab / Cap)", x + colW, ttdY + 14, { width: colW, align: "center" });
-}
-
 // =========================================================
 // EKSPORTIR UTAMA DOKUMEN PDF KONSUMSI
 // =========================================================
-function susunPdfKonsumsi({ data, streamRes }) {
+//
+// `hitungan` dari hitungKonsumsi() (hitung.js) — sumber angka yang sama
+// dengan kolom ringkasan di database. Satu restoran = SPBY + kwitansi;
+// dua restoran = SPBY + kwitansi untuk masing-masing.
+// Semua halaman digambar dulu, baru dialirkan ke respons, supaya galat
+// saat menyusun masih bisa dibalas sebagai JSON.
+function susunPdfKonsumsi({ data, hitungan, pejabat, streamRes }) {
   const isian = data.isian || {};
-  const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Konsumsi";
+  const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || "Konsumsi";
 
   const doc = new PDFDocument({
     autoFirstPage: false,
@@ -613,104 +455,35 @@ function susunPdfKonsumsi({ data, streamRes }) {
       Author: "SisKA Biro Keuangan dan BMN Kemnaker",
     },
   });
-
   pasangFontSemua(doc);
-  doc.pipe(streamRes);
 
-  const duaResto = Boolean(isian.dua_restoran && isian.penyedia_2 && String(isian.penyedia_2).trim());
-
-  if (duaResto) {
-    const rawItems = Array.isArray(isian.items) ? isian.items : [];
-    // Pisahkan item menurut restoran yang dipilih (1 atau 2)
-    const items1 = rawItems.filter((it) => (it.resto ?? 1) === 1);
-    const items2 = rawItems.filter((it) => it.resto === 2);
-
-    // Hitung subtotal, pph23, dan netto untuk masing-masing restoran
-    const total1 = items1.length > 0
-      ? items1.reduce((acc, it) => acc + (Number(it.volume || it.porsi) || 0) * (Number(it.hargaSatuan || it.harga_satuan) || 0), 0)
-      : Number(isian.subtotal_1) || Math.round((Number(data.total || isian.total) || 0) / 2);
-
-    const persenPph1 = Number(isian.persen_pph23 ?? 2);
-    const pph1 = Math.round((total1 * persenPph1) / 100);
-    const netto1 = total1 - pph1;
-
-    const total2 = items2.length > 0
-      ? items2.reduce((acc, it) => acc + (Number(it.volume || it.porsi) || 0) * (Number(it.hargaSatuan || it.harga_satuan) || 0), 0)
-      : Number(isian.subtotal_2) || ((Number(data.total || isian.total) || 0) - total1);
-
-    const persenPph2 = Number(isian.persen_pph23_2 ?? isian.persen_pph23 ?? 2);
-    const pph2 = Math.round((total2 * persenPph2) / 100);
-    const netto2 = total2 - pph2;
-
-    const dataResto1 = {
+  for (const r of hitungan.resto) {
+    const penyedia = r.penyedia || `Rekanan Katering ${r.ke}`;
+    const dataResto = {
       ...data,
-      penyedia: isian.penyedia || data.penyedia || "Rekanan Katering 1",
-      nomor_spby: isian.nomor_spby || data.nomor_spby || "",
-      total: total1,
-      pajak_pph23: pph1,
-      netto: netto1,
-      ttd_penerima_nama: isian.ttd_penerima_nama || "",
-      ttd_penerima_nip: isian.ttd_penerima_nip || "",
-      ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal || "",
+      penyedia,
+      nomor_spby: r.nomor_spby,
+      total: r.subtotal,
+      ttd_penerima_nama: r.ttd_penerima_nama,
+      ttd_penerima_nip: r.ttd_penerima_nip,
+      ttd_penerima_bawah_tanggal: r.ttd_penerima_bawah_tanggal,
       isian: {
         ...isian,
-        penyedia: isian.penyedia || data.penyedia || "Rekanan Katering 1",
-        nomor_spby: isian.nomor_spby || data.nomor_spby || "",
-        total: total1,
-        pajak_pph23: pph1,
-        netto: netto1,
-        ttd_penerima_nama: isian.ttd_penerima_nama || "",
-        ttd_penerima_nip: isian.ttd_penerima_nip || "",
-        ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal || "",
-        items: items1,
+        penyedia,
+        nomor_spby: r.nomor_spby,
+        no_bku: r.no_bku,
+        total: r.subtotal,
+        ttd_penerima_nama: r.ttd_penerima_nama,
+        ttd_penerima_nip: r.ttd_penerima_nip,
+        ttd_penerima_bawah_tanggal: r.ttd_penerima_bawah_tanggal,
+        items: r.items,
       },
     };
-
-    const dataResto2 = {
-      ...data,
-      penyedia: isian.penyedia_2 || "Rekanan Katering 2",
-      nomor_spby: isian.nomor_spby_2 || isian.nomor_spby || data.nomor_spby || "",
-      total: total2,
-      pajak_pph23: pph2,
-      netto: netto2,
-      ttd_penerima_nama: isian.ttd_penerima_nama_2 || "",
-      ttd_penerima_nip: isian.ttd_penerima_nip_2 || "",
-      ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal_2 || "",
-      isian: {
-        ...isian,
-        no_bku: isian.no_bku_2 || isian.no_bku || "",
-        penyedia: isian.penyedia_2 || "Rekanan Katering 2",
-        nomor_spby: isian.nomor_spby_2 || isian.nomor_spby || data.nomor_spby || "",
-        total: total2,
-        pajak_pph23: pph2,
-        netto: netto2,
-        ttd_penerima_nama: isian.ttd_penerima_nama_2 || "",
-        ttd_penerima_nip: isian.ttd_penerima_nip_2 || "",
-        ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal_2 || "",
-        items: items2,
-      },
-    };
-
-    // 1. Halaman 1: SURAT PERINTAH BAYAR (SPBY) — Restoran 1
-    halamanSpbyKonsumsi(doc, dataResto1);
-
-    // 2. Halaman 2: KWITANSI — Restoran 1
-    halamanKwitansiKonsumsi(doc, dataResto1);
-
-    // 3. Halaman 3: SURAT PERINTAH BAYAR (SPBY) — Restoran 2
-    halamanSpbyKonsumsi(doc, dataResto2);
-
-    // 4. Halaman 4: KWITANSI — Restoran 2
-    halamanKwitansiKonsumsi(doc, dataResto2);
-  } else {
-    // 1 Restoran (Default)
-    // 1. Halaman 1: SURAT PERINTAH BAYAR (SPBY — format resmi Setjen Kemnaker)
-    halamanSpbyKonsumsi(doc, data);
-
-    // 2. Halaman 2: KWITANSI (Format 1:1 sesuai templat resmi dengan kotak & garis ganda)
-    halamanKwitansiKonsumsi(doc, data);
+    halamanSpbyKonsumsi(doc, dataResto, pejabat);
+    halamanKwitansiKonsumsi(doc, dataResto, pejabat);
   }
 
+  doc.pipe(streamRes);
   doc.end();
   return doc;
 }
