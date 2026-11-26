@@ -1,10 +1,17 @@
-// Fitur Fotokopi — BELUM DIBUAT (menunggu contoh dokumen).
-// Pola yang dipakai sama dengan ../konsumsi dan ../langganan-aplikasi;
-// lihat PANDUAN-MAGANG.pdf.
+// =========================================================
+// FITUR FOTOKOPI & PENGGANDAAN — ADMINISTRASI ROKEU
+// =========================================================
 
-import { Printer } from "lucide-react";
-import SegeraHadir from "../../SegeraHadir";
+import { Routes, Route } from "react-router-dom";
+import DaftarFotokopi from "./DaftarFotokopi";
+import FormFotokopi from "./FormFotokopi";
 
-export default function Fotokopi() {
-  return <SegeraHadir judul="Fotokopi" Ikon={Printer} keterangan="SPBY dan kwitansi jasa fotokopi dan penggandaan." />;
+export default function Fotokopi(sesi) {
+  return (
+    <Routes>
+      <Route index element={<DaftarFotokopi {...sesi} />} />
+      <Route path="baru" element={<FormFotokopi {...sesi} />} />
+      <Route path=":id" element={<FormFotokopi {...sesi} />} />
+    </Routes>
+  );
 }
