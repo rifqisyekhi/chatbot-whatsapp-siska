@@ -1,9 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { apiKwitansi } from "../../../services/sesiKwitansi";
+import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { buatLokal, satuLokal, ubahLokal } from "./simpananLokal";
-import { bukaPdfBbmLokal } from "./cetakPdfLokal";
 import {
   ArrowLeft,
   ReceiptText,
@@ -23,6 +21,13 @@ import {
 // =========================================================
 // FORM BBM KEPALA BIRO (BARU / UBAH)
 // =========================================================
+//
+// Operator mengisi data BBM kendaraan dinas Kepala Biro, penyedia
+// (SPBU, "Kepada" di SPBY), pegawai penerima uang, rincian biaya, serta
+// mengunggah struk/bukti. Server menyusun PDF SPBY, kwitansi, dan lampiran.
+// Simpan/ubah hanya lewat API; angka pratinjau dihitung server
+// (POST .../hitung). localStorage hanya untuk draf form baru yang belum
+// disimpan.
 
 const KUNCI_DRAF = "kwitansi-bbm-kabiro-draf";
 
@@ -100,6 +105,7 @@ const FORM_AWAL = () => {
     kendaraan: "",
     nomor_polisi: "",
     keperluan: "",
+    uraian_spby: "",
     tanggal_mulai: t,
     tanggal_selesai: t,
     tanggal_bayar: t,
@@ -123,6 +129,7 @@ function bacaDraf() {
   return FORM_AWAL();
 }
 
+// Kompres gambar yang dipilih menjadi JPEG dataUrl agar ringan disimpan dan ditanam ke PDF.
 function kompresGambarKeDataUrl(berkas) {
   return new Promise((resolve, reject) => {
     const pembaca = new FileReader();
@@ -161,64 +168,10 @@ function kompresGambarKeDataUrl(berkas) {
   });
 }
 
-const angkaBulat = (v) => Math.max(0, Math.floor(Number(String(v ?? "").replace(/[^\d]/g, "")) || 0));
-
-function hitungLokal(isian) {
-  const jenisBbm = String(isian.jenis_bbm || "").trim();
-  if (!jenisBbm) throw new Error("Jenis BBM wajib diisi.");
-
-  const penyedia = String(isian.penyedia || "").trim();
-  const kendaraan = [String(isian.kendaraan || "").trim(), String(isian.nomor_polisi || "").trim()]
-    .filter(Boolean)
-    .join(" - ");
-  const keperluan = String(isian.keperluan || "").trim();
-  const tanggalMulai = isian.tanggal_mulai || hariIni();
-  const tanggalSelesai = isian.tanggal_selesai || tanggalMulai;
-  if (tanggalSelesai < tanggalMulai) {
-    throw new Error("Tanggal batas akhir tidak boleh sebelum tanggal pembelian.");
-  }
-
-  const penerimaNama = String(isian.penerima_nama || "").trim();
-  if (!penerimaNama) throw new Error("Nama penerima (Kepada) wajib diisi.");
-
-  const daftarRincian = Array.isArray(isian.rincian) && isian.rincian.length ? isian.rincian : [{}];
-  const rincian = daftarRincian.map((item, idx) => {
-    const uraianDefault =
-      idx === 0
-        ? `Pembelian BBM ${jenisBbm}${kendaraan ? ` (${kendaraan})` : ""}`
-        : `Item BBM ${idx + 1}`;
-    const uraian = String(item.uraian || "").trim() || uraianDefault;
-    const volume = Math.max(1, angkaBulat(item.volume || 1));
-    const satuan = String(item.satuan || "").trim() || "Liter";
-    const hargaSatuan = angkaBulat(item.harga_satuan);
-    const pajak = angkaBulat(item.pajak);
-    const keterangan = String(item.keterangan || "").trim();
-    const jumlah = volume * hargaSatuan + pajak;
-    return { uraian, volume, satuan, hargaSatuan, pajak, keterangan, jumlah };
-  });
-
-  const total = rincian.reduce((a, r) => a + r.jumlah, 0);
-  if (total <= 0) {
-    throw new Error("Isi harga satuan pada rincian biaya (total harus lebih dari Rp 0).");
-  }
-
-  const bagianAkun = String(isian.akun || AKUN_BAWAAN[0].kode).split(".");
-  return {
-    jenisBbm,
-    penyedia,
-    kendaraan,
-    keperluan,
-    kegiatanMak: bagianAkun.length >= 6 ? bagianAkun.slice(3, 6).join(".") : "2158.EBA.994",
-    kodeAkun: bagianAkun[bagianAkun.length - 1] || "523121",
-    penerima: {
-      nama: penerimaNama,
-      nip: String(isian.penerima_nip || "").trim(),
-      jabatan: String(isian.penerima_jabatan || "").trim(),
-    },
-    rincian,
-    total,
-  };
-}
+// Batas lampiran (disamakan dengan server; nilai dari referensi bila ada).
+const MAKS_LAMPIRAN = 5;
+const MAKS_BYTE_LAMPIRAN = 1024 * 1024;
+const ukuranDataUrl = (dataUrl) => Math.floor((String(dataUrl).split(",")[1] || "").length * 0.75);
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 
@@ -472,6 +425,7 @@ export default function FormBbm({ operator }) {
   const baru = !id || id === "baru";
   const navigate = useNavigate();
   const admin = operator?.peran === "admin";
+  const bendahara = operator?.peran === "bendahara";
   const [ref, setRef] = useState(REF_BAWAAN);
   const [pegawai, setPegawai] = useState([]);
   const [galatMuat, setGalatMuat] = useState("");
@@ -520,19 +474,10 @@ export default function FormBbm({ operator }) {
         setBidang(b.bidang);
         setForm({ ...FORM_AWAL(), ...b.isian });
       })
-      .catch((e) => {
-        const lokal = satuLokal(id);
-        if (lokal) {
-          setTersimpan(lokal);
-          setBidang(lokal.bidang);
-          setForm({ ...FORM_AWAL(), ...lokal.isian });
-          setGalatMuat("");
-        } else {
-          setGalatMuat(e.message || "Gagal memuat data BBM Kepala Biro");
-        }
-      });
+      .catch((e) => setGalatMuat(e.message || "Gagal memuat data BBM Kepala Biro"));
   }, [id, baru]);
 
+  // Simpan draf tanpa gambar lampiran agar tidak melebihi batas localStorage.
   useEffect(() => {
     if (!baru) return;
     try {
@@ -550,21 +495,15 @@ export default function FormBbm({ operator }) {
         const h = await apiKwitansi({
           url: "api/kwitansi/bbm-kepala-biro/hitung",
           method: "POST",
-          body: { ...form, lampiran: undefined },
+          body: { isian: { ...form, lampiran: undefined } },
         });
         if (nomor !== urutanHitung.current) return;
         setHasil(h);
         setGalatHitung("");
-      } catch {
+      } catch (e) {
         if (nomor !== urutanHitung.current) return;
-        try {
-          const lokal = hitungLokal(form);
-          setHasil(lokal);
-          setGalatHitung("");
-        } catch (errLokal) {
-          setHasil(null);
-          setGalatHitung(errLokal.message || "Gagal menghitung");
-        }
+        setHasil(null);
+        setGalatHitung(e.message || "Gagal menghitung");
       } finally {
         if (nomor === urutanHitung.current) setMenghitung(false);
       }
@@ -613,17 +552,32 @@ export default function FormBbm({ operator }) {
   const pilihBerkasBukti = async (e) => {
     const daftarBerkas = Array.from(e.target.files || []);
     if (!daftarBerkas.length) return;
+    const maks = Number(ref?.maksLampiran) || MAKS_LAMPIRAN;
+    const maksByte = Number(ref?.maksByteLampiran) || MAKS_BYTE_LAMPIRAN;
+    const sisa = maks - (Array.isArray(form.lampiran) ? form.lampiran.length : 0);
+    if (sisa <= 0) {
+      kabari(`Lampiran gambar paling banyak ${maks} berkas`, "error");
+      if (inputBerkasRef.current) inputBerkasRef.current.value = "";
+      return;
+    }
     setMengunggah(true);
     try {
       const hasilUnggah = [];
-      for (const berkas of daftarBerkas.slice(0, 10)) {
+      for (const berkas of daftarBerkas.slice(0, sisa)) {
         const terkompres = await kompresGambarKeDataUrl(berkas);
+        if (ukuranDataUrl(terkompres.dataUrl) > maksByte) {
+          throw new Error(`Gambar ${berkas.name} terlalu besar (maksimal 1 MB setelah dikompres)`);
+        }
         hasilUnggah.push(terkompres);
       }
       setForm((f) => ({
         ...f,
-        lampiran: [...(Array.isArray(f.lampiran) ? f.lampiran : []), ...hasilUnggah].slice(0, 10),
+        lampiran: [...(Array.isArray(f.lampiran) ? f.lampiran : []), ...hasilUnggah].slice(0, maks),
       }));
+      if (daftarBerkas.length > sisa) {
+        kabari(`Hanya ${sisa} berkas ditambahkan (maksimal ${maks} lampiran)`, "error");
+        return;
+      }
       kabari(`${hasilUnggah.length} bukti pembelian ditambahkan`);
     } catch (err) {
       kabari(err.message || "Gagal memuat berkas bukti", "error");
@@ -643,7 +597,17 @@ export default function FormBbm({ operator }) {
   const buatPdf = async () => {
     setMembuatPdf(true);
     try {
-      bukaPdfBbmLokal(form);
+      // Bendahara hanya membuka PDF data tersimpan; selain itu pratinjau
+      // dari isian form disusun server (angka dihitung ulang di sana).
+      if (bendahara && !baru) {
+        await bukaPdf({ url: `api/kwitansi/bbm-kepala-biro/${id}/pdf` });
+      } else {
+        await bukaPdf({
+          url: "api/kwitansi/bbm-kepala-biro/pdf",
+          method: "POST",
+          body: { isian: form },
+        });
+      }
       kabari("PDF SPBY & Kwitansi dibuka");
     } catch (e) {
       kabari(e.message || "Gagal membuat PDF", "error");
@@ -656,42 +620,22 @@ export default function FormBbm({ operator }) {
     setMenyimpan(true);
     try {
       if (baru) {
-        try {
-          await apiKwitansi({
-            url: "api/kwitansi/bbm-kepala-biro",
-            method: "POST",
-            body: { isian: form, bidang },
-          });
-        } catch (errApi) {
-          const hitungan = hasil || hitungLokal(form);
-          if (admin && !bidang) throw errApi;
-          buatLokal({
-            bidang: bidang || operator?.bidang || "TU",
-            isian: form,
-            hasil: hitungan,
-            oleh: operator?.nama || "Operator",
-          });
-        }
+        await apiKwitansi({
+          url: "api/kwitansi/bbm-kepala-biro",
+          method: "POST",
+          body: { isian: form, bidang },
+        });
         try {
           localStorage.removeItem(KUNCI_DRAF);
         } catch {
           // abaikan
         }
       } else {
-        try {
-          await apiKwitansi({
-            url: `api/kwitansi/bbm-kepala-biro/${id}`,
-            method: "PUT",
-            body: { isian: form },
-          });
-        } catch {
-          const hitungan = hasil || hitungLokal(form);
-          ubahLokal(id, {
-            isian: form,
-            hasil: hitungan,
-            oleh: operator?.nama || "Operator",
-          });
-        }
+        await apiKwitansi({
+          url: `api/kwitansi/bbm-kepala-biro/${id}`,
+          method: "PUT",
+          body: { isian: form },
+        });
       }
       navigate(jalur("bbm-kepala-biro"));
     } catch (e) {
@@ -803,8 +747,8 @@ export default function FormBbm({ operator }) {
                 </Medan>
 
                 <Medan
-                  label="SPBU / Penyedia"
-                  petunjuk="Ketik bebas atau pilih dari daftar SPBU"
+                  label="Penyedia (Kepada di SPBY)"
+                  petunjuk='Nama SPBU, mis. "SPBU 31.123.45". Kosong = "SPBU"'
                 >
                   <InputSaranPutih
                     value={form.penyedia}
@@ -825,6 +769,19 @@ export default function FormBbm({ operator }) {
                     className={kelasInput}
                     value={form.nomor_polisi || ""}
                     onChange={(e) => ubah("nomor_polisi", e.target.value)}
+                  />
+                </Medan>
+
+                <Medan
+                  label="Untuk pembayaran"
+                  className="sm:col-span-2"
+                  petunjuk='Opsional. Kosong = otomatis "Biaya pembelian BBM … kendaraan dinas Kepala Biro Keuangan dan BMN … bulan …, sesuai bukti/faktur terlampir"'
+                >
+                  <textarea
+                    rows={2}
+                    className={kelasInput}
+                    value={form.uraian_spby || ""}
+                    onChange={(e) => ubah("uraian_spby", e.target.value)}
                   />
                 </Medan>
 
@@ -863,12 +820,12 @@ export default function FormBbm({ operator }) {
               </div>
             </section>
 
-            {/* ---------- Kepada / Penerima ---------- */}
+            {/* ---------- Penerima Uang ---------- */}
             <section className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6">
-              <h2 className="text-base font-extrabold mb-4">Kepada / Penerima</h2>
+              <h2 className="text-base font-extrabold mb-4">Penerima Uang</h2>
 
               <div className="grid sm:grid-cols-2 gap-4">
-                <Medan label="Kepada (Nama Penerima)" petunjuk="Ketik nama pegawai atau penerima di SPBY">
+                <Medan label="Nama pegawai" petunjuk="Pegawai yang membayarkan BBM; menandatangani kwitansi">
                   <InputSaranPutih
                     value={form.penerima_nama}
                     onChange={(v) => ubah("penerima_nama", v)}
@@ -1065,7 +1022,7 @@ export default function FormBbm({ operator }) {
                       {hasil.kendaraan ? ` (${hasil.kendaraan})` : ""}
                     </p>
                     <p className="text-xs text-slate-500 truncate">
-                      Kepada: {hasil.penyedia || hasil.penerima.nama}
+                      Kepada: {hasil.penyedia || "SPBU"} • Penerima uang: {hasil.penerima.nama}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       MAK: {hasil.kegiatanMak} • Kode: {hasil.kodeAkun}
@@ -1102,12 +1059,13 @@ export default function FormBbm({ operator }) {
               <button
                 type="button"
                 onClick={buatPdf}
-                disabled={!hasil || !!galatHitung || membuatPdf}
+                disabled={membuatPdf || (!(bendahara && !baru) && (!hasil || !!galatHitung))}
                 className="mt-4 w-full inline-flex items-center justify-center gap-2 bg-brand hover:bg-navy disabled:bg-slate-300 disabled:cursor-not-allowed text-white px-5 py-3 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
               >
                 {membuatPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 Lihat PDF
               </button>
+              {!bendahara && (
               <button
                 type="button"
                 onClick={simpan}
@@ -1123,6 +1081,7 @@ export default function FormBbm({ operator }) {
                 {menyimpan ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {baru ? "Simpan ke daftar" : "Simpan perubahan"}
               </button>
+              )}
               <p className="text-[11px] text-slate-400 mt-2 text-center">
                 Surat Perintah Bayar (SPBY) + lampiran bukti pembelian
               </p>

@@ -2,18 +2,18 @@
 // PDF SPBY & KWITANSI BBM KEPALA BIRO
 // =========================================================
 //
-// Menyusun dokumen PDF SPJ BBM Kepala Biro:
-//   1. Halaman 1: Surat Perintah Bayar (SPBY) — sesuai format Biro Keuangan dan BMN.
-//   2. Halaman 2: Kwitansi pembelian BBM Kepala Biro.
-//   3. Halaman 3: Rincian Biaya BBM Kepala Biro.
-//   4. Halaman 4+: Lampiran gambar bukti/struk pembelian (bila diunggah).
+// Menyusun dokumen PDF SPJ BBM kendaraan dinas Kepala Biro:
+//   1. Halaman 1: Surat Perintah Bayar (SPBY) — "Kepada" = penyedia (SPBU).
+//   2. Halaman 2: Kwitansi; penerima uang = pegawai yang membayarkan.
+//   3. Halaman 3+: Lampiran gambar struk/bukti (bila diunggah).
+// Tata letak mengikuti contoh SPBY resmi Tata Usaha (seperti Langganan
+// Aplikasi); belum ada contoh khusus BBM.
 
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 
 const angka = (n) => Math.floor(Number(n) || 0).toLocaleString("id-ID");
-const rp = (n) => `Rp ${angka(n)},-`;
 
 const HURUF = 10;
 const ISI = "Tahoma";
@@ -38,14 +38,7 @@ function pasangFontDokumen(doc) {
   }
 }
 
-function namaPpkResmi(nama) {
-  const s = String(nama || "").trim();
-  if (!s || /alpha\s+sandro/i.test(s)) {
-    return "Alpha Sandro Adithyaswara, S.Sos.";
-  }
-  return s;
-}
-
+// Memformat 18 digit NIP dengan spasi (8 - 6 - 1 - 3) untuk halaman SPBY.
 function formatNipSpby(nip) {
   const bersih = String(nip || "").replace(/\s+/g, "");
   if (/^\d{18}$/.test(bersih)) {
@@ -54,31 +47,36 @@ function formatNipSpby(nip) {
   return String(nip || "").trim();
 }
 
-function rentangTanggal(h, tanggalPanjang) {
-  if (!h.tanggalMulai) return tanggalPanjang(h.tanggalBayar);
-  if (h.tanggalMulai === h.tanggalSelesai) return tanggalPanjang(h.tanggalMulai);
-  return `${tanggalPanjang(h.tanggalMulai)} s.d ${tanggalPanjang(h.tanggalSelesai)}`;
+const NAMA_BULAN = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+// "2026-07-01".."2026-07-31" → "Juli 2026"; lintas bulan → "Juli s.d. September 2026".
+function bulanLayanan(h) {
+  const awal = String(h.tanggalMulai || h.tanggalBayar || "");
+  const akhir = String(h.tanggalSelesai || awal);
+  const [ta, ba] = [awal.slice(0, 4), Number(awal.slice(5, 7))];
+  const [tb, bb] = [akhir.slice(0, 4), Number(akhir.slice(5, 7))];
+  if (!ba) return "";
+  if (ta === tb && ba === bb) return `${NAMA_BULAN[ba - 1]} ${ta}`;
+  if (ta === tb) return `${NAMA_BULAN[ba - 1]} s.d. ${NAMA_BULAN[bb - 1]} ${ta}`;
+  return `${NAMA_BULAN[ba - 1]} ${ta} s.d. ${NAMA_BULAN[bb - 1]} ${tb}`;
 }
 
-function keteranganKendaraan(h) {
-  const nama = String(h.namaKendaraan || "").trim();
-  const nopol = String(h.nomorPolisi || "").trim();
-  if (nama && nopol) return ` untuk kendaraan ${nama} Nomor Polisi ${nopol}`;
-  if (nama) return ` untuk kendaraan ${nama}`;
-  if (nopol) return ` Nomor Polisi ${nopol}`;
-  if (h.kendaraan) return ` untuk kendaraan ${String(h.kendaraan).replace(/[•·]|â€¢/g, "-")}`;
-  return "";
-}
+const AKHIRAN = "sesuai bukti/faktur terlampir";
 
-function untukPembayaran(h, tanggalPanjang) {
-  const kend = keteranganKendaraan(h);
-  const penyedia = h.penyedia ? ` pada ${h.penyedia}` : "";
-  const keperluan = h.keperluan ? ` dalam rangka ${h.keperluan.replace(/^dalam rangka\s*/i, "")}` : "";
-  const tanggal = ` tanggal ${rentangTanggal(h, tanggalPanjang)}`;
-  const dasar = `Pembelian BBM ${h.jenisBbm}${kend}${penyedia}${tanggal}${keperluan}`;
-  return /sesuai dengan bukti terlampir/i.test(dasar)
-    ? dasar
-    : `${dasar}, sesuai dengan bukti terlampir`;
+// Kalimat baku mengikuti contoh Tata Usaha: "Biaya pembelian BBM Pertamax
+// kendaraan dinas Kepala Biro Keuangan dan BMN Toyota Innova B 1234 XYZ
+// bulan Juli 2026, sesuai bukti/faktur terlampir". Uraian ketik sendiri
+// (uraian_spby) tetap diakhiri kalimat itu.
+function untukPembayaran(h) {
+  if (h.uraianSpby) {
+    const teks = h.uraianSpby.trim();
+    return /sesuai (dengan )?bukti/i.test(teks) ? teks : `${teks.replace(/[.,;\s]+$/, "")}, ${AKHIRAN}`;
+  }
+  const kendaraan = [h.namaKendaraan, h.nomorPolisi].filter(Boolean).join(" ");
+  const bulan = bulanLayanan(h);
+  return `Biaya pembelian BBM ${h.jenisBbm} kendaraan dinas Kepala Biro Keuangan dan BMN${
+    kendaraan ? ` ${kendaraan}` : ""
+  }${bulan ? ` bulan ${bulan}` : ""}, ${AKHIRAN}`;
 }
 
 function lebarIsi(doc) {
@@ -92,11 +90,6 @@ function bingkai(doc) {
 function garisGanda(doc, x, y, w) {
   doc.lineWidth(1.2).moveTo(x, y).lineTo(x + w, y).stroke();
   doc.lineWidth(0.5).moveTo(x, y + 3).lineTo(x + w, y + 3).stroke();
-}
-
-function tulis(doc, isi, x, y, opsi = {}) {
-  doc.font(opsi.tebal ? TEBAL : ISI).fontSize(opsi.ukuran || HURUF);
-  doc.text(String(isi ?? ""), x, y, { lineBreak: opsi.lebar !== undefined, ...opsi, width: opsi.lebar });
 }
 
 function barisLabel(doc, label, isi, y, { xLabel, xTitik, xIsi, lebarIsi: w, tebal = false, jarak = 6 }) {
@@ -155,7 +148,11 @@ function blokTtd(doc, {
   return doc.y;
 }
 
-function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
+// =========================================================
+// HALAMAN 1: SURAT PERINTAH BAYAR (SPBY)
+// =========================================================
+
+function halamanSpbyPersis(doc, h, { terbilangRupiah }) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 36, bottom: 36, left: 38, right: 38 } });
 
   const xKiri = 38;
@@ -169,9 +166,12 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   const labelTgl = `        ${tahun}`;
   const nomorSpby = h.nomorSpby ? ` ${h.nomorSpby}` : "";
 
+  // ---- 1. KOP & JUDUL ----
   doc.font(ARIAL_TEBAL).fontSize(10.5);
   doc.text("KEMENTERIAN KETENAGAKERJAAN", xKiri, 44, { width: w, align: "center" });
   doc.text("BIRO KEUANGAN DAN BMN", xKiri, 59, { width: w, align: "center" });
+
+  doc.font(ARIAL_TEBAL).fontSize(10.5);
   doc.text("SURAT PERINTAH BAYAR", xKiri, 88, { width: w, align: "center", underline: true });
 
   doc.font(ARIAL).fontSize(H);
@@ -180,6 +180,7 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   const yGaris1 = 126;
   doc.lineWidth(0.9).moveTo(xKiri, yGaris1).lineTo(xKanan, yGaris1).stroke();
 
+  // ---- 2. PERINTAH BAYAR, NOMINAL, & TERBILANG ----
   doc.font(ARIAL).fontSize(H);
   doc.text(
     "Saya yang bertanda tangan di bawah ini selaku Pejabat Pembuat Komitmen memerintahkan Bendahara Pengeluaran agar melakukan pembayaran sejumlah :",
@@ -192,12 +193,14 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   doc.text("Rp", xKiri + 6, 172, { lineBreak: false });
   doc.text(angka(h.total), xKiri + 6, 172, { width: 130, align: "right" });
 
+  const teksTerbilang = terbilangRupiah(h.total);
   doc.font(ARIAL_TEBAL).fontSize(H);
-  doc.text(terbilangRupiah(h.total), xKiri + 5, 200, { width: w - 10 });
+  doc.text(teksTerbilang, xKiri + 5, 200, { width: w - 10 });
 
   const yGaris2 = Math.max(226, doc.y + 8);
   doc.lineWidth(1.5).moveTo(xKiri, yGaris2).lineTo(xKanan, yGaris2).stroke();
 
+  // ---- 3. KEPADA, UNTUK PEMBAYARAN, ATAS DASAR, PEMBEBANAN ----
   const xLabel = xKiri + 5;
   const xTitik = xKiri + 150;
   const xIsi = xKiri + 170;
@@ -207,12 +210,13 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
 
   doc.font(ARIAL).fontSize(H).text("Kepada", xLabel, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  doc.font(ARIAL_TEBAL).fontSize(H).text(h.penyedia || h.penerima.nama, xIsi, y, { width: wIsi });
+  // Kepada = penyedia (SPBU / nama pom bensin), bukan pegawai.
+  doc.font(ARIAL_TEBAL).fontSize(H).text(h.penyedia || "SPBU", xIsi, y, { width: wIsi });
   y = Math.max(doc.y, y + 14) + 4;
 
   doc.font(ARIAL).fontSize(H).text("Untuk pembayaran", xLabel, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  doc.font(ARIAL).fontSize(H).text(untukPembayaran(h, tanggalPanjang), xIsi, y, {
+  doc.font(ARIAL).fontSize(H).text(untukPembayaran(h), xIsi, y, {
     width: wIsi,
     align: "justify",
   });
@@ -223,6 +227,7 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   y += 18;
 
   const xTitikDasar = xKiri + 206;
+  // Isian "Atas dasar" sengaja dibiarkan kosong setelah titik dua (contoh Tata Usaha).
   doc.text("1. Kuitansi/bukti pembelian", xLabel, y, { lineBreak: false });
   doc.text(":", xTitikDasar, y, { lineBreak: false });
   y += 17;
@@ -249,14 +254,18 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   const yGaris3 = Math.max(536, y + 36);
   doc.lineWidth(1.5).moveTo(xKiri, yGaris3).lineTo(xKanan, yGaris3).stroke();
 
+  // ---- 4. TANDA TANGAN BENDAHARA & PPK ----
   const yTtdAtas = yGaris3 + 22;
   const xKolKiri = xKiri + 6;
   const wKolKiri = 210;
   const wKolKanan = 230;
   const xKolKanan = xKanan - wKolKanan - 6;
 
+  const tglBawah = `      ${tahun}`;
+  const tglKanan = `            ${tahun}`;
+
   doc.font(ARIAL).fontSize(H);
-  doc.text(`Setuju/lunas dibayar, Tgl      ${tahun}`, xKolKiri, yTtdAtas, {
+  doc.text(`Setuju/lunas dibayar, Tgl${tglBawah}`, xKolKiri, yTtdAtas, {
     width: wKolKiri,
     align: "center",
     lineBreak: false,
@@ -264,7 +273,7 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   doc.text("Bendahara Pengeluaran", xKolKiri, yTtdAtas + 17, { width: wKolKiri, align: "center" });
   doc.text("Sekretariat Jenderal Kemnaker", xKolKiri, yTtdAtas + 33, { width: wKolKiri, align: "center" });
 
-  doc.text(`Jakarta,            ${tahun}`, xKolKanan, yTtdAtas, {
+  doc.text(`Jakarta,${tglKanan}`, xKolKanan, yTtdAtas, {
     width: wKolKanan,
     align: "center",
     lineBreak: false,
@@ -275,7 +284,7 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   const yNama = yTtdAtas + 105;
   const namaBendahara = h.pejabat?.bendahara?.nama || "";
   const nipBendahara = formatNipSpby(h.pejabat?.bendahara?.nip);
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
+  const namaPpk = h.pejabat?.ppk?.nama || "";
   const nipPpk = formatNipSpby(h.pejabat?.ppk?.nip);
 
   const uBendahara = ukuranSatuBaris(doc, [namaBendahara], wKolKiri - 4, ARIAL, H);
@@ -306,6 +315,10 @@ function halamanSpbyPersis(doc, h, { terbilangRupiah, tanggalPanjang }) {
   doc.lineWidth(1).rect(xKiri, yAtas, w, yKotakBawah - yAtas).stroke();
 }
 
+// =========================================================
+// HALAMAN 2: KWITANSI
+// =========================================================
+
 function halamanKwitansiBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 50, right: 50 } });
   bingkai(doc);
@@ -330,7 +343,7 @@ function halamanKwitansiBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
 
   doc.font(ISI).fontSize(HURUF).text("Sudah Terima Dari", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  doc.text("Kuasa Pengguna Anggaran DIPA Setjen Kemnaker", xIsi, y, { width: wIsi });
+  doc.text("KPA DIPA Setjen Kemnaker", xIsi, y, { width: wIsi });
   y = doc.y + 6;
 
   doc.text("Rp.", xIsi, y + 3, { lineBreak: false });
@@ -343,14 +356,16 @@ function halamanKwitansiBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
 
   doc.font(ISI).text("Untuk Pembayaran", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  y = kotakTeks(doc, untukPembayaran(h, tanggalPanjang), xIsi, y, wIsi, { minTinggi: 66, align: "justify" }) + 8;
+  y = kotakTeks(doc, untukPembayaran(h), xIsi, y, wIsi, { minTinggi: 66, align: "justify" }) + 8;
 
   garisGanda(doc, x, y, w);
   y += 12;
 
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
+  const namaPpk = h.pejabat?.ppk?.nama || "";
   const tglJakarta = `Jakarta, ${tanggalPanjang(h.tanggalBayar)}`;
 
+  // Kolom ke-3: pegawai yang membayarkan BBM (penerima uang), di bawah
+  // tanggal "Jakarta, ..." tanpa judul lain — seperti contoh Tata Usaha.
   const blok = [
     {
       judul: ["Setuju dibayar", "Pejabat Pembuat Komitmen", "Biro Keuangan Kemnaker"],
@@ -358,12 +373,12 @@ function halamanKwitansiBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
       nip: h.pejabat?.ppk?.nip || "",
     },
     {
-      judul: ["Lunas dibayar", "Bendahara Pengeluaran", "Setjen Kemnaker"],
+      judul: ["Lunas dibayar", "Bendahara Pengeluaran", "Biro Keuangan Kemnaker"],
       nama: h.pejabat?.bendahara?.nama || "",
       nip: h.pejabat?.bendahara?.nip || "",
     },
     {
-      judul: [tglJakarta, "Yang Menerima,", ""],
+      judul: [tglJakarta, "", ""],
       nama: h.penerima.nama,
       nip: h.penerima.nip,
     },
@@ -386,111 +401,9 @@ function halamanKwitansiBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
   );
 }
 
-function halamanRincianBbm(doc, h, { terbilangRupiah, tanggalPanjang }) {
-  doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 40, right: 40 } });
-  bingkai(doc);
-  const x = doc.page.margins.left;
-  const w = lebarIsi(doc);
-
-  tulis(doc, "RINCIAN BIAYA PEMBELIAN BBM", x, 34, { tebal: true, ukuran: 13, lebar: w, align: "center" });
-  let y = doc.y + 18;
-  const opsi = { xLabel: x, xTitik: x + 150, xIsi: x + 165, lebarIsi: w - 165, jarak: 2 };
-  y = barisLabel(doc, "Jenis BBM", `${h.jenisBbm}${h.kendaraan ? ` (${h.kendaraan})` : ""}`, y, {
-    ...opsi,
-    tebal: true,
-  });
-  y = barisLabel(doc, "SPBU / Penyedia", h.penyedia || "-", y, opsi);
-  y = barisLabel(doc, "Periode / Tanggal", rentangTanggal(h, tanggalPanjang), y, opsi);
-  y = barisLabel(doc, "Tanggal Pembayaran", tanggalPanjang(h.tanggalBayar), y, { ...opsi, jarak: 10 });
-
-  const kNo = 28;
-  const kJml = 120;
-  const kKet = 70;
-  const kUr = w - kNo - kJml - kKet;
-  const xs = [x, x + kNo, x + kNo + kUr, x + kNo + kUr + kJml, x + w];
-  const yAtas = y;
-
-  doc.font(TEBAL).fontSize(HURUF);
-  doc.text("NO.", xs[0] + 2, y + 4, { width: kNo - 4, align: "center" });
-  doc.text("PERINCIAN BIAYA", xs[1] + 4, y + 4, { width: kUr - 8, align: "center" });
-  doc.text("JUMLAH", xs[2] + 4, y + 4, { width: kJml - 8, align: "center" });
-  doc.text("KET", xs[3] + 4, y + 4, { width: kKet - 8, align: "center" });
-  y += 20;
-  doc.lineWidth(0.6).moveTo(x, y).lineTo(x + w, y).stroke();
-  y += 8;
-
-  doc.font(ISI).fontSize(HURUF);
-  h.rincian.forEach((r, i) => {
-    doc.text(String(i + 1), xs[0], y, { width: kNo, align: "center" });
-    doc.text(r.uraian, xs[1] + 6, y, { width: kUr - 12 });
-    const ySub = doc.y + 2;
-    doc.fontSize(HURUF - 1).text(
-      `${r.volume} ${r.satuan} × Rp ${angka(r.hargaSatuan)}${r.pajak > 0 ? ` + Pajak/Admin Rp ${angka(r.pajak)}` : ""}`,
-      xs[1] + 6,
-      ySub,
-      { width: kUr - 12 },
-    );
-    doc.fontSize(HURUF);
-    const yBawah = doc.y;
-    doc.text("Rp", xs[2] + 6, y, { lineBreak: false });
-    doc.text(angka(r.jumlah), xs[2] + 22, y, { width: kJml - 28, align: "right" });
-    if (r.keterangan) {
-      doc.fontSize(HURUF - 1).text(r.keterangan, xs[3] + 4, y, { width: kKet - 8, align: "center" });
-      doc.fontSize(HURUF);
-    }
-    y = Math.max(yBawah, y + 18) + 10;
-  });
-
-  doc.lineWidth(0.6).moveTo(x, y).lineTo(x + w, y).stroke();
-  doc.font(TEBAL).text("JUMLAH", xs[1] + 6, y + 4, { lineBreak: false });
-  doc.text("Rp", xs[2] + 6, y + 4, { lineBreak: false });
-  doc.text(angka(h.total), xs[2] + 22, y + 4, { width: kJml - 28, align: "right" });
-  y += 19;
-  doc.moveTo(x, y).lineTo(x + w, y).stroke();
-  doc.rect(x, yAtas, w, y - yAtas).stroke();
-  for (let i = 1; i < 4; i++) doc.moveTo(xs[i], yAtas).lineTo(xs[i], y).stroke();
-
-  doc.font(TEBAL).text("TERBILANG", xs[1] + 6, y + 5, { lineBreak: false });
-  doc.text(":", xs[1] + 90, y + 5, { lineBreak: false });
-  doc.fontSize(HURUF - 1).text(terbilangRupiah(h.total), xs[1] + 100, y + 6, { width: w - kNo - 104 });
-  doc.fontSize(HURUF);
-  y = doc.y + 28;
-
-  const kol = w / 2;
-  tulis(doc, `Jakarta, ${tanggalPanjang(h.tanggalBayar)}`, x + kol, y, { lebar: kol, align: "center" });
-  y += 22;
-  blokTtd(doc, {
-    x,
-    y,
-    lebar: kol,
-    tebalNip: true,
-    judul: ["Telah dibayar sejumlah", rp(h.total), "", "Bendahara Pengeluaran"],
-    ...h.pejabat.bendahara,
-  });
-  const yAkhir = blokTtd(doc, {
-    x: x + kol,
-    y,
-    lebar: kol,
-    tebalNip: true,
-    judul: ["Telah menerima jumlah uang sebesar", rp(h.total), "", "Yang menerima,"],
-    nama: h.penerima.nama,
-    nip: h.penerima.nip,
-  });
-
-  const namaPpk = namaPpkResmi(h.pejabat?.ppk?.nama);
-  y = yAkhir + 24;
-  doc.lineWidth(0.8).moveTo(x, y).lineTo(x + w, y).stroke();
-  blokTtd(doc, {
-    x: x + kol / 2,
-    y: y + 18,
-    lebar: kol,
-    tebalNip: true,
-    judul: ["Mengetahui / Menyetujui,", "Pejabat Pembuat Komitmen", "Biro Keuangan dan BMN Kemnaker"],
-    tinggi: 54,
-    nama: namaPpk,
-    nip: h.pejabat?.ppk?.nip || "",
-  });
-}
+// =========================================================
+// HALAMAN 3+: LAMPIRAN STRUK / BUKTI PEMBELIAN
+// =========================================================
 
 function halamanLampiranBukti(doc, lampiran = []) {
   const daftarBuffer = lampiran
@@ -547,15 +460,16 @@ function tulisBbmPdf(hitungan, tujuan, alat) {
   });
   pasangFontDokumen(doc);
   if (alat?.pasangFontSpby) alat.pasangFontSpby(doc);
-  doc.pipe(tujuan);
 
   halamanSpbyPersis(doc, hitungan, alat);
   halamanKwitansiBbm(doc, hitungan, alat);
-  halamanRincianBbm(doc, hitungan, alat);
   if (Array.isArray(hitungan.lampiran) && hitungan.lampiran.length) {
     halamanLampiranBukti(doc, hitungan.lampiran);
   }
 
+  // Dialirkan setelah semua halaman tergambar: galat saat menggambar
+  // terjadi sebelum header terkirim sehingga rute bisa membalas JSON.
+  doc.pipe(tujuan);
   doc.end();
   return doc;
 }
