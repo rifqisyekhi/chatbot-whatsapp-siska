@@ -12,9 +12,20 @@ import {
   AlertCircle,
   Loader2,
 } from "lucide-react";
+import { apiTU } from "../../../services/ApiTU";
 import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { DATA_CONTOH_FOTOKOPI } from "./dataContoh";
+
+// =========================================================
+// FORM FOTOKOPI & PENGGANDAAN
+// =========================================================
+//
+// Simpan & ubah hanya lewat API (Postgres); angka dihitung ulang server.
+// Penandatangan (PPK & bendahara) dari GET api/kwitansi/referensi → pejabat
+// (.env server), tidak diketik di form. localStorage hanya untuk draf form
+// BARU yang belum disimpan.
+
+const KUNCI_DRAF = "kwitansi-fotokopi-draf";
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 const hariIni = () => new Date().toISOString().slice(0, 10);
@@ -43,6 +54,7 @@ const DAFTAR_PROVINSI = [
   "Luar Jawa / Lainnya",
 ];
 
+// Pilihan terbatas; server mencocokkan label yang sama persis.
 const STATUS_PAJAK_OPTIONS = [
   {
     label: "UMKM / Fotokopi Eceran Tanpa Potongan Pajak",
@@ -86,178 +98,153 @@ const FORM_KOSONG = (bidangAwal = "") => ({
   lokasi_provinsi: "D.K.I. Jakarta",
   penyedia: "",
   status_pajak: STATUS_PAJAK_OPTIONS[0].label,
-  persen_pph: 0,
+  persen_pph: STATUS_PAJAK_OPTIONS[0].persen,
   nomor_spby: "",
   no_bku: "",
   ttd_penerima_nama: "",
   ttd_penerima_nip: "",
   tanggal_kegiatan: hariIni(),
   tanggal_spby: hariIni(),
-  ppk_nama: "Drs. Hendra Wijaya, M.M.",
-  ppk_nip: "197508121998032001",
-  bendahara_nama: "Siti Rahmawati, S.E.",
-  bendahara_nip: "198304152006041002",
   items: [
     {
       jenis: "Fotokopi Hitam Putih",
-      uraianMenu: "Fotokopi Bahan Rapat & Penggandaan HVS A4 70gr",
-      volume: 500,
+      uraianMenu: "",
+      volume: 100,
       satuan: "Lembar",
       hargaSatuan: 300,
     },
   ],
 });
 
+// Status pajak hanya dari pilihan tetap; label tak dikenal → cocokkan persen → pilihan pertama.
+const cariStatusPajak = (label, persen) =>
+  STATUS_PAJAK_OPTIONS.find((o) => o.label === label) ||
+  STATUS_PAJAK_OPTIONS.find((o) => o.persen === Number(persen)) ||
+  STATUS_PAJAK_OPTIONS[0];
+
+// Isian tersimpan (atau draf) → bentuk form. Baris lama memakai namaItem/porsi.
+const isianKeForm = (isian = {}, bidang = "") => {
+  const dasar = FORM_KOSONG(bidang);
+  const hasil = { ...dasar };
+  for (const k of Object.keys(dasar)) {
+    if (k !== "items" && isian[k] !== undefined && isian[k] !== null) hasil[k] = isian[k];
+  }
+  hasil.bidang = bidang;
+  hasil.dalam_rangka = isian.dalam_rangka || isian.nama_kegiatan || "";
+  hasil.tempat_kegiatan = isian.tempat_kegiatan || isian.lokasi_detail || dasar.tempat_kegiatan;
+  const opsi = cariStatusPajak(isian.status_pajak, isian.persen_pph);
+  hasil.status_pajak = opsi.label;
+  hasil.persen_pph = opsi.persen;
+  if (Array.isArray(isian.items) && isian.items.length) {
+    hasil.items = isian.items.map((it) => ({
+      jenis: it.jenis || "Fotokopi Hitam Putih",
+      uraianMenu: it.uraianMenu || it.namaItem || "",
+      volume: Number(it.volume ?? it.porsi) || 0,
+      satuan: it.satuan || "Lembar",
+      hargaSatuan: Number(it.hargaSatuan ?? it.harga_satuan) || 0,
+    }));
+  }
+  return hasil;
+};
+
+function bacaDraf(bidang) {
+  try {
+    const d = JSON.parse(localStorage.getItem(KUNCI_DRAF) || "null");
+    if (d && typeof d === "object") return isianKeForm(d, bidang || d.bidang || "");
+  } catch {
+    // draf rusak atau storage diblokir — mulai dari form kosong
+  }
+  return FORM_KOSONG(bidang);
+}
+
+function hapusDraf() {
+  try {
+    localStorage.removeItem(KUNCI_DRAF);
+  } catch {
+    // abaikan
+  }
+}
+
 const kelasInput =
-  "w-full px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
+  "w-full px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all disabled:bg-slate-50 disabled:text-slate-500";
 
 export default function FormFotokopi({ operator }) {
   const { id } = useParams();
   const baru = !id || id === "baru";
   const navigate = useNavigate();
 
-  const [form, setForm] = useState(() => {
-    const bidangAwal = operator?.peran === "operator" ? operator?.bidang || "" : "";
-    if (baru) return FORM_KOSONG(bidangAwal);
+  const bendahara = operator?.peran === "bendahara";
+  const bidangTetap = operator?.peran === "operator" ? operator?.bidang || "" : "";
 
-    let temuan = null;
-    if (String(id).startsWith("sample-")) {
-      temuan = DATA_CONTOH_FOTOKOPI.find((d) => String(d.id) === String(id));
-    }
-    if (!temuan) {
-      try {
-        const tersimpan = JSON.parse(localStorage.getItem("kwitansi-fotokopi-data") || "[]");
-        temuan = tersimpan.find((d) => String(d.id) === String(id));
-      } catch {
-        // abaikan
-      }
-    }
-
-    if (temuan) {
-      const isian = temuan.isian || {};
-      const statusPajakTerpilih =
-        STATUS_PAJAK_OPTIONS.find((p) => p.persen === Number(isian.persen_pph))?.label ||
-        isian.status_pajak ||
-        STATUS_PAJAK_OPTIONS[0].label;
-
-      return {
-        ...FORM_KOSONG(temuan.bidang || bidangAwal),
-        bidang: temuan.bidang || isian.bidang || "",
-        akun: isian.akun || DAFTAR_AKUN[0],
-        dalam_rangka: isian.dalam_rangka || temuan.nama_kegiatan || "",
-        tempat_kegiatan:
-          isian.tempat_kegiatan || temuan.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker",
-        lokasi_provinsi: temuan.lokasi_provinsi || isian.lokasi_provinsi || "D.K.I. Jakarta",
-        penyedia: temuan.penyedia || isian.penyedia || "",
-        status_pajak: statusPajakTerpilih,
-        persen_pph: Number(isian.persen_pph ?? 0),
-        nomor_spby: temuan.nomor_spby || isian.nomor_spby || "",
-        no_bku: isian.no_bku || "",
-        ttd_penerima_nama: isian.ttd_penerima_nama || "",
-        ttd_penerima_nip: isian.ttd_penerima_nip || "",
-        tanggal_kegiatan: temuan.tanggal_kegiatan || isian.tanggal_kegiatan || hariIni(),
-        tanggal_spby: isian.tanggal_spby || temuan.tanggal_kegiatan || hariIni(),
-        ppk_nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-        ppk_nip: isian.ppk?.nip || isian.ppk_nip || "197508121998032001",
-        bendahara_nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-        bendahara_nip: isian.bendahara?.nip || isian.bendahara_nip || "198304152006041002",
-        items: (isian.items || []).map((it) => ({
-          jenis: it.jenis || "Fotokopi Hitam Putih",
-          uraianMenu: it.uraianMenu || it.namaItem || "",
-          volume: Number(it.volume || it.porsi) || 500,
-          satuan: it.satuan || "Lembar",
-          hargaSatuan: Number(it.hargaSatuan) || 300,
-        })),
-      };
-    }
-
-    return FORM_KOSONG(bidangAwal);
-  });
-
-  const [memuat, setMemuat] = useState(false);
+  const [form, setForm] = useState(() => (baru ? bacaDraf(bidangTetap) : FORM_KOSONG(bidangTetap)));
+  const [pejabat, setPejabat] = useState(null);
+  const [statusTersimpan, setStatusTersimpan] = useState("");
+  const [memuat, setMemuat] = useState(!baru);
   const [menyimpan, setMenyimpan] = useState(false);
   const [galat, setGalat] = useState("");
   const [toast, setToast] = useState(null);
+
+  // Data yang dibatalkan tidak bisa disimpan sebelum dipulihkan dari daftar.
+  const terkunciBatal = statusTersimpan === "dibatalkan";
+  const terkunci = bendahara || terkunciBatal;
 
   const kabari = (text, type = "success") => {
     setToast({ text, type });
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Muat data dari server jika mode edit
+  // Penandatangan dari server (.env)
   useEffect(() => {
-    if (baru || String(id).startsWith("sample-")) return;
+    apiTU({ url: "api/kwitansi/referensi" })
+      .then((r) => setPejabat(r?.pejabat || null))
+      .catch(() => setPejabat(null));
+  }, []);
 
+  // Muat data tersimpan untuk diubah
+  useEffect(() => {
+    if (baru) return;
     let usang = false;
     apiKwitansi({ url: `api/kwitansi/fotokopi/${id}` })
       .then((data) => {
         if (usang || !data) return;
-        const isian = data.isian || {};
-        const statusPajakTerpilih =
-          STATUS_PAJAK_OPTIONS.find((p) => p.persen === Number(isian.persen_pph))?.label ||
-          isian.status_pajak ||
-          STATUS_PAJAK_OPTIONS[0].label;
-
-        setForm((prev) => ({
-          ...prev,
-          bidang: data.bidang || isian.bidang || "",
-          akun: isian.akun || DAFTAR_AKUN[0],
-          dalam_rangka: isian.dalam_rangka || data.nama_kegiatan || "",
-          tempat_kegiatan:
-            isian.tempat_kegiatan || data.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker",
-          lokasi_provinsi: data.lokasi_provinsi || isian.lokasi_provinsi || "D.K.I. Jakarta",
-          penyedia: data.penyedia || isian.penyedia || "",
-          status_pajak: statusPajakTerpilih,
-          persen_pph: Number(isian.persen_pph ?? 0),
-          nomor_spby: data.nomor_spby || isian.nomor_spby || "",
-          no_bku: isian.no_bku || "",
-          ttd_penerima_nama: isian.ttd_penerima_nama || "",
-          ttd_penerima_nip: isian.ttd_penerima_nip || "",
-          tanggal_kegiatan: data.tanggal_kegiatan || isian.tanggal_kegiatan || hariIni(),
-          tanggal_spby: isian.tanggal_spby || data.tanggal_kegiatan || hariIni(),
-          ppk_nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-          ppk_nip: isian.ppk?.nip || isian.ppk_nip || "197508121998032001",
-          bendahara_nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-          bendahara_nip: isian.bendahara?.nip || isian.bendahara_nip || "198304152006041002",
-          items: (isian.items || []).map((it) => ({
-            jenis: it.jenis || "Fotokopi Hitam Putih",
-            uraianMenu: it.uraianMenu || it.namaItem || "",
-            volume: Number(it.volume || it.porsi) || 500,
-            satuan: it.satuan || "Lembar",
-            hargaSatuan: Number(it.hargaSatuan) || 300,
-          })),
-        }));
+        setForm(isianKeForm(data.isian || {}, data.bidang || ""));
+        setStatusTersimpan(data.status || "");
+        setGalat("");
       })
       .catch((err) => {
-        if (!usang) setGalat(err?.message || "Gagal memuat data dari server");
+        if (!usang) setGalat(err?.message || "Gagal memuat data fotokopi");
       })
       .finally(() => {
         if (!usang) setMemuat(false);
       });
-
     return () => {
       usang = true;
     };
   }, [id, baru]);
 
-  // Kalkulasi total rincian & pajak
+  // Simpan draf setiap isian berubah (hanya form baru yang belum disimpan).
+  useEffect(() => {
+    if (!baru || bendahara) return;
+    try {
+      localStorage.setItem(KUNCI_DRAF, JSON.stringify(form));
+    } catch {
+      // storage tidak tersedia — draf tidak diingat, form tetap jalan
+    }
+  }, [form, baru, bendahara]);
+
+  // Pratinjau angka di layar. Angka resmi dihitung ulang server saat simpan/PDF.
   const hitungan = useMemo(() => {
     const items = form.items || [];
-    const totalVolume = items.reduce((acc, it) => acc + (Number(it.volume) || 0), 0);
-    const subtotalBruto = items.reduce(
-      (acc, it) => acc + (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0),
-      0
-    );
-
+    const bulat = (v) => Math.max(0, Math.round(Number(v) || 0));
+    const totalVolume = items.reduce((acc, it) => acc + bulat(it.volume), 0);
+    const subtotalBruto = items.reduce((acc, it) => acc + bulat(it.volume) * bulat(it.hargaSatuan), 0);
     const persen = Number(form.persen_pph) || 0;
-    const potonganPajak = Math.round(subtotalBruto * (persen / 100));
-    const bersihDibayarkan = subtotalBruto - potonganPajak;
-
+    const potonganPajak = Math.round((subtotalBruto * persen) / 100);
     return {
       totalVolume,
       subtotalBruto,
       potonganPajak,
-      bersihDibayarkan,
+      bersihDibayarkan: subtotalBruto - potonganPajak,
       persen,
     };
   }, [form.items, form.persen_pph]);
@@ -266,17 +253,10 @@ export default function FormFotokopi({ operator }) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
+  // Ubah status pajak (persen hanya dari pilihan tetap)
   const ubahStatusPajak = (labelPajak) => {
-    const opsi = STATUS_PAJAK_OPTIONS.find(
-      (o) => o.label === labelPajak || o.labelRingkas === labelPajak
-    );
-    const persen = opsi ? opsi.persen : 0;
-    const labelUtama = opsi ? opsi.label : labelPajak;
-    setForm((prev) => ({
-      ...prev,
-      status_pajak: labelUtama,
-      persen_pph: persen,
-    }));
+    const opsi = cariStatusPajak(labelPajak);
+    setForm((prev) => ({ ...prev, status_pajak: opsi.label, persen_pph: opsi.persen }));
   };
 
   const updateItem = (index, field, value) => {
@@ -346,61 +326,41 @@ export default function FormFotokopi({ operator }) {
     }));
   };
 
+  // Tombol "Kosongkan"
   const kosongkanForm = () => {
     if (!window.confirm("Kosongkan seluruh isian form pengajuan fotokopi?")) return;
-    const bidangAwal = operator?.peran === "operator" ? operator?.bidang || "" : "";
-    setForm(FORM_KOSONG(bidangAwal));
+    setForm(FORM_KOSONG(bidangTetap || (baru ? "" : form.bidang)));
+    if (baru) hapusDraf();
     kabari("Form dikosongkan");
   };
 
-  const siapkanPayload = () => {
-    const itemsTersusun = form.items.map((it) => ({
+  // Isian yang dikirim ke server (tanpa angka hasil hitung — server menghitung sendiri)
+  const siapkanIsian = () => ({
+    akun: form.akun,
+    dalam_rangka: form.dalam_rangka,
+    tempat_kegiatan: form.tempat_kegiatan,
+    lokasi_provinsi: form.lokasi_provinsi,
+    tanggal_kegiatan: form.tanggal_kegiatan,
+    tanggal_spby: form.tanggal_spby,
+    penyedia: form.penyedia,
+    status_pajak: form.status_pajak,
+    persen_pph: Number(form.persen_pph) || 0,
+    nomor_spby: form.nomor_spby,
+    no_bku: form.no_bku,
+    ttd_penerima_nama: form.ttd_penerima_nama,
+    ttd_penerima_nip: form.ttd_penerima_nip,
+    items: form.items.map((it) => ({
       jenis: it.jenis,
-      uraianMenu: it.uraianMenu || it.jenis,
-      namaItem: it.uraianMenu || it.jenis,
+      uraianMenu: it.uraianMenu,
       volume: Number(it.volume) || 0,
-      porsi: Number(it.volume) || 0,
       satuan: it.satuan || "Lembar",
       hargaSatuan: Number(it.hargaSatuan) || 0,
-      subtotal: (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0),
-    }));
+    })),
+  });
 
-    const isian = {
-      bidang: form.bidang,
-      akun: form.akun,
-      dalam_rangka: form.dalam_rangka,
-      nama_kegiatan: form.dalam_rangka,
-      tempat_kegiatan: form.tempat_kegiatan,
-      lokasi_detail: form.tempat_kegiatan,
-      lokasi_provinsi: form.lokasi_provinsi,
-      penyedia: form.penyedia,
-      nama_penerima: form.penyedia,
-      status_pajak: form.status_pajak,
-      persen_pph: hitungan.persen,
-      nomor_spby: form.nomor_spby,
-      no_bku: form.no_bku,
-      tanggal_kegiatan: form.tanggal_kegiatan,
-      tanggal_spby: form.tanggal_spby,
-      total: hitungan.subtotalBruto,
-      pajak_pph: hitungan.potonganPajak,
-      netto: hitungan.bersihDibayarkan,
-      items: itemsTersusun,
-      ppk: {
-        nama: form.ppk_nama,
-        nip: form.ppk_nip,
-      },
-      bendahara: {
-        nama: form.bendahara_nama,
-        nip: form.bendahara_nip,
-      },
-      ttd_penerima_nama: form.ttd_penerima_nama,
-      ttd_penerima_nip: form.ttd_penerima_nip,
-    };
-
-    return isian;
-  };
-
+  // Simpan ke daftar: hanya lewat API. Gagal → pesan galat, form tetap terbuka.
   const simpanKeDaftar = async () => {
+    if (terkunci) return;
     if (!form.bidang) {
       kabari("Pilih bidang pelaksana kegiatan terlebih dahulu", "error");
       return;
@@ -415,88 +375,33 @@ export default function FormFotokopi({ operator }) {
     }
 
     setMenyimpan(true);
-    const isian = siapkanPayload();
-
-    const entriLokal = {
-      id: baru ? `local-${Date.now()}` : id,
-      bidang: form.bidang,
-      status: "aktif",
-      nama_kegiatan: form.dalam_rangka,
-      tanggal_kegiatan: form.tanggal_kegiatan,
-      lokasi_provinsi: form.lokasi_provinsi,
-      lokasi_detail: form.tempat_kegiatan,
-      nomor_spby: form.nomor_spby,
-      penyedia: form.penyedia,
-      nama_penerima: form.penyedia,
-      jumlah_volume: hitungan.totalVolume,
-      total: hitungan.subtotalBruto,
-      pajak_pph: hitungan.potonganPajak,
-      netto: hitungan.bersihDibayarkan,
-      jumlah_jenis_item: form.items.length,
-      isian,
-    };
-
     try {
-      const dataLokal = JSON.parse(localStorage.getItem("kwitansi-fotokopi-data") || "[]");
-      let dataBaru;
+      const isian = siapkanIsian();
       if (baru) {
-        dataBaru = [entriLokal, ...dataLokal];
+        await apiKwitansi({ url: "api/kwitansi/fotokopi", method: "POST", body: { isian, bidang: form.bidang } });
+        hapusDraf();
       } else {
-        dataBaru = dataLokal.map((d) => (String(d.id) === String(id) ? entriLokal : d));
-        if (!dataBaru.some((d) => String(d.id) === String(id))) {
-          dataBaru.unshift(entriLokal);
-        }
+        await apiKwitansi({ url: `api/kwitansi/fotokopi/${id}`, method: "PUT", body: { isian } });
       }
-      localStorage.setItem("kwitansi-fotokopi-data", JSON.stringify(dataBaru));
-    } catch {
-      // abaikan jika localStorage gagal
-    }
-
-    try {
-      if (baru) {
-        const res = await apiKwitansi({
-          url: "api/kwitansi/fotokopi",
-          method: "POST",
-          body: { isian },
-        });
-        if (res?.data?.id) {
-          try {
-            const dataLokal = JSON.parse(localStorage.getItem("kwitansi-fotokopi-data") || "[]");
-            const disesuaikan = dataLokal.map((d) =>
-              String(d.id) === String(entriLokal.id) ? { ...d, id: res.data.id } : d
-            );
-            localStorage.setItem("kwitansi-fotokopi-data", JSON.stringify(disesuaikan));
-          } catch {
-            // abaikan
-          }
-        }
-      } else {
-        await apiKwitansi({
-          url: `api/kwitansi/fotokopi/${id}`,
-          method: "PUT",
-          body: { isian },
-        });
-      }
-    } catch (errApi) {
-      console.warn("[FOTOKOPI] Sinkronisasi server tertunda, data tersimpan di penyimpanan lokal:", errApi);
-    }
-
-    kabari("Pengajuan fotokopi berhasil disimpan ke daftar");
-    setTimeout(() => {
       navigate(jalur("fotokopi"));
-    }, 600);
-    setMenyimpan(false);
+    } catch (err) {
+      kabari(err?.message || "Gagal menyimpan fotokopi", "error");
+      setMenyimpan(false);
+    }
   };
 
+  // PDF: bendahara membuka data tersimpan; pengubah melihat pratinjau isian form.
   const lihatPdf = async () => {
     try {
-      const isian = siapkanPayload();
+      if (bendahara) {
+        if (!baru) await bukaPdf({ url: `api/kwitansi/fotokopi/${id}/pdf` });
+        return;
+      }
       await bukaPdf({
         url: "api/kwitansi/fotokopi/pdf-preview",
         method: "POST",
-        body: { isian },
+        body: { isian: siapkanIsian() },
       });
-      kabari("Membuka dokumen PDF SPBY & Kwitansi");
     } catch (err) {
       kabari(err?.message || "Gagal membuka PDF", "error");
     }
@@ -544,14 +449,16 @@ export default function FormFotokopi({ operator }) {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={kosongkanForm}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-mist bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Kosongkan</span>
-            </button>
+            {!terkunci && (
+              <button
+                type="button"
+                onClick={kosongkanForm}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-mist bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Kosongkan</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -571,7 +478,7 @@ export default function FormFotokopi({ operator }) {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT / MAIN COLUMN (8 COLS) */}
-            <div className="lg:col-span-8 space-y-6">
+            <fieldset disabled={terkunci} className="lg:col-span-8 space-y-6 min-w-0">
               {/* CARD 1: DATA KEGIATAN & FOTOKOPI */}
               <div className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6 space-y-5">
                 <div className="flex items-center justify-between border-b border-mist pb-3">
@@ -590,6 +497,7 @@ export default function FormFotokopi({ operator }) {
                     <select
                       className={kelasInput}
                       value={form.bidang}
+                      disabled={Boolean(bidangTetap) || !baru}
                       onChange={(e) => setField("bidang", e.target.value)}
                       required
                     >
@@ -771,54 +679,21 @@ export default function FormFotokopi({ operator }) {
                     </div>
                   </div>
 
-                  {/* Pejabat PPK & Bendahara */}
+                  {/* Penandatangan dari server (.env), tidak diketik di form */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Pejabat Pembuat Komitmen (PPK)
-                      </label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Drs. Hendra Wijaya, M.M."
-                        value={form.ppk_nama}
-                        onChange={(e) => setField("ppk_nama", e.target.value)}
-                      />
+                    <div className="p-3 rounded-xl bg-slate-50 border border-mist">
+                      <p className="text-xs font-bold text-slate-700">Pejabat Pembuat Komitmen (PPK)</p>
+                      <p className="text-sm font-semibold text-navy mt-1">{pejabat?.ppk?.nama || "—"}</p>
+                      <p className="text-[11px] text-slate-500">NIP. {pejabat?.ppk?.nip || "—"}</p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Bendahara Pengeluaran
-                      </label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Siti Rahmawati, S.E."
-                        value={form.bendahara_nama}
-                        onChange={(e) => setField("bendahara_nama", e.target.value)}
-                      />
+                    <div className="p-3 rounded-xl bg-slate-50 border border-mist">
+                      <p className="text-xs font-bold text-slate-700">Bendahara Pengeluaran</p>
+                      <p className="text-sm font-semibold text-navy mt-1">{pejabat?.bendahara?.nama || "—"}</p>
+                      <p className="text-[11px] text-slate-500">NIP. {pejabat?.bendahara?.nip || "—"}</p>
                     </div>
-                  </div>
-
-                  {/* NIP PPK & NIP Bendahara */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">NIP PPK</label>
-                      <input
-                        className={kelasInput}
-                        placeholder="NIP PPK"
-                        value={form.ppk_nip}
-                        onChange={(e) => setField("ppk_nip", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        NIP Bendahara
-                      </label>
-                      <input
-                        className={kelasInput}
-                        placeholder="NIP Bendahara"
-                        value={form.bendahara_nip}
-                        onChange={(e) => setField("bendahara_nip", e.target.value)}
-                      />
-                    </div>
+                    <p className="sm:col-span-2 text-[11px] text-slate-400">
+                      Penandatangan diatur di server dan dipakai otomatis di SPBY & kwitansi.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -972,7 +847,7 @@ export default function FormFotokopi({ operator }) {
                   })}
                 </div>
               </div>
-            </div>
+            </fieldset>
 
             {/* RIGHT COLUMN: RINCIAN & AKSI (4 COLS) */}
             <div className="lg:col-span-4 space-y-4">
@@ -1013,6 +888,7 @@ export default function FormFotokopi({ operator }) {
                     <select
                       className={kelasInput + " text-xs py-2"}
                       value={form.status_pajak}
+                      disabled={terkunci}
                       onChange={(e) => ubahStatusPajak(e.target.value)}
                     >
                       {STATUS_PAJAK_OPTIONS.map((o) => (
@@ -1046,29 +922,44 @@ export default function FormFotokopi({ operator }) {
 
                 {/* Tombol Aksi */}
                 <div className="space-y-2.5 pt-2">
-                  <button
-                    type="button"
-                    onClick={lihatPdf}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-mist bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
-                  >
-                    <FileText className="w-4 h-4 text-slate-500" />
-                    <span>Lihat PDF</span>
-                  </button>
+                  {/* Bendahara: PDF data tersimpan; tidak ada pratinjau untuk form baru */}
+                  {!(bendahara && baru) && (
+                    <button
+                      type="button"
+                      onClick={lihatPdf}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-mist bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                    >
+                      <FileText className="w-4 h-4 text-slate-500" />
+                      <span>Lihat PDF</span>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={simpanKeDaftar}
-                    disabled={menyimpan}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand hover:bg-navy text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-98 disabled:opacity-50"
-                  >
-                    {menyimpan ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    <span>Simpan ke daftar</span>
-                  </button>
+                  {terkunciBatal && (
+                    <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                      Pengajuan ini dibatalkan. Pulihkan dari daftar sebelum mengubah.
+                    </p>
+                  )}
+
+                  {!terkunci && (
+                    <button
+                      type="button"
+                      onClick={simpanKeDaftar}
+                      disabled={menyimpan}
+                      className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand hover:bg-navy text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-98 disabled:opacity-50"
+                    >
+                      {menyimpan ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                      <span>{baru ? "Simpan ke daftar" : "Simpan perubahan"}</span>
+                    </button>
+                  )}
                 </div>
+
+                <p className="text-[11px] text-slate-400 text-center leading-relaxed">
+                  Angka di atas hanya pratinjau; jumlah resmi dihitung ulang server saat simpan & PDF.
+                </p>
 
                 <p className="text-[11px] text-slate-400 text-center leading-relaxed">
                   SPBY, kwitansi, dan rincian fotokopi & penjilidan sesuai format Biro Keuangan Kemnaker.

@@ -17,18 +17,19 @@ import {
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { DATA_CONTOH_FOTOKOPI } from "./dataContoh";
+
+// =========================================================
+// DAFTAR FOTOKOPI & PENGGANDAAN
+// =========================================================
+//
+// Data hanya dari API (Postgres). Batal, pulihkan, dan hapus lewat API;
+// setelah berhasil daftar dimuat ulang dari server. Galat API tampil
+// sebagai toast merah, tidak pernah dianggap berhasil. Angka (total, PPh,
+// netto, volume) diambil dari kolom yang dihitung server.
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 
-const DAFTAR_BIDANG_PILIHAN = [
-  "Semua bidang",
-  "TU",
-  "AKLAP",
-  "PTUK",
-  "BMN",
-  "PA",
-];
+const DAFTAR_BIDANG_PILIHAN = ["Semua bidang", "TU", "AKLAP", "PTUK", "BMN", "PA"];
 
 const NAMA_BIDANG_LENGKAP = {
   TU: "Bidang Tata Usaha",
@@ -41,62 +42,6 @@ const NAMA_BIDANG_LENGKAP = {
 const kelasInput =
   "px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
 
-const bacaDataLokal = () => {
-  try {
-    return JSON.parse(localStorage.getItem("kwitansi-fotokopi-data") || "[]");
-  } catch {
-    return [];
-  }
-};
-
-const simpanDataLokal = (items) => {
-  try {
-    localStorage.setItem("kwitansi-fotokopi-data", JSON.stringify(items));
-  } catch {
-    // abaikan
-  }
-};
-
-const gabungkanData = (dataServer = []) => {
-  const dataLokal = bacaDataLokal();
-  const peta = new Map();
-  const jejakUnik = new Set();
-
-  const buatKunci = (d) => {
-    const nama = String(d.nama_kegiatan || d.isian?.nama_kegiatan || d.isian?.dalam_rangka || "").trim().toLowerCase();
-    const tgl = String(d.tanggal_kegiatan || d.isian?.tanggal_kegiatan || "").trim();
-    const tot = String(d.total || d.isian?.total || 0);
-    return `${nama}|${tgl}|${tot}`;
-  };
-
-  if (Array.isArray(dataServer) && dataServer.length > 0) {
-    dataServer.forEach((d) => {
-      peta.set(String(d.id), d);
-      jejakUnik.add(buatKunci(d));
-    });
-  }
-
-  dataLokal.forEach((d) => {
-    const kunci = buatKunci(d);
-    if (!peta.has(String(d.id)) && !jejakUnik.has(kunci)) {
-      peta.set(String(d.id), d);
-      jejakUnik.add(kunci);
-    }
-  });
-
-  if (peta.size === 0) {
-    DATA_CONTOH_FOTOKOPI.forEach((d) => {
-      const kunci = buatKunci(d);
-      if (!peta.has(String(d.id)) && !jejakUnik.has(kunci)) {
-        peta.set(String(d.id), d);
-        jejakUnik.add(kunci);
-      }
-    });
-  }
-
-  return Array.from(peta.values());
-};
-
 function formatTanggalPendek(iso) {
   if (!iso) return "-";
   const p = String(iso).slice(0, 10).split("-");
@@ -106,31 +51,31 @@ function formatTanggalPendek(iso) {
 
 function ambilKodeMak(akunStr) {
   const m = String(akunStr || "").match(/52\d{4}/);
-  return m ? m[0] : "521111";
+  return m ? m[0] : "-";
 }
 
 export default function DaftarFotokopi({ operator }) {
   const bendahara = operator?.peran === "bendahara";
   const admin = operator?.peran === "admin" || bendahara;
 
-  const [daftar, setDaftar] = useState(() => gabungkanData());
-  const [memuat, setMemuat] = useState(false);
+  const [daftar, setDaftar] = useState([]);
+  const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
   const [cari, setCari] = useState("");
   const [bidang, setBidang] = useState("Semua bidang");
-  const [tahun, setTahun] = useState("2026");
-  const [status, setStatus] = useState("Semua status");
-  const [lihatEmptyState, setLihatEmptyState] = useState(false);
+  const [tahun, setTahun] = useState(String(new Date().getFullYear()));
+  const [status, setStatus] = useState("semua");
 
   // Modal-modal
   const [modalBatal, setModalBatal] = useState(null);
   const [alasanBatal, setAlasanBatal] = useState("");
   const [modalDetail, setModalDetail] = useState(null);
   const [modalHapus, setModalHapus] = useState(null);
-  const [menghapus, setMenghapus] = useState(false);
+  const [bekerja, setBekerja] = useState(false);
 
   const [toast, setToast] = useState(null);
   const [putaran, setPutaran] = useState(0);
+  const muatUlang = () => setPutaran((p) => p + 1);
 
   const kabari = (text, type = "success") => {
     setToast({ text, type });
@@ -140,81 +85,45 @@ export default function DaftarFotokopi({ operator }) {
   useEffect(() => {
     let usang = false;
     const q = new URLSearchParams();
-    if (tahun && tahun !== "Semua tahun") q.set("tahun", tahun);
-    if (bidang && bidang !== "Semua bidang") q.set("bidang", bidang);
-    if (status && status !== "Semua status") q.set("status", status.toLowerCase());
+    if (tahun !== "Semua tahun") q.set("tahun", tahun);
+    if (admin && bidang !== "Semua bidang") q.set("bidang", bidang);
+    if (status !== "semua") q.set("status", status);
 
-    apiKwitansi({ url: `api/kwitansi/fotokopi?${q.toString()}` })
+    apiKwitansi({ url: `api/kwitansi/fotokopi?${q}` })
       .then((data) => {
         if (usang) return;
-        setDaftar(gabungkanData(data));
+        setDaftar(Array.isArray(data) ? data : []);
         setGalat("");
       })
-      .catch(() => {
-        if (!usang) {
-          setDaftar(gabungkanData());
-        }
+      .catch((e) => {
+        if (usang) return;
+        setDaftar([]);
+        setGalat(e?.message || "Gagal memuat daftar fotokopi");
       })
-      .finally(() => {
-        if (!usang) setMemuat(false);
-      });
+      .finally(() => !usang && setMemuat(false));
 
     return () => {
       usang = true;
     };
-  }, [tahun, bidang, status, putaran]);
+  }, [tahun, bidang, status, admin, putaran]);
 
-  const pulihkanDataContoh = () => {
-    try {
-      localStorage.removeItem("kwitansi-fotokopi-data");
-    } catch {
-      // abaikan
-    }
-    setLihatEmptyState(false);
-    setDaftar(DATA_CONTOH_FOTOKOPI);
-    setPutaran((p) => p + 1);
-    kabari("Data contoh fotokopi dimuat kembali");
-  };
-
+  // Pencarian kata kunci (saringan lain sudah dikerjakan server)
   const dataTampil = useMemo(() => {
-    if (lihatEmptyState) return [];
+    const c = cari.trim().toLowerCase();
+    if (!c) return daftar;
+    return daftar.filter((d) =>
+      [d.nama_kegiatan, d.lokasi_provinsi, d.lokasi_detail, d.penyedia, d.nomor_spby, d.bidang]
+        .join(" ")
+        .toLowerCase()
+        .includes(c),
+    );
+  }, [daftar, cari]);
 
-    return daftar.filter((d) => {
-      if (status !== "Semua status") {
-        const cocokStatus =
-          (status === "Aktif / Selesai" && d.status === "aktif") ||
-          (status === "Aktif" && d.status === "aktif") ||
-          (status === "Dibatalkan" && d.status === "dibatalkan");
-        if (!cocokStatus) return false;
-      }
-      if (bidang !== "Semua bidang" && d.bidang !== bidang) {
-        return false;
-      }
-      if (tahun !== "Semua tahun" && d.tanggal_kegiatan && !d.tanggal_kegiatan.startsWith(tahun)) {
-        return false;
-      }
-      if (cari.trim()) {
-        const c = cari.toLowerCase();
-        const teks = [
-          d.nama_kegiatan,
-          d.lokasi_provinsi,
-          d.lokasi_detail,
-          d.penyedia,
-          d.nomor_spby,
-          d.bidang,
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!teks.includes(c)) return false;
-      }
-      return true;
-    });
-  }, [daftar, lihatEmptyState, status, bidang, tahun, cari]);
-
+  // Statistik ringkasan (dari kolom server)
   const aktifList = useMemo(() => dataTampil.filter((d) => d.status === "aktif"), [dataTampil]);
-  const batalList = useMemo(() => dataTampil.filter((d) => d.status === "dibatalkan"), [dataTampil]);
+  const jumlahBatal = dataTampil.length - aktifList.length;
   const totalVolumeAktif = useMemo(
-    () => aktifList.reduce((acc, d) => acc + (Number(d.jumlah_volume || d.jumlah_porsi) || 0), 0),
+    () => aktifList.reduce((acc, d) => acc + (Number(d.jumlah_volume) || 0), 0),
     [aktifList],
   );
   const totalBiayaAktif = useMemo(
@@ -222,89 +131,69 @@ export default function DaftarFotokopi({ operator }) {
     [aktifList],
   );
 
+  // PDF dari data tersimpan di server
   const unduhPdf = async (item) => {
     try {
-      const isian = item.isian || item;
-      await bukaPdf({
-        url: "api/kwitansi/fotokopi/pdf-preview",
-        method: "POST",
-        body: { isian },
-      });
-      kabari("Membuka PDF SPBY & Kwitansi Fotokopi");
+      await bukaPdf({ url: `api/kwitansi/fotokopi/${item.id}/pdf` });
     } catch (e) {
       kabari(e?.message || "Gagal membuka PDF", "error");
     }
   };
 
-  const konfirmasiBatal = async () => {
-    if (!modalBatal) return;
+  // Jalankan satu aksi API; daftar dimuat ulang hanya bila berhasil.
+  const jalankan = async (aksi, pesanBerhasil, pesanGagal) => {
+    setBekerja(true);
     try {
-      const dataLokal = bacaDataLokal();
-      const diperbarui = dataLokal.map((it) =>
-        String(it.id) === String(modalBatal.id)
-          ? {
-              ...it,
-              status: "dibatalkan",
-              alasan_batal: alasanBatal || "Dibatalkan oleh operator",
-              tanggal_batal: new Date().toISOString().slice(0, 10),
-            }
-          : it
-      );
-      simpanDataLokal(diperbarui);
-
-      setDaftar((prev) =>
-        prev.map((it) =>
-          String(it.id) === String(modalBatal.id)
-            ? {
-                ...it,
-                status: "dibatalkan",
-                alasan_batal: alasanBatal || "Dibatalkan oleh operator",
-                tanggal_batal: new Date().toISOString().slice(0, 10),
-              }
-            : it
-        )
-      );
-
-      if (!String(modalBatal.id).startsWith("sample-") && !String(modalBatal.id).startsWith("local-")) {
-        apiKwitansi({
-          url: `api/kwitansi/fotokopi/${modalBatal.id}/batalkan`,
-          method: "POST",
-          body: { alasan: alasanBatal },
-        }).catch(() => {});
-      }
-
-      kabari("Pengajuan fotokopi berhasil dibatalkan");
-      setModalBatal(null);
-      setAlasanBatal("");
+      await aksi();
+      kabari(pesanBerhasil);
+      muatUlang();
+      return true;
     } catch (e) {
-      kabari(e?.message || "Gagal membatalkan pengajuan", "error");
+      kabari(e?.message || pesanGagal, "error");
+      return false;
+    } finally {
+      setBekerja(false);
     }
   };
 
+  const konfirmasiBatal = async () => {
+    if (!modalBatal) return;
+    if (!alasanBatal.trim()) {
+      kabari("Alasan pembatalan wajib diisi", "error");
+      return;
+    }
+    const ok = await jalankan(
+      () =>
+        apiKwitansi({
+          url: `api/kwitansi/fotokopi/${modalBatal.id}/batalkan`,
+          method: "POST",
+          body: { alasan: alasanBatal.trim() },
+        }),
+      "Pengajuan fotokopi dibatalkan",
+      "Gagal membatalkan pengajuan",
+    );
+    if (ok) {
+      setModalBatal(null);
+      setAlasanBatal("");
+    }
+  };
+
+  const pulihkanPengajuan = (item) =>
+    jalankan(
+      () => apiKwitansi({ url: `api/kwitansi/fotokopi/${item.id}/pulihkan`, method: "POST" }),
+      `Pengajuan "${item.nama_kegiatan}" dipulihkan`,
+      "Gagal memulihkan pengajuan",
+    );
+
   const konfirmasiHapus = async () => {
     if (!modalHapus) return;
-    setMenghapus(true);
-    try {
-      const dataLokal = bacaDataLokal();
-      const sisa = dataLokal.filter((it) => String(it.id) !== String(modalHapus.id));
-      simpanDataLokal(sisa);
-
-      setDaftar((prev) => prev.filter((it) => String(it.id) !== String(modalHapus.id)));
-
-      if (!String(modalHapus.id).startsWith("sample-") && !String(modalHapus.id).startsWith("local-")) {
-        apiKwitansi({
-          url: `api/kwitansi/fotokopi/${modalHapus.id}`,
-          method: "DELETE",
-        }).catch(() => {});
-      }
-
-      kabari("Data pengajuan fotokopi berhasil dihapus");
-      setModalHapus(null);
-    } catch (e) {
-      kabari(e?.message || "Gagal menghapus data", "error");
-    } finally {
-      setMenghapus(false);
-    }
+    const item = modalHapus;
+    const ok = await jalankan(
+      () => apiKwitansi({ url: `api/kwitansi/fotokopi/${item.id}`, method: "DELETE" }),
+      `Pengajuan "${item.nama_kegiatan}" dihapus`,
+      "Gagal menghapus pengajuan",
+    );
+    if (ok) setModalHapus(null);
   };
 
   return (
@@ -332,37 +221,11 @@ export default function DaftarFotokopi({ operator }) {
               <h1 className="text-xl sm:text-2xl font-black text-navy tracking-tight truncate">
                 {bendahara
                   ? "Monitoring Fotokopi"
-                  : `Fotokopi ${admin ? "— Semua Bidang" : `— Bidang ${operator?.bidang || "BMN"}`}`}
+                  : `Fotokopi ${admin ? "— Semua Bidang" : `— Bidang ${operator?.bidang || ""}`}`}
               </h1>
               <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
-                {operator?.nama || "Pengembang Lokal (admin)"} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
+                {operator?.nama || ""} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setLihatEmptyState((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                  lihatEmptyState
-                    ? "bg-brand text-white border-brand shadow-xs"
-                    : "bg-white border-mist text-slate-600 hover:bg-slate-50"
-                }`}
-                title="Pratinjau tampilan saat tidak ada data"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Lihat Empty State</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={pulihkanDataContoh}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-mist bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all cursor-pointer"
-                title="Muat kembali data contoh resmi"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Data Contoh</span>
-              </button>
             </div>
           </div>
         </div>
@@ -378,7 +241,7 @@ export default function DaftarFotokopi({ operator }) {
 
           <div className="bg-white rounded-2xl border border-mist shadow-2xs p-4 sm:p-5">
             <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">DIBATALKAN</p>
-            <p className="text-2xl sm:text-3xl font-black tabular-nums mt-1 text-navy">{batalList.length}</p>
+            <p className="text-2xl sm:text-3xl font-black tabular-nums mt-1 text-navy">{jumlahBatal}</p>
           </div>
 
           <div className="bg-white rounded-2xl border border-mist shadow-2xs p-4 sm:p-5">
@@ -425,24 +288,27 @@ export default function DaftarFotokopi({ operator }) {
 
             {/* Filter & Tombol Baru */}
             <div className="flex flex-wrap items-center gap-2">
-              <select className={kelasInput} value={bidang} onChange={(e) => setBidang(e.target.value)}>
-                {DAFTAR_BIDANG_PILIHAN.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+              {admin && (
+                <select className={kelasInput} value={bidang} onChange={(e) => setBidang(e.target.value)}>
+                  {DAFTAR_BIDANG_PILIHAN.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <select className={kelasInput} value={tahun} onChange={(e) => setTahun(e.target.value)}>
                 <option value="Semua tahun">Semua tahun</option>
+                <option value="2027">2027</option>
                 <option value="2026">2026</option>
                 <option value="2025">2025</option>
               </select>
 
               <select className={kelasInput} value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="Semua status">Semua status</option>
-                <option value="Aktif / Selesai">Aktif / Selesai</option>
-                <option value="Dibatalkan">Dibatalkan</option>
+                <option value="semua">Semua status</option>
+                <option value="aktif">Aktif / Selesai</option>
+                <option value="dibatalkan">Dibatalkan</option>
               </select>
 
               {!bendahara && (
@@ -475,11 +341,9 @@ export default function DaftarFotokopi({ operator }) {
               </div>
               <p className="text-base font-bold text-navy">Belum ada kegiatan fotokopi</p>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {lihatEmptyState
-                  ? "Tampilan pratinjau Empty State aktif. Klik tombol \"Lihat Empty State\" di kanan atas untuk kembali."
-                  : "Belum ada data pengajuan fotokopi yang sesuai dengan filter pencarian."}
+                {galat ? "Daftar tidak dapat dimuat." : "Tidak ada data fotokopi yang sesuai dengan saringan."}
               </p>
-              {!bendahara && !lihatEmptyState && (
+              {!bendahara && !galat && (
                 <Link
                   to={jalur("fotokopi", "baru")}
                   className="inline-flex items-center gap-2 mt-4 bg-brand hover:bg-navy text-white px-4 py-2 rounded-xl font-bold text-xs shadow-sm transition-all"
@@ -506,9 +370,9 @@ export default function DaftarFotokopi({ operator }) {
                   {dataTampil.map((d) => {
                     const batalkan = d.status === "dibatalkan";
                     const tglFormat = formatTanggalPendek(d.tanggal_kegiatan);
-                    const kodeMak = ambilKodeMak(d.isian?.akun || d.akun);
-                    const namaBidangLengkap = NAMA_BIDANG_LENGKAP[d.bidang] || `Bidang ${d.bidang || "BMN"}`;
-                    const jumlahJenis = Number(d.jumlah_jenis_item) || (d.isian?.items?.length || 1);
+                    const kodeMak = ambilKodeMak(d.isian?.akun);
+                    const namaBidangLengkap = NAMA_BIDANG_LENGKAP[d.bidang] || `Bidang ${d.bidang || "-"}`;
+                    const jumlahJenis = Number(d.jumlah_jenis_item) || 0;
 
                     return (
                       <tr
@@ -555,7 +419,7 @@ export default function DaftarFotokopi({ operator }) {
                         {/* 4. VOLUME */}
                         <td className="py-4 px-3.5 text-center whitespace-nowrap">
                           <span className="font-bold text-navy text-sm tabular-nums">
-                            {Number(d.jumlah_volume || d.jumlah_porsi || 0).toLocaleString("id-ID")} item
+                            {Number(d.jumlah_volume || 0).toLocaleString("id-ID")} item
                           </span>
                         </td>
 
@@ -563,7 +427,7 @@ export default function DaftarFotokopi({ operator }) {
                         <td className="py-4 px-3.5 whitespace-nowrap">
                           <p className="font-bold text-navy text-sm tabular-nums">{rupiah(d.total)}</p>
                           <p className="text-[10px] font-medium text-slate-500 tabular-nums">
-                            Netto: {rupiah(d.netto || d.total - (d.pajak_pph || 0))}
+                            Netto: {rupiah(d.netto)}
                           </p>
                         </td>
 
@@ -626,6 +490,19 @@ export default function DaftarFotokopi({ operator }) {
                               </button>
                             )}
 
+                            {/* Tombol Pulihkan (data dibatalkan) */}
+                            {!bendahara && batalkan && (
+                              <button
+                                type="button"
+                                onClick={() => pulihkanPengajuan(d)}
+                                disabled={bekerja}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors cursor-pointer disabled:opacity-50"
+                                title={d.alasan_batal ? `Pulihkan — dibatalkan: ${d.alasan_batal}` : "Pulihkan Pengajuan"}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+
                             {/* Tombol Hapus */}
                             {!bendahara && (
                               <button
@@ -661,7 +538,7 @@ export default function DaftarFotokopi({ operator }) {
                 <div>
                   <h3 className="text-base font-bold text-navy leading-none">Rincian Pengajuan Fotokopi</h3>
                   <p className="text-xs text-slate-500 mt-1">
-                    {modalDetail.bidang || "BMN"} • {modalDetail.tanggal_kegiatan}
+                    {modalDetail.bidang || "-"} • {formatTanggalPendek(modalDetail.tanggal_kegiatan)}
                   </p>
                 </div>
               </div>
@@ -690,7 +567,7 @@ export default function DaftarFotokopi({ operator }) {
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Lokasi Provinsi:</span>
-                  <span className="font-bold text-navy">{modalDetail.lokasi_provinsi || "D.K.I. Jakarta"}</span>
+                  <span className="font-bold text-navy">{modalDetail.lokasi_provinsi || "-"}</span>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-medium">Nomor SPBY:</span>
@@ -700,6 +577,16 @@ export default function DaftarFotokopi({ operator }) {
                   <span className="text-slate-400 block font-medium">Kode Akun / MAK:</span>
                   <span className="font-bold text-navy">{ambilKodeMak(modalDetail.isian?.akun)}</span>
                 </div>
+                <div>
+                  <span className="text-slate-400 block font-medium">Nomor BKU:</span>
+                  <span className="font-bold text-navy">{modalDetail.isian?.no_bku || "-"}</span>
+                </div>
+                {modalDetail.status === "dibatalkan" && (
+                  <div>
+                    <span className="text-slate-400 block font-medium">Alasan Pembatalan:</span>
+                    <span className="font-bold text-navy">{modalDetail.alasan_batal || "-"}</span>
+                  </div>
+                )}
               </div>
 
               {/* Rincian Item Pekerjaan */}
@@ -722,16 +609,16 @@ export default function DaftarFotokopi({ operator }) {
                       {(modalDetail.isian?.items || []).map((it, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50">
                           <td className="py-2 px-3 font-semibold text-navy">
-                            {it.uraianMenu || it.namaItem || it.uraian || `Pekerjaan ${idx + 1}`}
+                            {it.uraianMenu || it.jenis || `Pekerjaan ${idx + 1}`}
                           </td>
                           <td className="py-2 px-3 text-center text-slate-600">
-                            {it.volume || it.porsi} {it.satuan || "Lembar"}
+                            {Number(it.volume) || 0} {it.satuan || ""}
                           </td>
                           <td className="py-2 px-3 text-right text-slate-600 tabular-nums">
-                            {rupiah(it.hargaSatuan || it.harga_satuan)}
+                            {rupiah(it.hargaSatuan)}
                           </td>
                           <td className="py-2 px-3 text-right font-bold text-navy tabular-nums">
-                            {rupiah(it.subtotal || it.jumlah_harga || (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0))}
+                            {rupiah((Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0))}
                           </td>
                         </tr>
                       ))}
@@ -748,13 +635,11 @@ export default function DaftarFotokopi({ operator }) {
                 </div>
                 <div className="flex justify-between font-semibold text-rose-600">
                   <span>Potongan Pajak (PPh):</span>
-                  <span className="tabular-nums">- {rupiah(modalDetail.pajak_pph || modalDetail.pajak_pph23 || 0)}</span>
+                  <span className="tabular-nums">- {rupiah(modalDetail.pajak_pph)}</span>
                 </div>
                 <div className="flex justify-between font-black text-emerald-800 pt-1.5 border-t border-emerald-200 text-sm">
                   <span>Bersih Dibayarkan:</span>
-                  <span className="tabular-nums">
-                    {rupiah(modalDetail.netto || modalDetail.total - (modalDetail.pajak_pph || 0))}
-                  </span>
+                  <span className="tabular-nums">{rupiah(modalDetail.netto)}</span>
                 </div>
               </div>
             </div>
@@ -821,7 +706,8 @@ export default function DaftarFotokopi({ operator }) {
               <button
                 type="button"
                 onClick={konfirmasiBatal}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                disabled={bekerja}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50"
               >
                 Ya, Batalkan
               </button>
@@ -858,11 +744,11 @@ export default function DaftarFotokopi({ operator }) {
               </button>
               <button
                 type="button"
-                disabled={menghapus}
+                disabled={bekerja}
                 onClick={konfirmasiHapus}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer disabled:opacity-50"
               >
-                {menghapus && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                {bekerja && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 <span>Ya, Hapus</span>
               </button>
             </div>

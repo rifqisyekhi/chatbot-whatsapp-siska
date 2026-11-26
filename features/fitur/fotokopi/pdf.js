@@ -52,49 +52,8 @@ function tanggalPendek(iso) {
   return `${parseInt(m[3], 10)} ${bln} ${m[1]}`;
 }
 
-const SATUAN = [
-  "", "satu", "dua", "tiga", "empat", "lima",
-  "enam", "tujuh", "delapan", "sembilan", "sepuluh", "sebelas",
-];
-
-function terbilangDasar(n) {
-  if (n < 12) return SATUAN[n];
-  if (n < 20) return `${terbilangDasar(n - 10)} belas`;
-  if (n < 100) {
-    const sisa = n % 10;
-    return `${terbilangDasar(Math.floor(n / 10))} puluh${sisa ? " " + terbilangDasar(sisa) : ""}`;
-  }
-  if (n < 200) return `seratus${n > 100 ? " " + terbilangDasar(n - 100) : ""}`;
-  if (n < 1000) {
-    const sisa = n % 100;
-    return `${terbilangDasar(Math.floor(n / 10))} ratus${sisa ? " " + terbilangDasar(sisa) : ""}`;
-  }
-  if (n < 2000) return `seribu${n > 1000 ? " " + terbilangDasar(n - 1000) : ""}`;
-
-  const SKALA = [
-    [1e12, "triliun"],
-    [1e9, "miliar"],
-    [1e6, "juta"],
-    [1e3, "ribu"],
-  ];
-
-  for (const [nilai, nama] of SKALA) {
-    if (n >= nilai) {
-      const depan = Math.floor(n / nilai);
-      const sisa = n % nilai;
-      return `${terbilangDasar(depan)} ${nama}${sisa ? " " + terbilangDasar(sisa) : ""}`;
-    }
-  }
-
-  return "";
-}
-
-function terbilangRupiah(nom) {
-  const n = Math.floor(Number(nom) || 0);
-  if (n <= 0) return "Nol rupiah";
-  const teks = `${terbilangDasar(n)} rupiah`.replace(/\s+/g, " ").trim();
-  return teks.charAt(0).toUpperCase() + teks.slice(1);
-}
+// Terbilang bersama dengan SPBY servis kendaraan (sudah teruji).
+const { terbilangRupiah } = require("../../spbyServisPdf");
 
 function bingkai(doc) {
   doc.lineWidth(0.8).rect(24, 24, doc.page.width - 48, doc.page.height - 48).stroke();
@@ -120,9 +79,9 @@ function uraikanAkunDipa(akunRaw) {
   const kodeMatch = str.match(/52\d{4}/);
   const kodeAkun = kodeMatch ? kodeMatch[0] : str.split(".").pop() || "521111";
 
-  const makMatch = str.match(/2158\.[A-Za-z0-9.]+/);
-  let makKegiatan = makMatch ? makMatch[0].replace(/\.52\d{4}$/, "") : "2158.EBA.994";
-  if (!makKegiatan) makKegiatan = "2158.EBA.994";
+  // Kegiatan.Output.Komponen saja, mis. "2158.EBA.994" (seperti contoh SPBY Tata Usaha).
+  const makMatch = str.match(/\d{4}\.[A-Z]{3}\.\d{3}/);
+  const makKegiatan = makMatch ? makMatch[0] : "2158.EBA.994";
 
   return { makKegiatan, kodeAkun, strUtuh: str };
 }
@@ -130,7 +89,7 @@ function uraikanAkunDipa(akunRaw) {
 // =========================================================
 // HALAMAN 1: SURAT PERINTAH BAYAR (SPBY FOTOKOPI)
 // =========================================================
-function halamanSpbyFotokopi(doc, data) {
+function halamanSpbyFotokopi(doc, data, pejabat) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 32, bottom: 32, left: 32, right: 32 } });
 
   const isian = data.isian || {};
@@ -141,14 +100,9 @@ function halamanSpbyFotokopi(doc, data) {
   const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Fotokopi & Percetakan";
 
-  const ppk = {
-    nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk?.nip || isian.ppk_nip || "",
-  };
-  const bendahara = {
-    nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-    nip: isian.bendahara?.nip || isian.bendahara_nip || "",
-  };
+  // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
+  const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
+  const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
   const { makKegiatan, kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
   const nomorSpbyVal = isian.nomor_spby || data.nomor_spby || "";
@@ -264,13 +218,13 @@ function halamanSpbyFotokopi(doc, data) {
 
   ySekarang += 58;
   doc.font("Arial-Tebal").fontSize(9.5);
-  doc.text(bendahara.nama || "Siti Rahmawati, S.E.", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
-  doc.text(ppk.nama || "Drs. Hendra Wijaya, M.M.", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
+  doc.text(bendahara.nama, xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
+  doc.text(ppk.nama, xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
 
   ySekarang += 12;
   doc.font("Arial").fontSize(9);
-  doc.text(bendahara.nip ? `NIP. ${bendahara.nip}` : "NIP. 198304152006041002", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
-  doc.text(ppk.nip ? `NIP. ${ppk.nip}` : "NIP. 197508121998032001", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
+  doc.text(bendahara.nip ? `NIP. ${bendahara.nip}` : "NIP.", xKiri + 8, ySekarang, { width: lebarKolomTtd - 16, align: "center" });
+  doc.text(ppk.nip ? `NIP. ${ppk.nip}` : "NIP.", xKiri + lebarKolomTtd, ySekarang, { width: lebarKolomTtd - 8, align: "center" });
 
   doc.lineWidth(1).rect(xKiri, yAtas, lebar, tinggiSpby).stroke();
 }
@@ -278,7 +232,7 @@ function halamanSpbyFotokopi(doc, data) {
 // =========================================================
 // HALAMAN 2: KWITANSI FOTOKOPI
 // =========================================================
-function halamanKwitansiFotokopi(doc, data) {
+function halamanKwitansiFotokopi(doc, data, pejabat) {
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 45, right: 45 } });
   bingkai(doc);
   const x = doc.page.margins.left;
@@ -293,14 +247,9 @@ function halamanKwitansiFotokopi(doc, data) {
   const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Percetakan / Fotokopi";
 
-  const ppk = {
-    nama: isian.ppk?.nama || isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk?.nip || isian.ppk_nip || "",
-  };
-  const bendahara = {
-    nama: isian.bendahara?.nama || isian.bendahara_nama || "Siti Rahmawati, S.E.",
-    nip: isian.bendahara?.nip || isian.bendahara_nip || "",
-  };
+  // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
+  const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
+  const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
   const { kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
 
@@ -387,8 +336,7 @@ function halamanKwitansiFotokopi(doc, data) {
   doc.text("Pejabat Pembuat Komitmen", xCol1, y + 13, { width: colW, align: "center" });
   doc.text("Bendahara Pengeluaran", xCol2, y + 13, { width: colW, align: "center" });
 
-  const ttdBawahTanggal = isian.ttd_penerima_bawah_tanggal || "Penerima / Pembuat Daftar";
-  doc.text(ttdBawahTanggal, xCol3, y + 13, { width: colW, align: "center" });
+  doc.text("Yang Menerima,", xCol3, y + 13, { width: colW, align: "center" });
 
   doc.text("Biro Keuangan Kemnaker", xCol1, y + 26, { width: colW, align: "center" });
   doc.text("Biro Keuangan Kemnaker", xCol2, y + 26, { width: colW, align: "center" });
@@ -420,9 +368,9 @@ function halamanKwitansiFotokopi(doc, data) {
 // =========================================================
 // HALAMAN 3: RINCIAN BIAYA PENGGANDAAN & PENJILIDAN (LAMPIRAN)
 // =========================================================
-function halamanRincianFotokopi(doc, data) {
+function halamanRincianFotokopi(doc, data, hitungan, pejabat) {
   const isian = data.isian || {};
-  const items = Array.isArray(isian.items) ? isian.items : [];
+  const items = hitungan.items;
   if (!items.length) return;
 
   doc.addPage({ size: "A4", layout: "portrait", margins: { top: 40, bottom: 40, left: 40, right: 40 } });
@@ -436,10 +384,7 @@ function halamanRincianFotokopi(doc, data) {
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Percetakan";
   const nomorSpbyVal = isian.nomor_spby || data.nomor_spby || "-";
 
-  const ppk = isian.ppk || {
-    nama: isian.ppk_nama || "Drs. Hendra Wijaya, M.M.",
-    nip: isian.ppk_nip || "",
-  };
+  const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
 
   doc.font(TEBAL).fontSize(13).text("RINCIAN BIAYA FOTOKOPI & PENJILIDAN", x, 34, { width: w, align: "center" });
   let y = doc.y + 14;
@@ -465,7 +410,7 @@ function halamanRincianFotokopi(doc, data) {
 
   // Tabel Rincian Pekerjaan
   const colTable = [30, 205, 50, 55, 85, 90];
-  const headerLabels = ["No", "Jenis Pekerjaan / Spesifikasi", "Vol", "Satuan", "Harga Satuan (Rp)", "Jumlah Harga (Rp)"];
+  const headerLabels = ["No", "Jenis Pekerjaan / Spesifikasi", "Vol", "Satuan", "Harga Satuan", "Jumlah Harga"];
 
   doc.font(TEBAL).fontSize(8.5);
   doc.rect(x, y, w, 20).fillAndStroke("#E5E9EE", "#9CA3AF");
@@ -482,9 +427,9 @@ function halamanRincianFotokopi(doc, data) {
   // Baris Item Pekerjaan
   doc.font(ISI).fontSize(9);
   items.forEach((it, idx) => {
-    const vol = Number(it.volume || it.porsi) || 0;
-    const hrg = Number(it.hargaSatuan || it.harga_satuan) || 0;
-    const sub = Number(it.subtotal || it.jumlah_harga) || vol * hrg;
+    const vol = it.volume;
+    const hrg = it.hargaSatuan;
+    const sub = it.subtotal;
     const namaMenu = it.uraianMenu || it.namaItem || it.uraian || it.jenis || "-";
 
     doc.rect(x, y, w, 18).stroke("#D1D5DB");
@@ -505,9 +450,7 @@ function halamanRincianFotokopi(doc, data) {
     y += 18;
   });
 
-  const totalBiaya = Number(data.total || isian.total) || 0;
-  const pph = Number(data.pajak_pph ?? isian.pajak_pph ?? isian.pajak_pph23) || 0;
-  const netto = Number(data.netto || isian.netto) || totalBiaya - pph;
+  const { total: totalBiaya, pph, netto } = hitungan;
 
   // Total Bruto
   doc.font(TEBAL);
@@ -526,7 +469,7 @@ function halamanRincianFotokopi(doc, data) {
   // Potongan Pajak
   doc.rect(x, y, w, 18).fillAndStroke("#FFFFFF", "#D1D5DB");
   doc.fillColor("#000000");
-  doc.text("POTONGAN PAJAK (PPh)", x + 10, y + 4, {
+  doc.text(`POTONGAN PAJAK (PPh ${String(hitungan.persenPph).replace(".", ",")}%)`, x + 10, y + 4, {
     width: colTable[0] + colTable[1] + colTable[2] + colTable[3] - 20,
     align: "right",
   });
@@ -569,9 +512,12 @@ function halamanRincianFotokopi(doc, data) {
 // =========================================================
 // EKSPORTIR UTAMA DOKUMEN PDF FOTOKOPI
 // =========================================================
-function susunPdfFotokopi({ data, streamRes }) {
+// `hitungan` dari hitungFotokopi() (hitung.js) — sumber angka yang sama
+// dengan kolom ringkasan di database. Semua halaman digambar dulu, baru
+// dialirkan ke respons, supaya galat saat menyusun masih bisa dibalas JSON.
+function susunPdfFotokopi({ data, hitungan, pejabat, streamRes }) {
   const isian = data.isian || {};
-  const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Fotokopi";
+  const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || "Fotokopi";
 
   const doc = new PDFDocument({
     autoFirstPage: false,
@@ -580,19 +526,14 @@ function susunPdfFotokopi({ data, streamRes }) {
       Author: "SisKA Biro Keuangan dan BMN Kemnaker",
     },
   });
-
   pasangFontSemua(doc);
+
+  const dataCetak = { ...data, total: hitungan.total };
+  halamanSpbyFotokopi(doc, dataCetak, pejabat);
+  halamanKwitansiFotokopi(doc, dataCetak, pejabat);
+  halamanRincianFotokopi(doc, dataCetak, hitungan, pejabat);
+
   doc.pipe(streamRes);
-
-  // 1. Halaman 1: SURAT PERINTAH BAYAR (SPBY Fotokopi)
-  halamanSpbyFotokopi(doc, data);
-
-  // 2. Halaman 2: KWITANSI (Format 1:1 Kemnaker)
-  halamanKwitansiFotokopi(doc, data);
-
-  // 3. Halaman 3: RINCIAN BIAYA PENGGANDAAN (Lampiran)
-  halamanRincianFotokopi(doc, data);
-
   doc.end();
   return doc;
 }
