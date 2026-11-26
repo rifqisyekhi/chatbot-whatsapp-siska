@@ -44,7 +44,9 @@ const SBM_KONSUMSI = {
 
 const DAFTAR_BIDANG = ["TU", "AKLAP", "PTUK", "BMN", "PA"];
 
+// 521119 sesuai contoh SPBY Konsumsi dari Tata Usaha.
 const DAFTAR_AKUN = [
+  "026.01.WA.2158.EBA.994.002.A.521119 — Belanja Barang Operasional Lainnya (Konsumsi Rapat)",
   "026.01.WA.2158.EBA.994.002.A.521211 — Belanja Bahan (Konsumsi Rapat Biasa)",
   "026.01.WA.2158.EBA.994.002.A.521219 — Belanja Bahan Lainnya",
   "026.01.WA.2158.EBA.994.002.A.524111 — Belanja Perjalanan Dinas Paket Meeting",

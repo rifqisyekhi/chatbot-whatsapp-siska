@@ -55,6 +55,19 @@ function tanggalPendek(iso) {
 // Terbilang bersama dengan SPBY servis kendaraan (sudah teruji).
 const { terbilangRupiah } = require("../../spbyServisPdf");
 
+// Nama penanda tangan selalu satu baris: huruf dikecilkan bila terlalu
+// panjang (mis. gelar lengkap PPK) supaya tidak menabrak baris NIP.
+function namaSebaris(doc, teks, x, y, w, ukuran = 9.5) {
+  let u = ukuran;
+  doc.fontSize(u);
+  while (u > 6.5 && doc.widthOfString(teks) > w - 4) {
+    u -= 0.5;
+    doc.fontSize(u);
+  }
+  doc.text(teks, x, y, { width: w, align: "center", lineBreak: false });
+  doc.fontSize(ukuran);
+}
+
 function bingkai(doc) {
   doc.lineWidth(0.8).rect(24, 24, doc.page.width - 48, doc.page.height - 48).stroke();
 }
@@ -68,16 +81,22 @@ function lebarIsi(doc) {
   return doc.page.width - doc.page.margins.left - doc.page.margins.right;
 }
 
-function susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat) {
-  const tglTeks = tanggalPanjang(tglKegiatan);
-  const lokasiTeks = tempat ? ` di ${tempat}` : "";
-  return `Biaya belanja penggandaan, fotokopi dan penjilidan dokumen dalam rangka ${namaKegiatan}${lokasiTeks} pada tanggal ${tglTeks}, sesuai dengan bukti terlampir`;
+// Kalimat baku contoh Tata Usaha: "Biaya hard cover dan jilid laporan
+// keuangan, Biro keuangan dan BMN Setjen Kemnaker, sesuai bukti/faktur
+// terlampir". Uraian yang sudah diawali "Biaya" dipakai apa adanya.
+function susunUraianPembayaran(namaKegiatan) {
+  let teks = String(namaKegiatan || "").trim().replace(/[.,;\s]+$/, "");
+  if (!/^biaya\b/i.test(teks)) {
+    const isi = /^(dalam rangka|untuk)\b/i.test(teks) ? teks : `untuk ${teks}`;
+    teks = `Biaya fotokopi dan penjilidan ${isi}, Biro Keuangan dan BMN Setjen Kemnaker`;
+  }
+  return /sesuai (dengan )?(bukti|faktur)/i.test(teks) ? teks : `${teks}, sesuai bukti/faktur terlampir`;
 }
 
 function uraikanAkunDipa(akunRaw) {
-  const str = String(akunRaw || "026.01.WA.2158.EBA.994.002.A.521111").split(" — ")[0].trim();
+  const str = String(akunRaw || "026.01.WA.2158.EBA.994.002.A.521119").split(" — ")[0].trim();
   const kodeMatch = str.match(/52\d{4}/);
-  const kodeAkun = kodeMatch ? kodeMatch[0] : str.split(".").pop() || "521111";
+  const kodeAkun = kodeMatch ? kodeMatch[0] : str.split(".").pop() || "521119";
 
   // Kegiatan.Output.Komponen saja, mis. "2158.EBA.994" (seperti contoh SPBY Tata Usaha).
   const makMatch = str.match(/\d{4}\.[A-Z]{3}\.\d{3}/);
@@ -97,7 +116,6 @@ function halamanSpbyFotokopi(doc, data, pejabat) {
   const tglSpby = isian.tanggal_spby || tglKegiatan;
   const totalBiaya = Number(data.total || isian.total) || 0;
   const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Penggandaan Dokumen";
-  const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Fotokopi & Percetakan";
 
   // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
@@ -168,7 +186,7 @@ function halamanSpbyFotokopi(doc, data, pejabat) {
   ySekarang = doc.y + 8;
   doc.font("Arial").text("Untuk pembayaran", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  const uraianSpby = susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat);
+  const uraianSpby = susunUraianPembayaran(namaKegiatan);
   doc.text(uraianSpby, xKonten, ySekarang, { width: lebarKonten, align: "justify" });
 
   ySekarang = Math.max(doc.y + 10, ySekarang + 36);
@@ -176,12 +194,10 @@ function halamanSpbyFotokopi(doc, data, pejabat) {
   ySekarang += 14;
   doc.text("1. Kuitansi/bukti pembelian", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  doc.text(penyedia, xKonten, ySekarang, { width: lebarKonten });
 
   ySekarang += 14;
   doc.text("2. Nota/bukti penerimaan barang/jasa/", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  doc.text("Bukti Faktur / Nota Pembelian Terlampir", xKonten, ySekarang, { width: lebarKonten });
   ySekarang += 12;
   doc.text("    bukti lainnya", xKiri + 8, ySekarang);
 
@@ -244,14 +260,12 @@ function halamanKwitansiFotokopi(doc, data, pejabat) {
   const thn = tglKegiatan.slice(0, 4) || "2026";
   const totalBiaya = Number(data.total || isian.total) || 0;
   const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Penggandaan Dokumen";
-  const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Biro Keuangan dan BMN, Gedung Kemnaker";
-  const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Percetakan / Fotokopi";
 
   // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
   const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
   const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
-  const { kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
+  const { strUtuh: akunLengkap } = uraikanAkunDipa(isian.akun || data.akun);
 
   // 1. JUDUL KWITANSI
   doc.font(JUDUL_KWITANSI).fontSize(20).text("KWITANSI", x, 32, { width: w, align: "center", underline: true });
@@ -278,7 +292,7 @@ function halamanKwitansiFotokopi(doc, data, pejabat) {
 
   doc.text("Akun", x, y, { lineBreak: false });
   doc.text(":", xTitikMeta, y, { lineBreak: false });
-  doc.text(kodeAkun || "", xIsiMeta, y);
+  doc.text(akunLengkap || "", xIsiMeta, y);
   y = doc.y + 6;
 
   garisGanda(doc, x, y, w);
@@ -313,7 +327,7 @@ function halamanKwitansiFotokopi(doc, data, pejabat) {
   // Untuk Pembayaran : [ kotak besar ]
   doc.font(ISI).fontSize(10).text("Untuk Pembayaran", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  const uraianKwitansi = susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat);
+  const uraianKwitansi = susunUraianPembayaran(namaKegiatan);
   const tKotakBayar = 72;
   doc.rect(xIsi, y, wIsi, tKotakBayar).stroke("#000000");
   doc.font(ISI).fontSize(9.5).text(uraianKwitansi, xIsi + 6, y + 6, { width: wIsi - 12, align: "justify" });
@@ -336,7 +350,6 @@ function halamanKwitansiFotokopi(doc, data, pejabat) {
   doc.text("Pejabat Pembuat Komitmen", xCol1, y + 13, { width: colW, align: "center" });
   doc.text("Bendahara Pengeluaran", xCol2, y + 13, { width: colW, align: "center" });
 
-  doc.text("Yang Menerima,", xCol3, y + 13, { width: colW, align: "center" });
 
   doc.text("Biro Keuangan Kemnaker", xCol1, y + 26, { width: colW, align: "center" });
   doc.text("Biro Keuangan Kemnaker", xCol2, y + 26, { width: colW, align: "center" });
@@ -344,12 +357,13 @@ function halamanKwitansiFotokopi(doc, data, pejabat) {
   const yLineTtd = y + 92;
 
   doc.font(ISI).fontSize(9.5);
-  if (ppk.nama) doc.text(ppk.nama, xCol1, yLineTtd - 14, { width: colW, align: "center" });
-  if (bendahara.nama) doc.text(bendahara.nama, xCol2, yLineTtd - 14, { width: colW, align: "center" });
+  if (ppk.nama) namaSebaris(doc, ppk.nama, xCol1, yLineTtd - 14, colW);
+  if (bendahara.nama) namaSebaris(doc, bendahara.nama, xCol2, yLineTtd - 14, colW);
 
-  const ttdPenerimaNama = isian.ttd_penerima_nama || penyedia || "";
+  // Kolom ke-3: pegawai yang membayarkan (contoh Tata Usaha), bukan rekanan.
+  const ttdPenerimaNama = isian.ttd_penerima_nama || "";
   if (ttdPenerimaNama && String(ttdPenerimaNama).trim()) {
-    doc.text(String(ttdPenerimaNama).trim(), xCol3, yLineTtd - 14, { width: colW, align: "center" });
+    namaSebaris(doc, String(ttdPenerimaNama).trim(), xCol3, yLineTtd - 14, colW);
   }
 
   const padLine = 16;

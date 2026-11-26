@@ -38,7 +38,9 @@ const DAFTAR_BIDANG = [
   { kode: "PA", label: "PA — Bidang Perencanaan & Anggaran" },
 ];
 
+// 521119 sesuai contoh SPBY penjilidan/fotokopi dari Tata Usaha.
 const DAFTAR_AKUN = [
+  "026.01.WA.2158.EBA.994.002.A.521119 — Belanja Barang Operasional Lainnya",
   "026.01.WA.2158.EBA.994.002.A.521111 — Belanja Keperluan Perkantoran (Fotokopi & Penggandaan)",
   "026.01.WA.2158.EBA.994.002.A.521211 — Belanja Bahan (Penggandaan Rapat & Bahan Sidang)",
   "026.01.WA.2158.EBA.994.002.A.521219 — Belanja Barang Non Operasional Lainnya",
@@ -628,16 +630,16 @@ export default function FormFotokopi({ operator }) {
                     </div>
                   </div>
 
-                  {/* Kolom Tanda Tangan Kwitansi Penerima / Vendor */}
+                  {/* Kolom ke-3 kwitansi: pegawai yang membayarkan (contoh Tata Usaha) */}
                   <div className="border-t border-mist/80 pt-3 space-y-2">
                     <label className="block text-xs font-bold text-slate-700">
-                      Kolom Tanda Tangan Kwitansi Rekanan / Penerima
+                      Pegawai yang membayarkan (tanda tangan kolom ke-3 kwitansi)
                     </label>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                       <div>
                         <input
                           className={kelasInput}
-                          placeholder="Nama (kosong = nama penyedia)"
+                          placeholder="Nama pegawai"
                           value={form.ttd_penerima_nama}
                           onChange={(e) => setField("ttd_penerima_nama", e.target.value)}
                         />

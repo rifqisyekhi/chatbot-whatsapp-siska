@@ -104,6 +104,19 @@ function terbilangRupiah(angka) {
 }
 
 // Bingkai sekeliling halaman
+// Nama penanda tangan selalu satu baris: huruf dikecilkan bila terlalu
+// panjang (mis. gelar lengkap PPK) supaya tidak menabrak baris NIP.
+function namaSebaris(doc, teks, x, y, w, ukuran = 9.5) {
+  let u = ukuran;
+  doc.fontSize(u);
+  while (u > 6.5 && doc.widthOfString(teks) > w - 4) {
+    u -= 0.5;
+    doc.fontSize(u);
+  }
+  doc.text(teks, x, y, { width: w, align: "center", lineBreak: false });
+  doc.fontSize(ukuran);
+}
+
 function bingkai(doc) {
   doc.lineWidth(0.8).rect(24, 24, doc.page.width - 48, doc.page.height - 48).stroke();
 }
@@ -118,22 +131,26 @@ function lebarIsi(doc) {
 }
 
 // Uraian pembayaran khusus kegiatan konsumsi (mengikuti gaya formulasi PERDIN)
-function susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat) {
-  const tglTeks = tanggalPanjang(tglKegiatan);
-  const lokasiTeks = tempat ? ` di ${tempat}` : "";
-  return `Biaya belanja pengadaan konsumsi rapat dalam rangka ${namaKegiatan}${lokasiTeks} pada tanggal ${tglTeks}, sesuai dengan bukti terlampir`;
+// Kalimat baku contoh SPBY Konsumsi Tata Usaha: "Biaya pembelian konsumsi
+// rapat (nasi box) dalam rangka ... pada tanggal 22 September 2026, sesuai
+// bukti/faktur terlampir". Makanan = nasi box, Kudapan = snack box.
+function susunUraianPembayaran(namaKegiatan, tglKegiatan, items = []) {
+  const ada = (j) => items.some((it) => it.jenis === j);
+  const kotak = [ada("Makanan") || !items.length ? "nasi box" : "", ada("Kudapan") ? "snack box" : ""].filter(Boolean).join(" dan ");
+  const rangka = String(namaKegiatan || "").replace(/^dalam rangka\s*/i, "");
+  return `Biaya pembelian konsumsi rapat (${kotak}) dalam rangka ${rangka} pada tanggal ${tanggalPanjang(tglKegiatan)}, sesuai bukti/faktur terlampir`;
 }
 
 // Helper ekstraksi MAK dan Kode Akun dari format DIPA
 function uraikanAkunDipa(akunRaw) {
-  const str = String(akunRaw || "026.01.WA.2158.EBA.994.002.A.521211").split(" — ")[0].trim();
+  const str = String(akunRaw || "026.01.WA.2158.EBA.994.002.A.521119").split(" — ")[0].trim();
   const kodeMatch = str.match(/52\d{4}/);
-  const kodeAkun = kodeMatch ? kodeMatch[0] : str.split(".").pop() || "521211";
+  const kodeAkun = kodeMatch ? kodeMatch[0] : str.split(".").pop() || "521119";
 
   // Ambil pola Kegiatan.Output.MAK (misal: 2158.EBA.994 atau 2158.EBA.994.002.A)
-  const makMatch = str.match(/2158\.[A-Za-z0-9.]+/);
-  let makKegiatan = makMatch ? makMatch[0].replace(/\.52\d{4}$/, "") : "2158.EBA.994";
-  if (!makKegiatan) makKegiatan = "2158.EBA.994";
+  // Kegiatan.Output.Komponen saja, mis. "2158.EBA.994" (seperti contoh SPBY Tata Usaha).
+  const makMatch = str.match(/\d{4}\.[A-Z]{3}\.\d{3}/);
+  const makKegiatan = makMatch ? makMatch[0] : "2158.EBA.994";
 
   return { makKegiatan, kodeAkun, strUtuh: str };
 }
@@ -154,14 +171,12 @@ function halamanKwitansiKonsumsi(doc, data, pejabat) {
   const thn = tglKegiatan.slice(0, 4) || "2026";
   const totalBiaya = Number(data.total || isian.total) || 0;
   const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Rapat Internal";
-  const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Ruang Rapat Rokeu, Gedung Kemnaker";
-  const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Katering";
 
   // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
   const ppk = { nama: pejabat?.ppk?.nama || "", nip: pejabat?.ppk?.nip || "" };
   const bendahara = { nama: pejabat?.bendahara?.nama || "", nip: pejabat?.bendahara?.nip || "" };
 
-  const { kodeAkun } = uraikanAkunDipa(isian.akun || data.akun);
+  const { strUtuh: akunLengkap } = uraikanAkunDipa(isian.akun || data.akun);
 
   // 1. JUDUL KWITANSI (Times New Roman Bold Italic Underline)
   doc.font(JUDUL_KWITANSI).fontSize(20).text("KWITANSI", x, 32, { width: w, align: "center", underline: true });
@@ -188,7 +203,7 @@ function halamanKwitansiKonsumsi(doc, data, pejabat) {
 
   doc.text("Akun", x, y, { lineBreak: false });
   doc.text(":", xTitikMeta, y, { lineBreak: false });
-  doc.text(kodeAkun || "", xIsiMeta, y);
+  doc.text(akunLengkap || "", xIsiMeta, y);
   y = doc.y + 6;
 
   // Garis ganda pembatas atas
@@ -227,7 +242,7 @@ function halamanKwitansiKonsumsi(doc, data, pejabat) {
   // Untuk Pembayaran : [ kotak besar ]
   doc.font(ISI).fontSize(10).text("Untuk Pembayaran", x, y, { lineBreak: false });
   doc.text(":", xTitik, y, { lineBreak: false });
-  const uraianKwitansi = susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat);
+  const uraianKwitansi = susunUraianPembayaran(namaKegiatan, tglKegiatan, isian.items || []);
   const tKotakBayar = 72;
   doc.rect(xIsi, y, wIsi, tKotakBayar).stroke("#000000");
   doc.font(ISI).fontSize(9.5).text(uraianKwitansi, xIsi + 6, y + 6, { width: wIsi - 12, align: "justify" });
@@ -264,12 +279,12 @@ function halamanKwitansiKonsumsi(doc, data, pejabat) {
 
   // Nama pejabat di atas garis (jika tersedia)
   doc.font(ISI).fontSize(9.5);
-  if (ppk.nama) doc.text(ppk.nama, xCol1, yLineTtd - 14, { width: colW, align: "center" });
-  if (bendahara.nama) doc.text(bendahara.nama, xCol2, yLineTtd - 14, { width: colW, align: "center" });
+  if (ppk.nama) namaSebaris(doc, ppk.nama, xCol1, yLineTtd - 14, colW);
+  if (bendahara.nama) namaSebaris(doc, bendahara.nama, xCol2, yLineTtd - 14, colW);
   // Nama di kolom ketiga di atas garis (kiri di form)
   const ttdPenerimaNama = isian.ttd_penerima_nama || data.ttd_penerima_nama || "";
   if (ttdPenerimaNama && String(ttdPenerimaNama).trim()) {
-    doc.text(String(ttdPenerimaNama).trim(), xCol3, yLineTtd - 14, { width: colW, align: "center" });
+    namaSebaris(doc, String(ttdPenerimaNama).trim(), xCol3, yLineTtd - 14, colW);
   }
 
   // Garis horizontal tanda tangan persis seperti gambar acuan
@@ -299,7 +314,6 @@ function halamanSpbyKonsumsi(doc, data, pejabat) {
   const tglSpby = isian.tanggal_spby || tglKegiatan;
   const totalBiaya = Number(data.total || isian.total) || 0;
   const namaKegiatan = data.nama_kegiatan || isian.dalam_rangka || isian.nama_kegiatan || "Rapat Internal";
-  const tempat = isian.tempat_kegiatan || data.lokasi_detail || "Ruang Rapat Rokeu, Gedung Kemnaker";
   const penyedia = data.penyedia || isian.penyedia || isian.nama_penerima || "Rekanan Katering";
 
   // Penandatangan dari .env (alat.pejabat), bukan dari isian klien.
@@ -372,7 +386,7 @@ function halamanSpbyKonsumsi(doc, data, pejabat) {
   ySekarang = doc.y + 8;
   doc.font("Arial").text("Untuk pembayaran", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  const uraianSpby = susunUraianPembayaran(namaKegiatan, tglKegiatan, tempat);
+  const uraianSpby = susunUraianPembayaran(namaKegiatan, tglKegiatan, isian.items || []);
   doc.text(uraianSpby, xKonten, ySekarang, { width: lebarKonten, align: "justify" });
 
   // Atas Dasar
@@ -381,12 +395,10 @@ function halamanSpbyKonsumsi(doc, data, pejabat) {
   ySekarang += 14;
   doc.text("1. Kuitansi/bukti pembelian", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  doc.text(penyedia, xKonten, ySekarang, { width: lebarKonten });
 
   ySekarang += 14;
   doc.text("2. Nota/bukti penerimaan barang/jasa/", xKiri + 8, ySekarang);
   doc.text(":", xTitikDua, ySekarang);
-  doc.text("Bukti Pembelian / Faktur Terlampir", xKonten, ySekarang, { width: lebarKonten });
   ySekarang += 12;
   doc.text("    bukti lainnya", xKiri + 8, ySekarang);
 
