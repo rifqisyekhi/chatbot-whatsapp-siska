@@ -11,7 +11,8 @@
 // Hanya pegawai yang terdaftar sebagai operator di bawah ini yang
 // bisa masuk. Operator hanya melihat dan mengubah perjalanan dinas
 // bidangnya sendiri. Admin (KWITANSI_ADMIN di .env: daftar NIP atau
-// nomor WA dipisah koma) melihat semua bidang.
+// nomor WA dipisah koma) melihat semua bidang. Pegawai berkategori
+// "Developer" di Master Data diperlakukan sebagai admin (akun pengujian).
 //
 // Token tanpa status: payload JSON + HMAC-SHA256, berlaku 12 jam.
 // Kunci HMAC dari KWITANSI_RAHASIA; kalau kosong diturunkan dari
@@ -94,6 +95,11 @@ function peranPegawai(p) {
   const cocok = (daftar) => daftar.some((a) => a.replace(/\s+/g, "") === nip || nomorBaku(a) === nomorBaku(p.no_wa));
   if (cocok(daftarAdmin())) return { peran: "admin", bidang: null };
   if (cocok(daftarBendahara())) return { peran: "bendahara", bidang: null };
+  // Akun pengujian: pegawai berkategori "Developer" di Master Data mendapat
+  // akses penuh seperti admin (semua bidang, bisa mengubah data).
+  if (String(p.kategori_pegawai || "").trim().toLowerCase() === "developer") {
+    return { peran: "admin", bidang: null, developer: true };
+  }
   const op = OPERATOR.find((o) => rapat(o.nama) === rapat(p.nama));
   return op ? { peran: "operator", bidang: op.bidang } : null;
 }

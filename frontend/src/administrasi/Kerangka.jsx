@@ -19,7 +19,7 @@ const MENU_DASBOR = { path: DASAR, label: "Dashboard", Ikon: LayoutDashboard, ak
 
 
 const labelPeran = (op) =>
-  op.peran === "bendahara" ? "Bendahara" : op.peran === "admin" ? "Admin" : `Operator ${op.bidang || ""}`.trim();
+  op.peran === "bendahara" ? "Bendahara" : op.developer ? "Developer" : op.peran === "admin" ? "Admin" : `Operator ${op.bidang || ""}`.trim();
 
 const inisial = (nama) =>
   String(nama || "")

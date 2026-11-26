@@ -112,6 +112,8 @@ export default function AdminMasterDataTU({ modul = "pegawai" }) {
       ? { label: "NIP / NIK", digit: null, contoh: "Pilih kategori dulu" }
       : kategori === "ASN"
         ? { label: "NIP", digit: 18, contoh: "18 digit (PNS / PPPK)" }
+        : kategori === "Developer"
+        ? { label: "NIP / NIK", digit: null, contoh: "Bebas (akun pengujian)" }
         : { label: "NIK", digit: 16, contoh: "16 digit (Non ASN / Magang)" };
 
   const identitasForm = jenisIdentitas(formData.kategori_pegawai);
@@ -460,6 +462,7 @@ export default function AdminMasterDataTU({ modul = "pegawai" }) {
                       <option value="ASN">ASN</option>
                       <option value="Non ASN">Non ASN</option>
                       <option value="Magang">Magang</option>
+                      <option value="Developer">Developer</option>
                     </select>
                     <Filter className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
@@ -580,6 +583,10 @@ export default function AdminMasterDataTU({ modul = "pegawai" }) {
                               ) : item.kategori_pegawai === "Magang" ? (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
                                   Magang
+                                </span>
+                              ) : item.kategori_pegawai === "Developer" ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-violet-100 text-violet-800 border border-violet-200">
+                                  Developer
                                 </span>
                               ) : item.kategori_pegawai === "ASN" ? (
                                 <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-navy/10 text-navy border border-navy/15">
@@ -797,6 +804,7 @@ export default function AdminMasterDataTU({ modul = "pegawai" }) {
                         <option value="ASN">ASN (PNS / PPPK)</option>
                         <option value="Non ASN">Non ASN</option>
                         <option value="Magang">Magang</option>
+                        <option value="Developer">Developer (akun pengujian)</option>
                       </select>
                     </div>
 
