@@ -143,14 +143,16 @@ function bacaBiaya(teks) {
   return Number.isSafeInteger(angka) && angka > 0 ? angka : null;
 }
 
-// Kalimat baku "Untuk pembayaran" di SPBY. Hanya nama kendaraan
-// dan nomor polisi yang berubah.
+// Kalimat baku "Untuk pembayaran" di SPBY, mengikuti contoh Tata Usaha:
+// "Biaya pemeliharaan kendaraan dinas roda empat (4) dengan Nomor polisi
+// B 1509 SQP Biro Keuangan dan BMN, sesuai bukti/faktur terlampir".
 function susunUraian(flow) {
   const k = flow.kendaraan;
+  const roda = jenisKendaraan(k) === "Motor" ? "roda dua (2)" : "roda empat (4)";
 
   return (
-    `Biaya Pemeliharaan Kendaraan Dinas ${k.nama} No Polisi ${k.plat || "-"} ` +
-    "sesuai dengan Bukti/Faktur Terlampir"
+    `Biaya pemeliharaan kendaraan dinas ${roda} ${k.nama} dengan Nomor Polisi ${k.plat || "-"} ` +
+    "Biro Keuangan dan BMN, sesuai bukti/faktur terlampir"
   );
 }
 

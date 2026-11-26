@@ -17,6 +17,8 @@ ini tidak berlaku.
 |---|---|
 | `magang/konsumsi` | `frontend/src/administrasi/fitur/konsumsi/**`, `features/fitur/konsumsi/**`, `db/008-konsumsi.sql`, `db/konsumsi.js`, `public/**` (hasil build) |
 | `magang/langganan-aplikasi` | `frontend/src/administrasi/fitur/langganan-aplikasi/**`, `features/fitur/langganan-aplikasi/**`, `db/009-langganan-aplikasi.sql`, `db/langgananAplikasi.js`, `public/**` (hasil build) |
+| `magang/bbm-kepala-biro` | `frontend/src/administrasi/fitur/bbm-kepala-biro/**`, `features/fitur/bbm-kepala-biro/**`, `db/010-bbm-kepala-biro.sql`, `db/bbmKepalaBiro.js`, `public/**` (hasil build) |
+| `magang/fotocopy` | `frontend/src/administrasi/fitur/fotokopi/**`, `features/fitur/fotokopi/**`, `db/011-fotokopi.sql`, `db/fotokopi.js`, `public/**` (hasil build) |
 
 `public/**` hanya boleh berubah lewat `cd frontend && npm run build`, tidak
 pernah diedit tangan.
