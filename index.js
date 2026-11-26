@@ -21,6 +21,7 @@ const {
   calculateDuration,
 } = require("./features/pdf_generator");
 const absensiNonASN = require("./features/absensi");
+const { tanggalDariLamaCuti, ringkasTanggalCuti } = require("./features/tanggalCuti");
 const pengingatGajihub = require("./features/pengingatGajihub");
 const pengingatNonASN = require("./features/pengingatNonASN");
 const profilWA = require("./features/profilWA");
@@ -31,6 +32,7 @@ const buktiSerahTerima = require("./features/buktiSerahTerima");
 const servisKendaraan = require("./features/servisKendaraan");
 const { pasangRuteServis } = require("./features/ruteServisKendaraan");
 const { pasangRuteKwitansi } = require("./features/ruteKwitansi");
+const notulenRapat = require("./features/notulen");
 const {
   HELPDESK_GROUP_ID,
   NO_KETUA_SUB_TU,
@@ -2207,6 +2209,21 @@ async function ambilMediaAman(message, chatId, pesanGagal) {
 // Alur lapor service kendaraan (features/servisKendaraan.js).
 // `client` dibaca saat dipanggil, bukan saat dipasang, karena
 // baru dibuat jauh di bawah.
+// Notulen rapat: PDF-nya dibuat backend rapat, modul ini hanya meminta
+// lalu mengirimkannya. Alamat dan token di .env supaya pindah backend
+// tidak perlu menyentuh kode.
+notulenRapat.pasang({
+  kirim: (chatId, teks) => kirimDenganTyping(client, chatId, teks),
+  kirimDokumenB64: async (chatId, b64, nama, caption) => {
+    const media = new MessageMedia("application/pdf", b64, nama);
+    await client.sendMessage(chatId, media, { sendMediaAsDocument: true, caption });
+    logOut(chatId, `[PDF NOTULEN] ${nama}`);
+  },
+  cariPegawaiByWa,
+  baseUrl: process.env.NOTULEN_BACKEND_URL || "http://127.0.0.1:3003",
+  token: process.env.NOTULEN_API_TOKEN || "",
+});
+
 servisKendaraan.pasang({
   kirim: (chatId, teks) => kirimDenganTyping(client, chatId, teks),
   kirimDokumen: async (chatId, berkas, caption) => {
@@ -5469,22 +5486,56 @@ client.on("message", async (message) => {
       // pegawai mengetik "menu".
       const petugasRekap = await absensiNonASN.cekPetugas(hanyaAngka(chatId));
 
+      // Menu 9 dan 10 hanya muncul untuk sebagian pegawai, sedangkan
+      // routing memakai angka tetap. Notulen dipaku di 9 atau 10 akan
+      // bertabrakan; dipaku di 11 membuat menu kebanyakan orang melompat
+      // dari 8 ke 11. Jadi nomornya mengikuti menu bersyarat di atasnya.
+      const nomorMenuNotulen =
+        9 +
+        (absensiNonASN.bolehAbsenNonASN(pegawai) ? 1 : 0) +
+        (petugasRekap ? 1 : 0);
+
       const menu =
         `Halo *${pegawai.nama}*!\nAda yang bisa kami bantu hari ini?\n\nSilakan pilih menu (ketik *angka* pilihan):\n1. Pengajuan Lembur\n2. Pengajuan Cuti\n3. Chat Helpdesk\n4. Layanan Kendaraan\n5. Formulir Pengambilan Persediaan\n6. Peminjaman Data Arsip\n7. Laporan WFH / WFA\n8. Pengumpulan Laporan WFA/WFO` +
         (absensiNonASN.bolehAbsenNonASN(pegawai)
           ? `\n9. Absensi Non-ASN`
           : "") +
-        (petugasRekap ? `\n10. Rekap Absensi (Petugas)` : "");
+        (petugasRekap ? `\n10. Rekap Absensi (Petugas)` : "") +
+        `\n${nomorMenuNotulen}. Notulen Rapat`;
 
       await kirimDenganTyping(client, chatId, menu);
-      pengajuanBySender[chatId] = { step: "menu", pegawai };
+      // Nomornya ikut disimpan supaya routing mencocokkannya, bukan
+      // menebak dengan angka tetap yang berbeda-beda per pegawai.
+      pengajuanBySender[chatId] = {
+        step: "menu",
+        pegawai,
+        menuNotulen: String(nomorMenuNotulen),
+      };
       return;
     }
 
     // ==========================================
     // 8. ROUTING MENU UTAMA
     // ==========================================
+    // Alur notulen ditaruh sebelum routing menu supaya balasan angka
+    // saat memilih rapat tidak tertangkap penangan menu.
+    if (typeof flow.step === "string" && flow.step.startsWith(notulenRapat.AWALAN)) {
+      await notulenRapat.tangani({ chatId, flow, bodyLower });
+      if (!flow.step) delete pengajuanBySender[chatId];
+      return;
+    }
+
     if (flow.step === "menu") {
+      if (flow.menuNotulen && bodyLower === flow.menuNotulen) {
+        const alur = { step: null, pegawai: flow.pegawai };
+        pengajuanBySender[chatId] = alur;
+        await notulenRapat.mulai({ chatId, flow: alur, kataKunci: "" });
+        // Modul tidak membuka alur bila nomornya tak terdaftar atau
+        // daftarnya kosong; jangan tinggalkan flow kosong menggantung.
+        if (!alur.step) delete pengajuanBySender[chatId];
+        return;
+      }
+
       if (bodyLower === "1") {
         // Non-ASN yang masuk lewat menu 1 diarahkan ke alur yang sama
         // dengan menu 9. Kalau tidak, menu 1 jadi jalan belakang untuk
@@ -6343,10 +6394,29 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         return;
       }
 
+      // Rekap presensi membaca hari cuti dari teks ini (riwayat_cuti
+      // tidak punya kolom tanggal). Kalau tanggalnya tidak terbaca,
+      // hari cutinya akan tampil Alpha di web — jadi ditolak di sini.
+      const tanggalCuti = tanggalDariLamaCuti(lamaCuti);
+      if (!tanggalCuti.length) {
+        await kirimDenganTyping(
+          client,
+          chatId,
+          `Tanggal cuti belum terbaca. Mohon tuliskan *tanggal dan nama bulannya*.\n\n` +
+            `Contoh:\n` +
+            `• *2 hari (20 - 21 Oktober 2026)*\n` +
+            `• *30 Oktober - 2 November 2026*\n` +
+            `• *20, 21 dan 23 Oktober 2026*\n\n` +
+            `_Ketik *menu* untuk membatalkan._`,
+        );
+        return;
+      }
+
       pengajuanBySender[chatId] = {
         ...flow,
         step: "cuti-alamat",
         lamaCuti,
+        tanggalCuti,
       };
 
       await kirimDenganTyping(
@@ -6434,6 +6504,9 @@ Mohon laporkan ke admin agar nomor atasan diperiksa.`,
         `🌴 *Jenis Cuti:* ${flow.jenisCuti}\n` +
         `📝 *Alasan:* ${flow.alasan}\n` +
         `⏳ *Lamanya:* ${flow.lamaCuti}\n` +
+        (flow.tanggalCuti?.length
+          ? `📅 *Tanggal Terbaca:* ${ringkasTanggalCuti(flow.tanggalCuti)} (${flow.tanggalCuti.length} hari kalender)\n`
+          : "") +
         `🏠 *Alamat Selama Cuti:* ${flow.alamatCuti}\n` +
         `📞 *Kontak:* ${kontakCuti}\n` +
         `👔 *Atasan Langsung:* ${namaAtasan}\n` +

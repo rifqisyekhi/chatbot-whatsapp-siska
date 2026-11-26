@@ -4,7 +4,8 @@
 //
 // Menu 4 (Layanan Kendaraan) → 4. Lapor Service / Pemeliharaan
 //
-//   servis-pilih-kendaraan  pilih dari daftar kendaraan dinas
+//   servis-pilih-jenis      1. Mobil / 2. Motor
+//   servis-pilih-kendaraan  pilih dari daftar kendaraan jenis itu (0 = ganti jenis)
 //   servis-tanggal          tanggal service (DD-MM-YYYY / "hari ini")
 //   servis-bengkel          nama bengkel
 //   servis-biaya            total biaya sesuai nota
@@ -203,28 +204,28 @@ async function mulai(chatId, pegawai) {
     return;
   }
 
-  // Mobil dulu, lalu motor, masing-masing urut nama.
-  list.sort((a, b) =>
-    String(a.jenis).localeCompare(String(b.jenis)) || String(a.nama).localeCompare(String(b.nama)),
+  list.sort((a, b) => String(a.nama).localeCompare(String(b.nama)));
+
+  // Jenis dipilih dulu, seperti menu pinjam: daftar 25 kendaraan
+  // sekaligus terlalu panjang dibaca di WhatsApp.
+  await kirim(
+    chatId,
+    "*Lapor Service / Pemeliharaan Kendaraan* 🔧\n\n" +
+      "Jenis kendaraan apa yang di-service?\n1. Mobil 🚗\n2. Motor 🏍️\n\n" +
+      "_Ketik *batal* kapan saja untuk berhenti._",
   );
 
-  let teks =
-    "*Lapor Service / Pemeliharaan Kendaraan* 🔧\n\n" +
-    "Kendaraan mana yang di-service? Ketik *angka urutannya*:\n";
-  list.forEach((k, i) => {
-    teks += `\n${i + 1}. ${k.nama} (${k.plat || "-"})${k.jenis ? ` — ${k.jenis}` : ""}`;
-  });
-  teks += "\n\n_Ketik *batal* kapan saja untuk berhenti._";
-
-  await kirim(chatId, teks);
-
   setFlow(chatId, {
-    step: "servis-pilih-kendaraan",
+    step: "servis-pilih-jenis",
     pegawai,
-    daftar: list.map((k) => ({ id: k._id, nama: k.nama, plat: k.plat, jenis: k.jenis })),
+    semuaKendaraan: list.map((k) => ({ id: k._id, nama: k.nama, plat: k.plat, jenis: k.jenis })),
     fotoNota: [],
     fotoDokumentasi: [],
   });
+}
+
+function jenisKendaraan(k) {
+  return /motor/i.test(k?.jenis || "") ? "Motor" : "Mobil";
 }
 
 // =========================================================
@@ -513,14 +514,51 @@ async function tanganiLangkah({ message, chatId, bodyLower }) {
   }
 
   switch (flow.step) {
+    case "servis-pilih-jenis": {
+      const jenis = { 1: "Mobil", 2: "Motor", mobil: "Mobil", motor: "Motor" }[bodyLower];
+      if (!jenis) {
+        await kirim(chatId, "Ketik *1* untuk Mobil atau *2* untuk Motor.");
+        return;
+      }
+
+      const daftar = (flow.semuaKendaraan || []).filter((k) => jenisKendaraan(k) === jenis);
+      if (daftar.length === 0) {
+        const lain = jenis === "Mobil" ? "*2* untuk Motor" : "*1* untuk Mobil";
+        await kirim(chatId, `Belum ada data ${jenis.toLowerCase()} dinas. Ketik ${lain}, atau *batal*.`);
+        return;
+      }
+
+      let teks = `*Daftar ${jenis} Dinas*\n\nMana yang di-service? Ketik *angka urutannya*:\n`;
+      daftar.forEach((k, i) => {
+        teks += `\n${i + 1}. ${k.nama} (${k.plat || "-"})`;
+      });
+      teks += "\n\n_Ketik *0* untuk ganti jenis, atau *batal* untuk berhenti._";
+
+      setFlow(chatId, { ...flow, step: "servis-pilih-kendaraan", daftar });
+      await kirim(chatId, teks);
+      return;
+    }
+
     case "servis-pilih-kendaraan": {
+      if (bodyLower === "0") {
+        setFlow(chatId, { ...flow, step: "servis-pilih-jenis", daftar: undefined });
+        await kirim(chatId, "Jenis kendaraan apa yang di-service?\n1. Mobil 🚗\n2. Motor 🏍️");
+        return;
+      }
+
       const n = Number(bodyLower);
       const k = Number.isInteger(n) ? flow.daftar[n - 1] : null;
       if (!k) {
-        await kirim(chatId, `Pilihan tidak valid. Ketik angka 1 - ${flow.daftar.length}.`);
+        await kirim(chatId, `Pilihan tidak valid. Ketik angka 1 - ${flow.daftar.length}, atau *0* untuk ganti jenis.`);
         return;
       }
-      setFlow(chatId, { ...flow, step: "servis-tanggal", kendaraan: k, daftar: undefined });
+      setFlow(chatId, {
+        ...flow,
+        step: "servis-tanggal",
+        kendaraan: k,
+        daftar: undefined,
+        semuaKendaraan: undefined,
+      });
       await kirim(
         chatId,
         `Kendaraan: *${k.nama}* (${k.plat || "-"})\n\n` +

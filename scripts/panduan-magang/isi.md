@@ -9,7 +9,8 @@ satu menu di sidebar.
 | Perjalanan Dinas | (sudah jadi, `main`) | — |
 | Konsumsi | `magang/konsumsi` | anak magang 1 |
 | Langganan Aplikasi | `magang/langganan-aplikasi` | anak magang 2 |
-| Fotokopi, BBM Kepala Biro | (belum dibagi) | — |
+| BBM Kepala Biro (bensin) | `magang/bbm-kepala-biro` | anak magang 3 |
+| Fotokopi | (belum dibagi) | — |
 
 ## 1. Aturan main
 
@@ -17,7 +18,8 @@ satu menu di sidebar.
    - tampilan: `frontend/src/administrasi/fitur/<slug>/`
    - API: `features/fitur/<slug>/`
    - tabel: `db/<nomor>-<slug>.sql` + modul `db/<namaFitur>.js`
-     (nomor dipesan: **008 konsumsi**, **009 langganan-aplikasi**)
+     (nomor dipesan: **008 konsumsi**, **009 langganan-aplikasi**,
+     **010 bbm-kepala-biro**)
 2. Menu sidebar, alamat, dan sambungan API **sudah dibuat** — tidak perlu
    mengubah `App.jsx`, `index.js`, `administrasi/menu.js`, atau nginx.
    Kalau benar-benar perlu mengubah berkas di luar foldermu, tanyakan dulu.
@@ -30,7 +32,7 @@ satu menu di sidebar.
 ```bash
 git clone https://github.com/rifqisyekhi/chatbot-whatsapp-siska.git
 cd chatbot-whatsapp-siska
-git checkout magang/konsumsi          # atau magang/langganan-aplikasi
+git checkout magang/konsumsi     # atau magang/langganan-aplikasi / magang/bbm-kepala-biro
 npm install
 cd frontend && npm install && cd ..
 ```
@@ -135,6 +137,8 @@ server menyala, aman dijalankan berulang, `IF NOT EXISTS`) dan
 5. Buat PDF: SPBY (pakai `halamanSpby`) + kwitansi sesuai contoh.
 6. Uji sebagai operator dan bendahara, lalu buat Pull Request.
 
+<!-- halaman-baru -->
+
 ## 6. Kalau memakai AI (Claude, Copilot, ChatGPT, dll.)
 
 Repo ini sudah punya berkas aturan untuk AI: `AGENTS.md` (dibaca otomatis
@@ -143,37 +147,51 @@ mengubah folder fiturmu. Untuk AI di browser (ChatGPT, Gemini, dll.) yang
 tidak membaca berkas itu, **tempel prompt di bawah di awal setiap
 percakapan baru**, lalu baru tulis permintaanmu.
 
-Prompt awal untuk `magang/konsumsi`:
+Prompt awal (sama untuk semua branch magang, isi baris terakhir):
 
 ```
-Kamu membantu saya mengerjakan fitur KONSUMSI di repo SisKA
-(branch magang/konsumsi). Aturan WAJIB, tidak boleh dilanggar:
+Kamu membantu saya mengerjakan SATU fitur di repo SisKA
+(modul Administrasi Rokeu). Pakai baris yang cocok dengan
+branch saya (tertulis di bagian paling bawah):
 
-1. Hanya boleh membuat/mengubah berkas di:
-   - frontend/src/administrasi/fitur/konsumsi/
-   - features/fitur/konsumsi/
-   - db/008-konsumsi.sql dan db/konsumsi.js
-2. JANGAN mengubah berkas lain (App.jsx, index.js, menu.js,
-   Kerangka.jsx, Kwitansi*.jsx, ruteKwitansi.js, package.json,
-   deploy/, .gitignore). Kalau menurutmu perlu, BERHENTI dan
-   jelaskan dulu alasannya, jangan langsung diubah.
-3. Jangan membaca atau menulis .env, kata sandi, token, NIP,
+  Branch                      Fitur (slug)         Nomor tabel
+  magang/konsumsi             konsumsi             008
+  magang/langganan-aplikasi   langganan-aplikasi   009
+  magang/bbm-kepala-biro      bbm-kepala-biro      010
+
+Aturan WAJIB, tidak boleh dilanggar:
+1. Hanya boleh membuat/mengubah berkas milik fitur saya:
+   - frontend/src/administrasi/fitur/<slug>/
+   - features/fitur/<slug>/
+   - db/<nomor>-<slug>.sql dan modul aksesnya di db/
+   - public/ hanya lewat "npm run build", tidak diedit tangan
+2. JANGAN mengubah berkas lain, termasuk App.jsx, index.js,
+   menu.js, Kerangka.jsx, Kwitansi*.jsx, ruteKwitansi.js,
+   features/fitur/index.js, package.json, deploy/, .gitignore,
+   AGENTS.md. Kalau menurutmu perlu, BERHENTI dan jelaskan
+   dulu alasannya, jangan langsung diubah.
+3. JANGAN menyentuh folder fitur lain (milik teman saya).
+4. Jangan membaca atau menulis .env, kata sandi, token, NIP,
    atau nomor WA asli.
-4. Jangan menyarankan git push --force, git reset --hard,
-   menghapus berkas lain, atau npm install paket baru.
-5. Semua rute API berawalan /api/kwitansi/konsumsi/ dan dibuat
-   di features/fitur/konsumsi/rute.js lewat pasang(app, alat).
-6. Ikuti gaya kode yang sudah ada; teks dan komentar Bahasa
-   Indonesia.
-7. Di akhir setiap jawaban, sebutkan berkas apa saja yang diubah.
+5. Jangan menyarankan git push --force, git reset --hard,
+   push/commit ke main, menghapus berkas lain, atau
+   npm install paket baru.
+6. Semua rute API berawalan /api/kwitansi/<slug>/ dan dibuat
+   di features/fitur/<slug>/rute.js lewat pasang(app, alat).
+7. Ikuti gaya kode yang sudah ada; teks dan komentar dalam
+   Bahasa Indonesia.
+8. Kalau branch saya kosong atau tidak ada di tabel, TANYA
+   dulu sebelum menulis kode.
+9. Di akhir setiap jawaban, sebutkan berkas apa saja yang
+   diubah.
+
+Branch saya: ____________
 ```
 
-Untuk `magang/langganan-aplikasi`, pakai prompt yang sama dengan mengganti:
-`KONSUMSI` jadi `LANGGANAN APLIKASI`, `magang/konsumsi` jadi
-`magang/langganan-aplikasi`, folder `konsumsi` jadi `langganan-aplikasi`,
-`db/008-konsumsi.sql dan db/konsumsi.js` jadi
-`db/009-langganan-aplikasi.sql dan db/langgananAplikasi.js`, dan
-`/api/kwitansi/konsumsi/` jadi `/api/kwitansi/langganan-aplikasi/`.
+Ganti `____________` dengan `magang/konsumsi`,
+`magang/langganan-aplikasi`, atau `magang/bbm-kepala-biro`. Kalau nanti ada
+fitur magang baru, cukup
+tambahkan satu baris di tabel prompt (branch, slug, nomor tabel).
 
 Tetap periksa hasil AI sebelum commit: `git status` harus hanya
 menunjukkan berkas di folder fiturmu (dan `public/` hasil build).

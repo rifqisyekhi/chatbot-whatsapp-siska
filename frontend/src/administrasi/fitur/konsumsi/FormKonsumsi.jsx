@@ -13,9 +13,20 @@ import {
   Loader2,
   ReceiptText,
 } from "lucide-react";
+import { apiTU } from "../../../services/ApiTU";
 import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { DATA_CONTOH_KONSUMSI } from "./dataContoh";
+
+// =========================================================
+// FORM KONSUMSI
+// =========================================================
+//
+// Simpan & ubah hanya lewat API (Postgres); angka dihitung ulang server.
+// Penandatangan (PPK & bendahara) dari GET api/kwitansi/referensi → pejabat
+// (.env server), tidak diketik di form. localStorage hanya untuk draf form
+// BARU yang belum disimpan.
+
+const KUNCI_DRAF = "kwitansi-konsumsi-draf";
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 const hariIni = () => new Date().toISOString().slice(0, 10);
@@ -49,6 +60,7 @@ const DAFTAR_PROVINSI = [
   "Luar Jawa / Lainnya",
 ];
 
+// Pilihan terbatas; server memakai daftar yang sama (features/fitur/konsumsi/hitung.js).
 const STATUS_PAJAK_OPTIONS = [
   { label: "Ber-NPWP — Jasa Katering (PPh Pasal 23: 2%)", persen: 2 },
   { label: "Non-NPWP — Jasa Katering (PPh Pasal 23: 4%)", persen: 4 },
@@ -83,10 +95,6 @@ const FORM_KOSONG = (bidangAwal = "") => ({
   tanggal_spby: hariIni(),
   no_bku: "",
   no_bku_2: "",
-  ppk_nama: "Drs. Hendra Wijaya, M.M.",
-  ppk_nip: "",
-  bendahara_nama: "Siti Rahmawati, S.E.",
-  bendahara_nip: "",
   items: [
     {
       jenis: "Makanan",
@@ -99,78 +107,62 @@ const FORM_KOSONG = (bidangAwal = "") => ({
   ],
 });
 
+// Isian tersimpan (atau draf) → bentuk form. Baris lama memakai namaItem/porsi.
+const isianKeForm = (isian = {}, bidang = "") => {
+  const dasar = FORM_KOSONG(bidang);
+  const hasil = { ...dasar };
+  for (const k of Object.keys(dasar)) {
+    if (k !== "items" && isian[k] !== undefined && isian[k] !== null) hasil[k] = isian[k];
+  }
+  hasil.bidang = bidang;
+  hasil.dalam_rangka = isian.dalam_rangka || isian.nama_kegiatan || "";
+  hasil.dua_restoran = Boolean(isian.dua_restoran);
+  if (Array.isArray(isian.items) && isian.items.length) {
+    hasil.items = isian.items.map((it) => ({
+      jenis: it.jenis === "Kudapan" ? "Kudapan" : "Makanan",
+      uraianMenu: it.uraianMenu || it.namaItem || "",
+      volume: Number(it.volume ?? it.porsi) || 0,
+      satuan: it.satuan || "Pax",
+      hargaSatuan: Number(it.hargaSatuan ?? it.harga_satuan) || 0,
+      resto: Number(it.resto) === 2 ? 2 : 1,
+    }));
+  }
+  return hasil;
+};
+
+function bacaDraf(bidang) {
+  try {
+    const d = JSON.parse(localStorage.getItem(KUNCI_DRAF) || "null");
+    if (d && typeof d === "object") return isianKeForm(d, bidang || d.bidang || "");
+  } catch {
+    // draf rusak atau storage diblokir — mulai dari form kosong
+  }
+  return FORM_KOSONG(bidang);
+}
+
+function hapusDraf() {
+  try {
+    localStorage.removeItem(KUNCI_DRAF);
+  } catch {
+    // abaikan
+  }
+}
+
 const kelasInput =
-  "w-full px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
+  "w-full px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all disabled:bg-slate-50 disabled:text-slate-500";
 
 export default function FormKonsumsi({ operator }) {
   const { id } = useParams();
   const baru = !id || id === "baru";
   const navigate = useNavigate();
 
-  const [form, setForm] = useState(() => {
-    const bidangAwal = operator?.peran === "operator" ? operator?.bidang || "" : "";
-    if (baru) return FORM_KOSONG(bidangAwal);
+  const bendahara = operator?.peran === "bendahara";
+  const bidangTetap = operator?.peran === "operator" ? operator?.bidang || "" : "";
 
-    if (!baru) {
-      let temuan = null;
-      if (String(id).startsWith("sample-")) {
-        temuan = DATA_CONTOH_KONSUMSI.find((d) => String(d.id) === String(id));
-      }
-      if (!temuan) {
-        try {
-          const tersimpan = JSON.parse(localStorage.getItem("kwitansi-konsumsi-data") || "[]");
-          temuan = tersimpan.find((d) => String(d.id) === String(id));
-        } catch {
-          // abaikan
-        }
-      }
-      if (temuan) {
-        const isian = temuan.isian || {};
-        return {
-          ...FORM_KOSONG(temuan.bidang || bidangAwal),
-          bidang: temuan.bidang || "",
-          akun: isian.akun || DAFTAR_AKUN[0],
-          dalam_rangka: isian.dalam_rangka || temuan.nama_kegiatan || "",
-          tempat_kegiatan: isian.tempat_kegiatan || temuan.lokasi_detail || "Ruang Rapat Rokeu, Gedung Kemnaker",
-          lokasi_provinsi: temuan.lokasi_provinsi || isian.lokasi_provinsi || "D.K.I. Jakarta",
-          dua_restoran: Boolean(isian.dua_restoran || isian.penyedia_2),
-          penyedia: temuan.penyedia || isian.penyedia || "",
-          status_pajak: isian.status_pajak || STATUS_PAJAK_OPTIONS[0].label,
-          persen_pph23: Number(isian.persen_pph23 ?? 2),
-          nomor_spby: temuan.nomor_spby || isian.nomor_spby || "",
-          no_bku: isian.no_bku || "",
-          penyedia_2: isian.penyedia_2 || "",
-          status_pajak_2: isian.status_pajak_2 || STATUS_PAJAK_OPTIONS[0].label,
-          persen_pph23_2: Number(isian.persen_pph23_2 ?? 2),
-          nomor_spby_2: isian.nomor_spby_2 || "",
-          no_bku_2: isian.no_bku_2 || "",
-          tanggal_kegiatan: temuan.tanggal_kegiatan || isian.tanggal_kegiatan || hariIni(),
-          tanggal_spby: isian.tanggal_spby || temuan.tanggal_kegiatan || hariIni(),
-          ppk_nama: isian.ppk?.nama || "Drs. Hendra Wijaya, M.M.",
-          ppk_nip: isian.ppk?.nip || "",
-          bendahara_nama: isian.bendahara?.nama || "Siti Rahmawati, S.E.",
-          bendahara_nip: isian.bendahara?.nip || "",
-          ttd_penerima_nama: isian.ttd_penerima_nama || "",
-          ttd_penerima_nip: isian.ttd_penerima_nip || "",
-          ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal || "",
-          ttd_penerima_nama_2: isian.ttd_penerima_nama_2 || "",
-          ttd_penerima_nip_2: isian.ttd_penerima_nip_2 || "",
-          ttd_penerima_bawah_tanggal_2: isian.ttd_penerima_bawah_tanggal_2 || "",
-          items: (isian.items || []).map((it, idx) => ({
-            jenis: it.jenis || (it.namaItem?.toLowerCase().includes("snack") ? "Kudapan" : "Makanan"),
-            uraianMenu: it.uraianMenu || it.namaItem || "",
-            volume: Number(it.volume || it.porsi) || 20,
-            satuan: it.satuan || "Pax",
-            hargaSatuan: Number(it.hargaSatuan) || 57000,
-            resto: Number(it.resto) || (isian.dua_restoran && idx > 0 ? 2 : 1),
-          })),
-        };
-      }
-    }
-    return FORM_KOSONG(bidangAwal);
-  });
-
-  const [memuat, setMemuat] = useState(false);
+  const [form, setForm] = useState(() => (baru ? bacaDraf(bidangTetap) : FORM_KOSONG(bidangTetap)));
+  const [pejabat, setPejabat] = useState(null);
+  const [statusTersimpan, setStatusTersimpan] = useState("");
+  const [memuat, setMemuat] = useState(!baru);
   const [menyimpan, setMenyimpan] = useState(false);
   const [galat, setGalat] = useState("");
   const [toast, setToast] = useState(null);
@@ -180,118 +172,73 @@ export default function FormKonsumsi({ operator }) {
     setTimeout(() => setToast(null), 3500);
   };
 
-  // Muat data jika mode edit dari server
+  // Penandatangan dari server (.env)
   useEffect(() => {
-    if (baru || String(id).startsWith("sample-")) return;
+    apiTU({ url: "api/kwitansi/referensi" })
+      .then((r) => setPejabat(r?.pejabat || null))
+      .catch(() => setPejabat(null));
+  }, []);
 
+  // Muat data tersimpan untuk diubah
+  useEffect(() => {
+    if (baru) return;
     let usang = false;
     apiKwitansi({ url: `api/kwitansi/konsumsi/${id}` })
       .then((data) => {
         if (usang || !data) return;
-        const isian = data.isian || {};
-        setForm((prev) => ({
-          ...prev,
-          bidang: data.bidang || isian.bidang || "",
-          akun: isian.akun || DAFTAR_AKUN[0],
-          dalam_rangka: isian.dalam_rangka || data.nama_kegiatan || "",
-          tempat_kegiatan: isian.tempat_kegiatan || data.lokasi_detail || "",
-          lokasi_provinsi: data.lokasi_provinsi || isian.lokasi_provinsi || "D.K.I. Jakarta",
-          dua_restoran: Boolean(isian.dua_restoran || isian.penyedia_2),
-          penyedia: data.penyedia || isian.penyedia || "",
-          status_pajak: isian.status_pajak || STATUS_PAJAK_OPTIONS[0].label,
-          persen_pph23: Number(isian.persen_pph23 ?? 2),
-          nomor_spby: data.nomor_spby || isian.nomor_spby || "",
-          no_bku: isian.no_bku || "",
-          penyedia_2: isian.penyedia_2 || "",
-          status_pajak_2: isian.status_pajak_2 || STATUS_PAJAK_OPTIONS[0].label,
-          persen_pph23_2: Number(isian.persen_pph23_2 ?? 2),
-          nomor_spby_2: isian.nomor_spby_2 || "",
-          no_bku_2: isian.no_bku_2 || "",
-          tanggal_kegiatan: data.tanggal_kegiatan || isian.tanggal_kegiatan || hariIni(),
-          tanggal_spby: isian.tanggal_spby || data.tanggal_kegiatan || hariIni(),
-          ppk_nama: isian.ppk?.nama || "Drs. Hendra Wijaya, M.M.",
-          ppk_nip: isian.ppk?.nip || "",
-          bendahara_nama: isian.bendahara?.nama || "Siti Rahmawati, S.E.",
-          bendahara_nip: isian.bendahara?.nip || "",
-          ttd_penerima_nama: isian.ttd_penerima_nama || "",
-          ttd_penerima_nip: isian.ttd_penerima_nip || "",
-          ttd_penerima_bawah_tanggal: isian.ttd_penerima_bawah_tanggal || "",
-          ttd_penerima_nama_2: isian.ttd_penerima_nama_2 || "",
-          ttd_penerima_nip_2: isian.ttd_penerima_nip_2 || "",
-          ttd_penerima_bawah_tanggal_2: isian.ttd_penerima_bawah_tanggal_2 || "",
-          items: (isian.items || []).map((it, idx) => ({
-            jenis: it.jenis || (it.namaItem?.toLowerCase().includes("snack") ? "Kudapan" : "Makanan"),
-            uraianMenu: it.uraianMenu || it.namaItem || "",
-            volume: Number(it.volume || it.porsi) || 20,
-            satuan: it.satuan || "Pax",
-            hargaSatuan: Number(it.hargaSatuan) || 57000,
-            resto: Number(it.resto) || (isian.dua_restoran && idx > 0 ? 2 : 1),
-          })),
-        }));
+        setForm(isianKeForm(data.isian || {}, data.bidang || ""));
+        setStatusTersimpan(data.status || "");
+        setGalat("");
       })
       .catch((err) => {
-        if (!usang) setGalat(err?.message || "Gagal memuat data");
+        if (!usang) setGalat(err?.message || "Gagal memuat data konsumsi");
       })
       .finally(() => {
         if (!usang) setMemuat(false);
       });
-
     return () => {
       usang = true;
     };
   }, [id, baru]);
 
-  // Kalkulasi total rincian & batas SBM
+  // Simpan draf setiap isian berubah (hanya form baru yang belum disimpan).
+  useEffect(() => {
+    if (!baru || bendahara) return;
+    try {
+      localStorage.setItem(KUNCI_DRAF, JSON.stringify(form));
+    } catch {
+      // storage tidak tersedia — draf tidak diingat, form tetap jalan
+    }
+  }, [form, baru, bendahara]);
+
+  // Pratinjau angka di layar. Angka resmi dihitung ulang server saat simpan/PDF.
   const hitungan = useMemo(() => {
     const sbm = SBM_KONSUMSI[form.lokasi_provinsi] || SBM_KONSUMSI["D.K.I. Jakarta"];
     const items = form.items || [];
-    const totalPorsi = items.reduce((acc, it) => acc + (Number(it.volume) || 0), 0);
+    const bulat = (v) => Math.max(0, Math.round(Number(v) || 0));
+    const totalPorsi = items.reduce((acc, it) => acc + bulat(it.volume), 0);
 
     const duaResto = Boolean(form.dua_restoran);
     const itemsResto1 = duaResto ? items.filter((it) => (it.resto ?? 1) === 1) : items;
     const itemsResto2 = duaResto ? items.filter((it) => it.resto === 2) : [];
 
-    const subtotal1 = itemsResto1.reduce(
-      (acc, it) => acc + (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0),
-      0,
-    );
-    const persen1 = Number(form.persen_pph23) || 0;
-    const pph1 = Math.round(subtotal1 * (persen1 / 100));
-    const netto1 = subtotal1 - pph1;
-
-    const subtotal2 = itemsResto2.reduce(
-      (acc, it) => acc + (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0),
-      0,
-    );
-    const persen2 = Number(form.persen_pph23_2 ?? form.persen_pph23) || 0;
-    const pph2 = Math.round(subtotal2 * (persen2 / 100));
-    const netto2 = subtotal2 - pph2;
-
-    const subtotalBruto = subtotal1 + subtotal2;
-    const potonganPajak = pph1 + pph2;
-    const bersihDibayarkan = netto1 + netto2;
+    const susun = (daftarItem, persen) => {
+      const subtotal = daftarItem.reduce((acc, it) => acc + bulat(it.volume) * bulat(it.hargaSatuan), 0);
+      const pph = Math.round((subtotal * persen) / 100);
+      return { items: daftarItem, subtotal, pph, netto: subtotal - pph, persenPph: persen };
+    };
+    const resto1 = susun(itemsResto1, Number(form.persen_pph23) || 0);
+    const resto2 = susun(itemsResto2, Number(form.persen_pph23_2) || 0);
 
     return {
       sbm,
       totalPorsi,
-      subtotalBruto,
-      potonganPajak,
-      bersihDibayarkan,
+      subtotalBruto: resto1.subtotal + resto2.subtotal,
+      potonganPajak: resto1.pph + resto2.pph,
+      bersihDibayarkan: resto1.netto + resto2.netto,
       duaResto,
-      resto1: {
-        items: itemsResto1,
-        subtotal: subtotal1,
-        pph: pph1,
-        netto: netto1,
-        persenPph: persen1,
-      },
-      resto2: {
-        items: itemsResto2,
-        subtotal: subtotal2,
-        pph: pph2,
-        netto: netto2,
-        persenPph: persen2,
-      },
+      resto1,
+      resto2,
     };
   }, [form.items, form.lokasi_provinsi, form.persen_pph23, form.persen_pph23_2, form.dua_restoran]);
 
@@ -300,22 +247,13 @@ export default function FormKonsumsi({ operator }) {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  // Handler ubah status pajak
+  // Handler ubah status pajak (persen hanya dari pilihan terbatas)
   const ubahStatusPajak = (labelPajak, targetResto = 1) => {
-    const opsi = STATUS_PAJAK_OPTIONS.find((o) => o.label === labelPajak);
-    const persen = opsi ? opsi.persen : 2;
+    const opsi = STATUS_PAJAK_OPTIONS.find((o) => o.label === labelPajak) || STATUS_PAJAK_OPTIONS[0];
     if (targetResto === 2) {
-      setForm((prev) => ({
-        ...prev,
-        status_pajak_2: labelPajak,
-        persen_pph23_2: persen,
-      }));
+      setForm((prev) => ({ ...prev, status_pajak_2: opsi.label, persen_pph23_2: opsi.persen }));
     } else {
-      setForm((prev) => ({
-        ...prev,
-        status_pajak: labelPajak,
-        persen_pph23: persen,
-      }));
+      setForm((prev) => ({ ...prev, status_pajak: opsi.label, persen_pph23: opsi.persen }));
     }
   };
 
@@ -400,33 +338,30 @@ export default function FormKonsumsi({ operator }) {
 
   // Tombol "Kosongkan"
   const kosongkanForm = () => {
-    setForm(FORM_KOSONG(operator?.bidang || ""));
+    setForm(FORM_KOSONG(bidangTetap || (baru ? "" : form.bidang)));
+    if (baru) hapusDraf();
     kabari("Form dikosongkan");
   };
 
-  // Susun isian untuk backend & PDF
-  const siapkanPayload = () => ({
-    ...form,
-    nama_kegiatan: form.dalam_rangka,
-    lokasi_detail: form.tempat_kegiatan,
-    total: hitungan.subtotalBruto,
-    pajak_pph23: hitungan.potonganPajak,
-    netto: hitungan.bersihDibayarkan,
-    jumlah_porsi: hitungan.totalPorsi,
-    ppk: { nama: form.ppk_nama, nip: form.ppk_nip },
-    bendahara: { nama: form.bendahara_nama, nip: form.bendahara_nip },
-    items: form.items.map((it) => ({
-      ...it,
-      namaItem: it.uraianMenu || `${it.jenis} Konsumsi`,
-      porsi: Number(it.volume) || 0,
-      subtotal: (Number(it.volume) || 0) * (Number(it.hargaSatuan) || 0),
-      resto: Number(it.resto) || 1,
-    })),
-  });
+  // Isian yang dikirim ke server (tanpa angka hasil hitung — server menghitung sendiri)
+  const siapkanIsian = () => {
+    const isian = { ...form };
+    delete isian.bidang;
+    return {
+      ...isian,
+      items: form.items.map((it) => ({
+        ...it,
+        volume: Number(it.volume) || 0,
+        hargaSatuan: Number(it.hargaSatuan) || 0,
+        resto: Number(it.resto) === 2 ? 2 : 1,
+      })),
+    };
+  };
 
-  // Simpan ke daftar dengan dual-persistence (localStorage + server API)
+  // Simpan ke daftar: hanya lewat API. Gagal → pesan galat, form tetap terbuka.
   const simpanKeDaftar = async (e) => {
     if (e) e.preventDefault();
+    if (bendahara) return;
     if (!form.bidang) {
       kabari("Pilih bidang pelaksana kegiatan", "error");
       return;
@@ -445,93 +380,39 @@ export default function FormKonsumsi({ operator }) {
     }
 
     setMenyimpan(true);
-    setGalat("");
-
-    const isian = siapkanPayload();
-
-    const recordLokal = {
-      id: baru || String(id).startsWith("sample-") ? `konsumsi-${Date.now()}` : id,
-      bidang: form.bidang,
-      status: "aktif",
-      nama_kegiatan: form.dalam_rangka,
-      tanggal_kegiatan: form.tanggal_kegiatan,
-      lokasi_provinsi: form.lokasi_provinsi,
-      lokasi_detail: form.tempat_kegiatan,
-      nomor_spby: form.nomor_spby || "",
-      sbm_kategori: "SBM PMK 32/2025",
-      penyedia: form.penyedia,
-      nama_penerima: form.penyedia,
-      jumlah_porsi: hitungan.totalPorsi,
-      total: hitungan.subtotalBruto,
-      pajak_pph23: hitungan.potonganPajak,
-      netto: hitungan.bersihDibayarkan,
-      jumlah_jenis_item: form.items?.length || 1,
-      isian,
-      dibuat_pada: new Date().toISOString(),
-      diubah_pada: new Date().toISOString(),
-    };
-
-    // 1. Simpan ke localStorage terlebih dahulu agar data selalu tersimpan secara lokal
     try {
-      const dataLama = JSON.parse(localStorage.getItem("kwitansi-konsumsi-data") || "[]");
-      const tanpaRecordIni = dataLama.filter((item) => String(item.id) !== String(recordLokal.id));
-      localStorage.setItem("kwitansi-konsumsi-data", JSON.stringify([recordLokal, ...tanpaRecordIni]));
-    } catch (errLokal) {
-      console.warn("Gagal simpan ke localStorage:", errLokal);
-    }
-
-    // 2. Sinkronkan ke API backend jika server sedang aktif
-    try {
-      if (baru || String(id).startsWith("sample-")) {
-        const responServer = await apiKwitansi({
-          url: "api/kwitansi/konsumsi",
-          method: "POST",
-          body: { isian, bidang: form.bidang },
-        });
-        // Perbarui ID lokal agar sinkron dengan ID database dan tidak terjadi duplikasi/pengulangan baris
-        if (responServer && responServer.id) {
-          try {
-            const dataLama = JSON.parse(localStorage.getItem("kwitansi-konsumsi-data") || "[]");
-            const diperbarui = dataLama.map((item) =>
-              String(item.id) === String(recordLokal.id) ? { ...item, id: responServer.id } : item
-            );
-            localStorage.setItem("kwitansi-konsumsi-data", JSON.stringify(diperbarui));
-          } catch {
-            // abaikan
-          }
-        }
+      const isian = siapkanIsian();
+      if (baru) {
+        await apiKwitansi({ url: "api/kwitansi/konsumsi", method: "POST", body: { isian, bidang: form.bidang } });
+        hapusDraf();
       } else {
-        await apiKwitansi({
-          url: `api/kwitansi/konsumsi/${id}`,
-          method: "PUT",
-          body: { isian },
-        });
+        await apiKwitansi({ url: `api/kwitansi/konsumsi/${id}`, method: "PUT", body: { isian } });
       }
-    } catch (errApi) {
-      console.warn("[KONSUMSI] Sinkronisasi server tertunda, data tetap aman di penyimpanan lokal:", errApi);
-    }
-
-    kabari("Pengajuan konsumsi berhasil disimpan ke daftar");
-    setTimeout(() => {
       navigate(jalur("konsumsi"));
-    }, 600);
-    setMenyimpan(false);
+    } catch (err) {
+      kabari(err?.message || "Gagal menyimpan konsumsi", "error");
+      setMenyimpan(false);
+    }
   };
 
-  // Buka PDF
+  // PDF: bendahara membuka data tersimpan; pengubah melihat pratinjau isian form.
   const lihatPdf = async () => {
     try {
-      const isian = siapkanPayload();
+      if (bendahara) {
+        if (!baru) await bukaPdf({ url: `api/kwitansi/konsumsi/${id}/pdf` });
+        return;
+      }
       await bukaPdf({
         url: "api/kwitansi/konsumsi/pdf-preview",
         method: "POST",
-        body: { isian },
+        body: { isian: siapkanIsian() },
       });
-      kabari("Membuka dokumen PDF SPBY & Kwitansi");
     } catch (err) {
       kabari(err?.message || "Gagal membuka PDF", "error");
     }
   };
+
+  const terkunciBatal = statusTersimpan === "dibatalkan";
 
   return (
     <div className="min-h-screen bg-paper font-sans text-navy pb-16">
@@ -571,6 +452,7 @@ export default function FormKonsumsi({ operator }) {
               </div>
             </div>
 
+            {!bendahara && !terkunciBatal && (
             <button
               type="button"
               onClick={kosongkanForm}
@@ -579,6 +461,7 @@ export default function FormKonsumsi({ operator }) {
               <RotateCcw className="w-3.5 h-3.5" />
               <span>Kosongkan</span>
             </button>
+            )}
           </div>
         </div>
       </header>
@@ -598,7 +481,7 @@ export default function FormKonsumsi({ operator }) {
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
             {/* LEFT / MAIN COLUMN (8 COLS) */}
-            <div className="lg:col-span-8 space-y-6">
+            <fieldset disabled={bendahara || terkunciBatal} className="lg:col-span-8 space-y-6 min-w-0">
               {/* CARD 1: DATA KEGIATAN & KONSUMSI */}
               <div className="bg-white rounded-3xl border border-mist shadow-2xs p-5 sm:p-6 space-y-4">
                 <div className="flex items-center justify-between border-b border-mist pb-3">
@@ -617,6 +500,7 @@ export default function FormKonsumsi({ operator }) {
                     <select
                       className={kelasInput}
                       value={form.bidang}
+                      disabled={Boolean(bidangTetap) || !baru}
                       onChange={(e) => setField("bidang", e.target.value)}
                     >
                       <option value="">— Pilih bidang —</option>
@@ -1013,50 +897,21 @@ export default function FormKonsumsi({ operator }) {
                     </div>
                   </div>
 
-                  {/* Pejabat PPK & Bendahara */}
+                  {/* Penandatangan dari server (.env), tidak diketik di form */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                        Pejabat Pembuat Komitmen (PPK)
-                      </label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Drs. Hendra Wijaya, M.M."
-                        value={form.ppk_nama}
-                        onChange={(e) => setField("ppk_nama", e.target.value)}
-                      />
+                    <div className="p-3 rounded-xl bg-slate-50 border border-mist">
+                      <p className="text-xs font-bold text-slate-700">Pejabat Pembuat Komitmen (PPK)</p>
+                      <p className="text-sm font-semibold text-navy mt-1">{pejabat?.ppk?.nama || "—"}</p>
+                      <p className="text-[11px] text-slate-500">NIP. {pejabat?.ppk?.nip || "—"}</p>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">Bendahara Pengeluaran</label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Siti Rahmawati, S.E."
-                        value={form.bendahara_nama}
-                        onChange={(e) => setField("bendahara_nama", e.target.value)}
-                      />
+                    <div className="p-3 rounded-xl bg-slate-50 border border-mist">
+                      <p className="text-xs font-bold text-slate-700">Bendahara Pengeluaran</p>
+                      <p className="text-sm font-semibold text-navy mt-1">{pejabat?.bendahara?.nama || "—"}</p>
+                      <p className="text-[11px] text-slate-500">NIP. {pejabat?.bendahara?.nip || "—"}</p>
                     </div>
-                  </div>
-
-                  {/* NIP PPK & NIP Bendahara */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">NIP PPK</label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Ketik NIP PPK"
-                        value={form.ppk_nip}
-                        onChange={(e) => setField("ppk_nip", e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">NIP Bendahara</label>
-                      <input
-                        className={kelasInput}
-                        placeholder="Ketik NIP Bendahara"
-                        value={form.bendahara_nip}
-                        onChange={(e) => setField("bendahara_nip", e.target.value)}
-                      />
-                    </div>
+                    <p className="sm:col-span-2 text-[11px] text-slate-400">
+                      Penandatangan diatur di server dan dipakai otomatis di SPBY & kwitansi.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1248,7 +1103,7 @@ export default function FormKonsumsi({ operator }) {
                   })}
                 </div>
               </div>
-            </div>
+            </fieldset>
 
             {/* RIGHT COLUMN (4 COLS): SIDEBAR RINCIAN */}
             <div className="lg:col-span-4 lg:sticky lg:top-24 space-y-4">
@@ -1339,6 +1194,7 @@ export default function FormKonsumsi({ operator }) {
                     <select
                       className={kelasInput + " text-xs py-2"}
                       value={form.status_pajak}
+                      disabled={bendahara || terkunciBatal}
                       onChange={(e) => ubahStatusPajak(e.target.value, 1)}
                     >
                       {STATUS_PAJAK_OPTIONS.map((o) => (
@@ -1380,6 +1236,7 @@ export default function FormKonsumsi({ operator }) {
 
                 {/* Tombol Aksi */}
                 <div className="space-y-2.5 pt-2">
+                  {!(bendahara && baru) && (
                   <button
                     type="button"
                     onClick={lihatPdf}
@@ -1388,7 +1245,15 @@ export default function FormKonsumsi({ operator }) {
                     <FileText className="w-4 h-4 text-slate-600" />
                     <span>Lihat PDF</span>
                   </button>
+                  )}
 
+                  {terkunciBatal && (
+                    <p className="text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl p-2.5">
+                      Kegiatan ini dibatalkan. Pulihkan dari daftar sebelum mengubah.
+                    </p>
+                  )}
+
+                  {!bendahara && !terkunciBatal && (
                   <button
                     type="button"
                     onClick={simpanKeDaftar}
@@ -1396,8 +1261,9 @@ export default function FormKonsumsi({ operator }) {
                     className="w-full py-2.5 px-4 rounded-xl border-2 border-slate-200 hover:border-brand bg-white text-navy text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {menyimpan ? <Loader2 className="w-4 h-4 animate-spin text-brand" /> : <Save className="w-4 h-4 text-brand" />}
-                    <span>Simpan ke daftar</span>
+                    <span>{baru ? "Simpan ke daftar" : "Simpan perubahan"}</span>
                   </button>
+                  )}
                 </div>
 
                 {/* Catatan SBM di Bawah */}

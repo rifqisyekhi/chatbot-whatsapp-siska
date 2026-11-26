@@ -12,7 +12,7 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import (KeepTogether, ListFlowable, ListItem, Paragraph,
+from reportlab.platypus import (KeepTogether, ListFlowable, ListItem, PageBreak, Paragraph,
                                 Preformatted, SimpleDocTemplate, Spacer, Table, TableStyle)
 
 sumber, keluaran, folder_font = sys.argv[1:4]
@@ -97,7 +97,10 @@ def lepas_paragraf():
 
 while i < len(baris):
     b = baris[i]
-    if b.startswith("# "):
+    if b.strip() == "<!-- halaman-baru -->":
+        lepas_paragraf()
+        cerita.append(PageBreak())
+    elif b.startswith("# "):
         lepas_paragraf()
         cerita.append(Paragraph(sebaris(b[2:]), gaya["judul"]))
         cerita.append(Paragraph("Biro Keuangan dan BMN • Kementerian Ketenagakerjaan", gaya["sub"]))

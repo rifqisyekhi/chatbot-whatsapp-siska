@@ -17,7 +17,7 @@
 //   halamanSpby, pasangFontSpby   halaman SPBY yang sama dengan servis kendaraan
 //   terbilangRupiah, tanggalPanjang
 
-const FITUR = ["konsumsi", "langganan-aplikasi"];
+const FITUR = ["konsumsi", "langganan-aplikasi", "bbm-kepala-biro"];
 
 function pasangSemuaFitur(app, alat) {
   for (const slug of FITUR) {

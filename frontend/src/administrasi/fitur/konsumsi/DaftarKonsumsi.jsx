@@ -10,7 +10,6 @@ import {
   Loader2,
   AlertCircle,
   Eye,
-  RotateCcw,
   BookOpen,
   Coffee,
   X,
@@ -20,106 +19,40 @@ import {
 } from "lucide-react";
 import { apiKwitansi, bukaPdf } from "../../../services/sesiKwitansi";
 import { jalur } from "../../jalur";
-import { DATA_CONTOH_KONSUMSI } from "./dataContoh";
+
+// =========================================================
+// DAFTAR KONSUMSI
+// =========================================================
+//
+// Data hanya dari API (Postgres). Batal, pulihkan, dan hapus lewat API;
+// setelah berhasil daftar dimuat ulang dari server. Galat API tampil
+// sebagai toast merah, tidak pernah dianggap berhasil.
 
 const rupiah = (n) => "Rp " + Math.floor(Number(n) || 0).toLocaleString("id-ID");
 
 const ambilHari = (iso) => {
-  if (!iso) return "-";
-  try {
-    const bagian = String(iso).slice(0, 10).split("-");
-    if (bagian.length !== 3) return "-";
-    const d = new Date(Number(bagian[0]), Number(bagian[1]) - 1, Number(bagian[2]));
-    const hari = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-    return hari[d.getDay()] || "-";
-  } catch {
-    return "-";
-  }
+  const bagian = String(iso || "").slice(0, 10).split("-");
+  if (bagian.length !== 3) return "-";
+  const d = new Date(Number(bagian[0]), Number(bagian[1]) - 1, Number(bagian[2]));
+  return ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"][d.getDay()] || "-";
 };
 
-const DAFTAR_BIDANG_PILIHAN = [
-  "Semua bidang",
-  "TU",
-  "AKLAP",
-  "PTUK",
-  "BMN",
-  "PA",
-];
+const DAFTAR_BIDANG_PILIHAN = ["Semua bidang", "TU", "AKLAP", "PTUK", "BMN", "PA"];
 
 const kelasInput =
   "px-3.5 py-2.5 rounded-xl bg-white border border-mist focus:border-brand focus:ring-4 focus:ring-brand/10 outline-none text-sm font-medium transition-all";
-
-const bacaDataLokal = () => {
-  try {
-    return JSON.parse(localStorage.getItem("kwitansi-konsumsi-data") || "[]");
-  } catch {
-    return [];
-  }
-};
-
-const simpanDataLokal = (items) => {
-  try {
-    localStorage.setItem("kwitansi-konsumsi-data", JSON.stringify(items));
-  } catch {
-    // abaikan
-  }
-};
-
-const gabungkanData = (dataServer = []) => {
-  const dataLokal = bacaDataLokal();
-  const peta = new Map();
-  const jejakUnik = new Set();
-
-  const buatKunci = (d) => {
-    const nama = String(d.nama_kegiatan || d.isian?.nama_kegiatan || d.isian?.dalam_rangka || "").trim().toLowerCase();
-    const tgl = String(d.tanggal_kegiatan || d.isian?.tanggal_kegiatan || "").trim();
-    const tot = String(d.total || d.isian?.total || 0);
-    return `${nama}|${tgl}|${tot}`;
-  };
-
-  // 1. Prioritas data server (jika PostgreSQL aktif dan punya data)
-  if (Array.isArray(dataServer) && dataServer.length > 0) {
-    dataServer.forEach((d) => {
-      peta.set(String(d.id), d);
-      jejakUnik.add(buatKunci(d));
-    });
-  }
-
-  // 2. Data lokal pengguna (hanya jika belum ada di server, mencegah duplikasi/pengulangan)
-  dataLokal.forEach((d) => {
-    const kunci = buatKunci(d);
-    if (!peta.has(String(d.id)) && !jejakUnik.has(kunci)) {
-      peta.set(String(d.id), d);
-      jejakUnik.add(kunci);
-    }
-  });
-
-  // 3. Data contoh resmi sebagai basis awal HANYA bila belum ada data kegiatan sama sekali
-  if (peta.size === 0) {
-    DATA_CONTOH_KONSUMSI.forEach((d) => {
-      const kunci = buatKunci(d);
-      if (!peta.has(String(d.id)) && !jejakUnik.has(kunci)) {
-        peta.set(String(d.id), d);
-        jejakUnik.add(kunci);
-      }
-    });
-  }
-
-  return Array.from(peta.values());
-};
 
 export default function DaftarKonsumsi({ operator }) {
   const bendahara = operator?.peran === "bendahara";
   const admin = operator?.peran === "admin" || bendahara;
 
-  const [daftar, setDaftar] = useState(() => gabungkanData());
-  const [memuat, setMemuat] = useState(false);
+  const [daftar, setDaftar] = useState([]);
+  const [memuat, setMemuat] = useState(true);
   const [galat, setGalat] = useState("");
   const [cari, setCari] = useState("");
   const [bidang, setBidang] = useState("Semua bidang");
-  const [tahun, setTahun] = useState("2026");
+  const [tahun, setTahun] = useState(String(new Date().getFullYear()));
   const [status, setStatus] = useState("Semua status");
-  const [lihatEmptyState, setLihatEmptyState] = useState(false);
 
   // Modal-modal interaktif
   const [modalBatal, setModalBatal] = useState(null);
@@ -127,10 +60,11 @@ export default function DaftarKonsumsi({ operator }) {
   const [modalRiwayat, setModalRiwayat] = useState(null);
   const [modalDetail, setModalDetail] = useState(null);
   const [modalHapus, setModalHapus] = useState(null);
-  const [menghapus, setMenghapus] = useState(false);
+  const [bekerja, setBekerja] = useState(false);
 
   const [toast, setToast] = useState(null);
   const [putaran, setPutaran] = useState(0);
+  const muatUlang = () => setPutaran((p) => p + 1);
 
   const kabari = (text, type = "success") => {
     setToast({ text, type });
@@ -140,81 +74,39 @@ export default function DaftarKonsumsi({ operator }) {
   useEffect(() => {
     let usang = false;
     const q = new URLSearchParams();
-    if (tahun && tahun !== "Semua tahun") q.set("tahun", tahun);
-    if (bidang && bidang !== "Semua bidang") q.set("bidang", bidang);
-    if (status && status !== "Semua status") q.set("status", status.toLowerCase());
+    if (tahun !== "Semua tahun") q.set("tahun", tahun);
+    if (admin && bidang !== "Semua bidang") q.set("bidang", bidang);
+    if (status !== "Semua status") q.set("status", status.toLowerCase());
 
-    apiKwitansi({ url: `api/kwitansi/konsumsi?${q.toString()}` })
+    apiKwitansi({ url: `api/kwitansi/konsumsi?${q}` })
       .then((data) => {
         if (usang) return;
-        setDaftar(gabungkanData(data));
+        setDaftar(Array.isArray(data) ? data : []);
         setGalat("");
       })
-      .catch(() => {
-        if (!usang) {
-          setDaftar(gabungkanData());
-        }
+      .catch((e) => {
+        if (usang) return;
+        setDaftar([]);
+        setGalat(e?.message || "Gagal memuat daftar konsumsi");
       })
-      .finally(() => {
-        if (!usang) setMemuat(false);
-      });
+      .finally(() => !usang && setMemuat(false));
 
     return () => {
       usang = true;
     };
-  }, [tahun, bidang, status, putaran]);
+  }, [tahun, bidang, status, admin, putaran]);
 
-  // Tombol "Data Contoh" untuk reset data kembali ke data contoh awal
-  const pulihkanDataContoh = () => {
-    try {
-      localStorage.removeItem("kwitansi-konsumsi-data");
-    } catch {
-      // abaikan
-    }
-    setLihatEmptyState(false);
-    setDaftar(DATA_CONTOH_KONSUMSI);
-    setPutaran((p) => p + 1);
-    kabari("Data contoh dimuat kembali");
-  };
-
-  // Penyaringan data
+  // Pencarian kata kunci (saringan lain sudah dikerjakan server)
   const dataTampil = useMemo(() => {
-    if (lihatEmptyState) return [];
-
-    return daftar.filter((d) => {
-      // Saringan status
-      if (status !== "Semua status") {
-        const cocokStatus =
-          (status === "Aktif" && d.status === "aktif") ||
-          (status === "Dibatalkan" && d.status === "dibatalkan");
-        if (!cocokStatus) return false;
-      }
-      // Saringan bidang
-      if (bidang !== "Semua bidang" && d.bidang !== bidang) {
-        return false;
-      }
-      // Saringan tahun
-      if (tahun !== "Semua tahun" && d.tanggal_kegiatan && !d.tanggal_kegiatan.startsWith(tahun)) {
-        return false;
-      }
-      // Pencarian kata kunci
-      if (cari.trim()) {
-        const c = cari.toLowerCase();
-        const teks = [
-          d.nama_kegiatan,
-          d.lokasi_provinsi,
-          d.lokasi_detail,
-          d.penyedia,
-          d.nomor_spby,
-          d.bidang,
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!teks.includes(c)) return false;
-      }
-      return true;
-    });
-  }, [daftar, lihatEmptyState, status, bidang, tahun, cari]);
+    const c = cari.trim().toLowerCase();
+    if (!c) return daftar;
+    return daftar.filter((d) =>
+      [d.nama_kegiatan, d.lokasi_provinsi, d.lokasi_detail, d.penyedia, d.nomor_spby, d.bidang]
+        .join(" ")
+        .toLowerCase()
+        .includes(c),
+    );
+  }, [daftar, cari]);
 
   // Statistik ringkasan
   const aktifList = useMemo(() => dataTampil.filter((d) => d.status === "aktif"), [dataTampil]);
@@ -228,104 +120,72 @@ export default function DaftarKonsumsi({ operator }) {
     [aktifList],
   );
 
-  // Aksi Cetak PDF
+  // PDF dari data tersimpan di server
   const unduhPdf = async (item) => {
     try {
-      const isian = item.isian || item;
-      await bukaPdf({
-        url: "api/kwitansi/konsumsi/pdf-preview",
-        method: "POST",
-        body: { isian },
-      });
-      kabari("Membuka PDF SPBY & Kwitansi");
+      await bukaPdf({ url: `api/kwitansi/konsumsi/${item.id}/pdf` });
     } catch (e) {
       kabari(e?.message || "Gagal membuka PDF", "error");
     }
   };
 
-  // Aksi Batalkan
-  const konfirmasiBatal = async () => {
-    if (!modalBatal) return;
+  // Jalankan satu aksi API; daftar dimuat ulang hanya bila berhasil.
+  const jalankan = async (aksi, pesanBerhasil, pesanGagal) => {
+    setBekerja(true);
     try {
-      const dataLokal = bacaDataLokal();
-      const lokalBaru = dataLokal.map((d) =>
-        String(d.id) === String(modalBatal.id)
-          ? { ...d, status: "dibatalkan", alasan_batal: alasanBatal, tanggal_batal: new Date().toISOString().slice(0, 10) }
-          : d,
-      );
-      simpanDataLokal(lokalBaru);
-
-      setDaftar((prev) =>
-        prev.map((d) =>
-          String(d.id) === String(modalBatal.id)
-            ? { ...d, status: "dibatalkan", alasan_batal: alasanBatal, tanggal_batal: new Date().toISOString().slice(0, 10) }
-            : d,
-        ),
-      );
-
-      if (!String(modalBatal.id).startsWith("sample-") && !String(modalBatal.id).startsWith("konsumsi-")) {
-        await apiKwitansi({
-          url: `api/kwitansi/konsumsi/${modalBatal.id}/batalkan`,
-          method: "POST",
-          body: { alasan: alasanBatal },
-        });
-      }
-
-      kabari("Kegiatan konsumsi berhasil dibatalkan");
-      setModalBatal(null);
-      setAlasanBatal("");
+      await aksi();
+      kabari(pesanBerhasil);
+      muatUlang();
+      return true;
     } catch (e) {
-      kabari(e?.message || "Gagal membatalkan kegiatan", "error");
+      kabari(e?.message || pesanGagal, "error");
+      return false;
+    } finally {
+      setBekerja(false);
     }
   };
 
-  // Aksi Pulihkan Kegiatan Dibatalkan
-  const pulihkanKegiatan = (item) => {
-    if (!item) return;
-    const dataLokal = bacaDataLokal();
-    const lokalBaru = dataLokal.map((d) =>
-      String(d.id) === String(item.id)
-        ? { ...d, status: "aktif", alasan_batal: null, tanggal_batal: null }
-        : d,
+  const konfirmasiBatal = async () => {
+    if (!modalBatal) return;
+    if (!alasanBatal.trim()) {
+      kabari("Alasan pembatalan wajib diisi", "error");
+      return;
+    }
+    const ok = await jalankan(
+      () =>
+        apiKwitansi({
+          url: `api/kwitansi/konsumsi/${modalBatal.id}/batalkan`,
+          method: "POST",
+          body: { alasan: alasanBatal.trim() },
+        }),
+      "Kegiatan konsumsi dibatalkan",
+      "Gagal membatalkan kegiatan",
     );
-    simpanDataLokal(lokalBaru);
-
-    setDaftar((prev) =>
-      prev.map((d) =>
-        String(d.id) === String(item.id)
-          ? { ...d, status: "aktif", alasan_batal: null, tanggal_batal: null }
-          : d,
-      ),
-    );
-    kabari(`Kegiatan "${item.nama_kegiatan}" berhasil dipulihkan`);
-    setModalRiwayat(null);
+    if (ok) {
+      setModalBatal(null);
+      setAlasanBatal("");
+    }
   };
 
-  // Aksi Hapus (dieksekusi dari modal pop-up konfirmasi)
+  const pulihkanKegiatan = async (item) => {
+    if (!item) return;
+    const ok = await jalankan(
+      () => apiKwitansi({ url: `api/kwitansi/konsumsi/${item.id}/pulihkan`, method: "POST" }),
+      `Kegiatan "${item.nama_kegiatan}" dipulihkan`,
+      "Gagal memulihkan kegiatan",
+    );
+    if (ok) setModalRiwayat(null);
+  };
+
   const konfirmasiHapus = async () => {
     if (!modalHapus) return;
     const item = modalHapus;
-    setMenghapus(true);
-    try {
-      const dataLokal = bacaDataLokal();
-      simpanDataLokal(dataLokal.filter((d) => String(d.id) !== String(item.id)));
-
-      setDaftar((prev) => prev.filter((d) => String(d.id) !== String(item.id)));
-
-      if (!String(item.id).startsWith("sample-") && !String(item.id).startsWith("konsumsi-")) {
-        await apiKwitansi({
-          url: `api/kwitansi/konsumsi/${item.id}`,
-          method: "DELETE",
-        });
-      }
-
-      kabari(`Kegiatan "${item.nama_kegiatan}" berhasil dihapus`);
-      setModalHapus(null);
-    } catch (e) {
-      kabari(e?.message || "Gagal menghapus kegiatan", "error");
-    } finally {
-      setMenghapus(false);
-    }
+    const ok = await jalankan(
+      () => apiKwitansi({ url: `api/kwitansi/konsumsi/${item.id}`, method: "DELETE" }),
+      `Kegiatan "${item.nama_kegiatan}" dihapus`,
+      "Gagal menghapus kegiatan",
+    );
+    if (ok) setModalHapus(null);
   };
 
   return (
@@ -352,37 +212,11 @@ export default function DaftarKonsumsi({ operator }) {
               <h1 className="text-xl sm:text-2xl font-black text-navy tracking-tight truncate">
                 {bendahara
                   ? "Monitoring Konsumsi"
-                  : `Konsumsi ${admin ? "— Semua Bidang" : `— Bidang ${operator?.bidang || "BMN"}`}`}
+                  : `Konsumsi ${admin ? "— Semua Bidang" : `— Bidang ${operator?.bidang || ""}`}`}
               </h1>
               <p className="text-xs text-slate-500 font-medium truncate mt-0.5">
-                {operator?.nama || "Pengembang Lokal (admin)"} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
+                {operator?.nama || ""} • {bendahara ? "Bendahara" : admin ? "Admin" : "Operator"}
               </p>
-            </div>
-
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => setLihatEmptyState((v) => !v)}
-                className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-bold transition-all cursor-pointer ${
-                  lihatEmptyState
-                    ? "bg-brand text-white border-brand shadow-xs"
-                    : "bg-white border-mist text-slate-600 hover:bg-slate-50"
-                }`}
-                title="Pratinjau tampilan saat tidak ada data"
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Lihat Empty State</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={pulihkanDataContoh}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-mist bg-white hover:bg-slate-50 text-slate-600 text-xs font-bold transition-all cursor-pointer"
-                title="Muat kembali data contoh resmi"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                <span>Data Contoh</span>
-              </button>
             </div>
           </div>
         </div>
@@ -443,13 +277,15 @@ export default function DaftarKonsumsi({ operator }) {
 
             {/* Kontrol Saringan & Tombol Baru */}
             <div className="flex flex-wrap items-center gap-2">
-              <select className={kelasInput} value={bidang} onChange={(e) => setBidang(e.target.value)}>
-                {DAFTAR_BIDANG_PILIHAN.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+              {admin && (
+                <select className={kelasInput} value={bidang} onChange={(e) => setBidang(e.target.value)}>
+                  {DAFTAR_BIDANG_PILIHAN.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              )}
 
               <select className={kelasInput} value={tahun} onChange={(e) => setTahun(e.target.value)}>
                 <option value="2027">2027</option>
@@ -494,11 +330,9 @@ export default function DaftarKonsumsi({ operator }) {
               </div>
               <p className="text-base font-bold text-navy">Belum ada kegiatan konsumsi</p>
               <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                {lihatEmptyState
-                  ? "Tampilan pratinjau Empty State aktif. Klik tombol \"Lihat Empty State\" di kanan atas untuk kembali."
-                  : "Belum ada data pengajuan konsumsi yang sesuai dengan filter pencarian."}
+                {galat ? "Daftar tidak dapat dimuat." : "Tidak ada data konsumsi yang sesuai dengan saringan."}
               </p>
-              {!bendahara && !lihatEmptyState && (
+              {!bendahara && !galat && (
                 <Link
                   to={jalur("konsumsi", "baru")}
                   className="inline-flex items-center gap-2 mt-4 bg-brand hover:bg-navy text-white px-4 py-2 rounded-xl font-bold text-xs shadow-sm transition-all"
@@ -642,7 +476,8 @@ export default function DaftarKonsumsi({ operator }) {
                         {/* 9. AKSI (Three rounded outline buttons: Clock, Pencil, Trash2) */}
                         <td className="py-4 px-3.5 text-center whitespace-nowrap">
                           <div className="inline-flex items-center justify-center gap-1.5">
-                            {/* Tombol 1: Clock (Riwayat Pembatalan atau Batalkan) */}
+                            {/* Tombol 1: Clock (Riwayat Pembatalan, atau Batalkan untuk pengubah) */}
+                            {(batalkan || !bendahara) && (
                             <button
                               type="button"
                               onClick={() => {
@@ -662,9 +497,10 @@ export default function DaftarKonsumsi({ operator }) {
                             >
                               <Clock className="w-4 h-4" />
                             </button>
+                            )}
 
                             {/* Tombol 2: Pencil (Ubah) */}
-                            {!bendahara && !batalkan ? (
+                            {bendahara ? null : !batalkan ? (
                               <Link
                                 to={jalur("konsumsi", d.id)}
                                 className="p-2 rounded-xl border border-slate-200 text-slate-500 bg-white hover:border-brand hover:text-brand hover:bg-sky-50/50 transition-colors shadow-2xs inline-flex items-center justify-center"
@@ -775,7 +611,7 @@ export default function DaftarKonsumsi({ operator }) {
                   </div>
                   <div>
                     <span className="text-slate-400 block font-medium">Nomor BKU:</span>
-                    <span className="font-bold text-navy">{modalDetail.nomor_bku || "-"}</span>
+                    <span className="font-bold text-navy">{modalDetail.isian?.no_bku || "-"}</span>
                   </div>
                 </div>
               )}
@@ -926,6 +762,7 @@ export default function DaftarKonsumsi({ operator }) {
                 <button
                   type="button"
                   onClick={() => pulihkanKegiatan(modalRiwayat)}
+                  disabled={bekerja}
                   className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm cursor-pointer"
                 >
                   Pulihkan Kegiatan
@@ -977,6 +814,7 @@ export default function DaftarKonsumsi({ operator }) {
               <button
                 type="button"
                 onClick={konfirmasiBatal}
+                disabled={bekerja}
                 className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold shadow-sm cursor-pointer"
               >
                 Konfirmasi Pembatalan
@@ -1025,10 +863,10 @@ export default function DaftarKonsumsi({ operator }) {
               <button
                 type="button"
                 onClick={konfirmasiHapus}
-                disabled={menghapus}
+                disabled={bekerja}
                 className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-all cursor-pointer disabled:opacity-50"
               >
-                {menghapus ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                {bekerja ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 <span>Hapus Permanen</span>
               </button>
             </div>

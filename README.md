@@ -172,7 +172,7 @@ selebar A4), diikuti lampiran berisi foto saja (2 foto per halaman).
 
 ```
 4. Layanan Kendaraan → 4. Lapor Service / Pemeliharaan
-   pilih kendaraan → tanggal service → nama bengkel → total biaya
+   pilih jenis (Mobil/Motor) → pilih kendaraan → tanggal service → nama bengkel → total biaya
    → foto nota/kuitansi (wajib ≥1) → foto dokumentasi (wajib ≥1)
    → ringkasan → diteruskan ke Penanggung Jawab (QUOTE REPLY 1/2)
    → disetujui: PDF dikirim ke pegawai | ditolak: pegawai diberi tahu
